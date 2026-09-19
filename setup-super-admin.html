@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Super Admin Setup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:system-ui,sans-serif;background:#10151f;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;}
+  .card{background:#fff;border-radius:12px;padding:30px;width:380px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+  h1{font-family:Georgia,serif;font-size:20px;margin:0 0 4px;}
+  .sub{font-size:12px;color:#888;margin-bottom:20px;line-height:1.5;}
+  input{width:100%;padding:10px 12px;border:1px solid #dde1e6;border-radius:7px;margin-bottom:10px;font-size:13.5px;box-sizing:border-box;}
+  button{width:100%;padding:11px;border:none;border-radius:7px;background:#c8781f;color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;}
+  .msg{font-size:12.5px;margin-bottom:10px;min-height:16px;}
+  .msg.err{color:#b23a2c;}
+  .msg.ok{color:#1f7a6c;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>प्रमाण Praman</h1>
+  <div class="sub">One-time Super Admin setup. This works only if no Super Admin account exists yet — running it again will fail safely. You'll need the <b>SUPER_ADMIN_SETUP_KEY</b> from your server's .env file.</div>
+  <div class="msg" id="msg"></div>
+  <input id="setupKey" placeholder="Setup key (from .env)" type="password">
+  <input id="email" placeholder="Your email" type="email">
+  <input id="password" placeholder="Choose a password" type="password">
+  <button onclick="submitSetup()">Create Super Admin Account</button>
+</div>
+<script>
+async function submitSetup(){
+  const setupKey = document.getElementById('setupKey').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const msg = document.getElementById('msg');
+  msg.textContent = ''; msg.className = 'msg';
+  if(!setupKey || !email || !password){ msg.textContent = 'Fill in all fields.'; msg.className='msg err'; return; }
+
+  const res = await fetch('/api/auth/bootstrap-super-admin', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ setupKey, email, password })
+  });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.className='msg err'; return; }
+
+  localStorage.setItem('praman_token', data.token);
+  localStorage.setItem('praman_user', JSON.stringify(data.user));
+  msg.textContent = 'Success! Redirecting to your dashboard…'; msg.className = 'msg ok';
+  setTimeout(() => location.href = '/super-admin.html', 1000);
+}
+</script>
+</body>
+</html>
