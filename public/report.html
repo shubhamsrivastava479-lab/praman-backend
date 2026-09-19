@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Case Investigation Report</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#eef1f4;margin:0;color:#1a1a1a;}
+  .toolbar{position:sticky;top:0;background:#10151f;padding:10px 20px;display:flex;gap:10px;z-index:10;}
+  .toolbar button{padding:8px 16px;border:none;border-radius:6px;background:#c8781f;color:#fff;font-weight:600;cursor:pointer;font-size:13px;}
+  .toolbar button.secondary{background:#3a4356;}
+  .sheet{max-width:800px;margin:20px auto;background:#fff;padding:36px 40px;box-shadow:0 2px 10px rgba(0,0,0,.08);}
+  .co-header{border-bottom:3px solid #1a2f4b;padding-bottom:12px;margin-bottom:6px;}
+  .co-header .name{font-size:26px;font-weight:800;color:#1a2f4b;letter-spacing:.5px;}
+  .co-header .name span{color:#2f8f5b;}
+  .co-header .sub{font-size:11px;color:#888;letter-spacing:2px;}
+  h1.title{font-size:20px;margin:18px 0 2px;}
+  .meta{font-size:11px;color:#777;margin-bottom:16px;}
+  .claim-box{border:2px solid #7a1f1f;background:#fdf1ee;color:#7a1f1f;text-align:center;font-weight:800;font-size:18px;letter-spacing:1px;padding:12px;border-radius:4px;margin-bottom:20px;}
+  .claim-box input{border:none;background:transparent;color:#7a1f1f;font-weight:800;font-size:18px;text-align:center;width:220px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px;}
+  th.section-head{background:#1a2f4b;color:#fff;text-align:left;padding:8px 10px;font-size:12.5px;}
+  td.label{background:#f4f6f8;font-weight:700;color:#333;padding:8px 10px;width:32%;vertical-align:top;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;}
+  td.value{padding:8px 10px;border:1px solid #e2e5e9;vertical-align:top;}
+  td.value input, td.value textarea{width:100%;border:none;font-family:inherit;font-size:12px;background:transparent;resize:vertical;}
+  table.grid td.label{border:1px solid #e2e5e9;}
+  table.wide th{background:#1a2f4b;color:#fff;padding:6px 8px;font-size:11px;text-align:left;}
+  table.wide td{border:1px solid #e2e5e9;padding:6px 8px;font-size:11px;}
+  .obs-table td.of{background:#f4f6f8;font-weight:700;width:26%;font-size:10.5px;}
+  .conclusion-remarks{border:1px solid #e2e5e9;padding:10px;font-size:12px;line-height:1.6;min-height:80px;}
+  .sig{margin-top:30px;text-align:right;}
+  .sig .line{font-size:11px;font-weight:700;border-top:1px solid #333;display:inline-block;padding-top:4px;margin-top:30px;}
+  @media print {
+    .toolbar{display:none;}
+    body{background:#fff;}
+    .sheet{box-shadow:none;margin:0;max-width:100%;}
+    input, textarea{border:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button onclick="saveFields()">Save</button>
+  <button class="secondary" onclick="window.print()">Print / Save as PDF</button>
+  <button class="secondary" onclick="history.back()">Back to case</button>
+</div>
+
+<div class="sheet">
+  <div class="co-header">
+    <div class="name" id="companyName">YOUR<span>COMPANY</span></div>
+    <div class="sub">MANAGEMENT SERVICES PVT. LTD.</div>
+  </div>
+  <h1 class="title">Case Investigation Report</h1>
+  <div class="meta">CONFIDENTIAL INVESTIGATION REPORT · GENERATED <span id="genDate"></span></div>
+
+  <div class="claim-box">Claim ID: <input id="claimNo" placeholder="—"></div>
+
+  <table class="grid">
+    <tr><th colspan="4" class="section-head">Case Identity</th></tr>
+    <tr>
+      <td class="label">Case ID</td><td class="value"><input id="caseIdField"></td>
+      <td class="label">Claim Number</td><td class="value"><input id="claimNoField"></td>
+    </tr>
+    <tr>
+      <td class="label">Policy No.</td><td class="value"><input id="policyNo"></td>
+      <td class="label">Insured Name</td><td class="value"><input id="insuredName"></td>
+    </tr>
+    <tr>
+      <td class="label">Insured Mobile</td><td class="value"><input id="insuredMobile"></td>
+      <td class="label">Date of Intimation</td><td class="value"><input id="intimationDate" type="date"></td>
+    </tr>
+    <tr>
+      <td class="label">State</td><td class="value"><input id="state"></td>
+      <td class="label">District</td><td class="value"><input id="district"></td>
+    </tr>
+    <tr>
+      <td class="label">Accident Date</td><td class="value"><input id="accidentDate" type="date"></td>
+      <td class="label">Policy Start Date</td><td class="value"><input id="policyStartDate" type="date"></td>
+    </tr>
+    <tr>
+      <td class="label">Vehicle No</td><td class="value"><input id="vehicleNo"></td>
+      <td class="label">Vehicle Make</td><td class="value"><input id="vehicleMake"></td>
+    </tr>
+    <tr>
+      <td class="label">Vehicle Model</td><td class="value"><input id="vehicleModel"></td>
+      <td class="label">Claim Amount</td><td class="value"><input id="claimAmount"></td>
+    </tr>
+  </table>
+
+  <table class="wide">
+    <tr><th colspan="6" style="background:#1a2f4b;">Call Recordings &amp; Sessions</th></tr>
+    <tr><th>#</th><th>Session</th><th>From</th><th>To</th><th>Date &amp; Time</th><th>Duration</th></tr>
+    <tbody id="callRows"><tr><td colspan="6" style="color:#999;">No call sessions yet.</td></tr></tbody>
+  </table>
+
+  <table class="wide">
+    <tr><th colspan="4" style="background:#1a2f4b;">Digital Evidence &amp; Document Vault</th></tr>
+    <tr><th>#</th><th>File</th><th>Category</th><th>Link</th></tr>
+    <tbody id="evidenceRows"><tr><td colspan="4" style="color:#999;">No evidence yet.</td></tr></tbody>
+  </table>
+
+  <table class="grid">
+    <tr><th colspan="4" class="section-head">Investigation</th></tr>
+    <tr>
+      <td class="label">Assigned At</td><td class="value"><input id="assignedAt" type="date"></td>
+      <td class="label">Date of Submission</td><td class="value"><input id="submissionDate" type="date"></td>
+    </tr>
+    <tr>
+      <td class="label">Trigger Narrative</td><td class="value" colspan="3"><input id="triggerNarrative"></td>
+    </tr>
+    <tr>
+      <td class="label">Agent Notes</td><td class="value" colspan="3"><textarea id="agentNotes" rows="2"></textarea></td>
+    </tr>
+  </table>
+
+  <table class="wide obs-table">
+    <tr><th colspan="2" style="background:#1a2f4b;">Observation / Findings</th></tr>
+    <tr><td class="of">Insured Version</td><td><textarea id="obsInsured" rows="3"></textarea></td></tr>
+    <tr><td class="of">Driver Version</td><td><textarea id="obsDriver" rows="2"></textarea></td></tr>
+    <tr><td class="of">Pillion Rider/Occupant Version</td><td><textarea id="obsPillion" rows="2"></textarea></td></tr>
+    <tr><td class="of">KYC Documents Checked</td><td><textarea id="obsKyc" rows="2"></textarea></td></tr>
+    <tr><td class="of">DL Status of All Persons Contacted</td><td><textarea id="obsDl" rows="2"></textarea></td></tr>
+    <tr><td class="of">FIR / GD / Compromise Remarks</td><td><textarea id="obsFir" rows="2"></textarea></td></tr>
+    <tr><td class="of">Damages &amp; Garage Remarks</td><td><textarea id="obsDamage" rows="2"></textarea></td></tr>
+    <tr><td class="of">Evidences Remarks</td><td><textarea id="obsEvidences" rows="2"></textarea></td></tr>
+  </table>
+
+  <table class="grid">
+    <tr><th colspan="4" class="section-head">Case Conclusion &amp; Result</th></tr>
+    <tr>
+      <td class="label">Result</td><td class="value"><input id="result" placeholder="e.g. Fraud / Genuine"></td>
+      <td class="label">Conclusion Status</td><td class="value"><input id="conclusionStatus"></td>
+    </tr>
+    <tr>
+      <td class="label">Ground of Defence</td><td class="value"><input id="groundOfDefence"></td>
+      <td class="label">Conclusion</td><td class="value"><input id="conclusion" placeholder="Repudiate / Settle"></td>
+    </tr>
+    <tr>
+      <td class="label">Conclusion Remarks</td>
+      <td class="value" colspan="3"><textarea id="conclusionRemarks" rows="6"></textarea></td>
+    </tr>
+  </table>
+
+  <div class="sig">
+    <div class="line">AUTHORIZED SIGNATURE</div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const caseId = params.get('case');
+const token = localStorage.getItem('praman_token');
+const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
+if (!token) location.href = '/login.html';
+
+document.getElementById('genDate').textContent = new Date().toLocaleString();
+document.getElementById('companyName').innerHTML = (user?.vendorName || 'YOUR COMPANY').toUpperCase();
+
+async function loadCase(){
+  if(!caseId){ alert('No case specified'); return; }
+  const res = await fetch('/api/cases/' + caseId, { headers: { Authorization: 'Bearer ' + token } });
+  const c = await res.json();
+  if(c.error){ alert(c.error); return; }
+
+  document.getElementById('claimNo').value = c.claimNo || '';
+  document.getElementById('claimNoField').value = c.claimNo || '';
+  document.getElementById('caseIdField').value = c.id || '';
+  document.getElementById('policyNo').value = c.policyNo || '';
+  document.getElementById('insuredName').value = c.insuredName || '';
+  document.getElementById('insuredMobile').value = c.whatsappNumber || '';
+  document.getElementById('district').value = c.district || '';
+  document.getElementById('vehicleNo').value = c.vehicleNo || '';
+  document.getElementById('submissionDate').value = new Date().toISOString().slice(0,10);
+
+  // Pre-fill any fields the agent already saved on a previous visit
+  const f = c.reportFields || {};
+  Object.keys(f).forEach(key => { const el = document.getElementById(key); if (el) el.value = f[key]; });
+
+  // Evidence vault table
+  const evRows = c.evidence.map((e,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${e.caption || e.type}</td>
+      <td>${e.source}</td>
+      <td>${e.fileUrl ? `<a href="${e.fileUrl}" target="_blank">Open File</a>` : '—'}</td>
+    </tr>`).join('');
+  document.getElementById('evidenceRows').innerHTML = evRows || '<tr><td colspan="4" style="color:#999;">No evidence yet.</td></tr>';
+
+  // Call/transcript sessions table (grouped by source=live_call)
+  const callSpeakers = [...new Set(c.transcripts.filter(t => t.source === 'live_call').map(t => t.speaker))];
+  const callRows = callSpeakers.map((s,i) => `
+    <tr><td>${i+1}</td><td>${c.claimNo} — call</td><td>Agent</td><td>${s}</td><td>${new Date(c.transcripts.find(t=>t.speaker===s).timestamp).toLocaleString()}</td><td>—</td></tr>`).join('');
+  document.getElementById('callRows').innerHTML = callRows || '<tr><td colspan="6" style="color:#999;">No call sessions yet.</td></tr>';
+
+  // If a Gemini report was generated, offer it as a starting point for Conclusion Remarks
+  if (c.report && !f.conclusionRemarks) {
+    const text = c.report.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ').trim();
+    document.getElementById('conclusionRemarks').value = text;
+  }
+}
+
+async function saveFields(){
+  const ids = ['claimAmount','intimationDate','state','accidentDate','policyStartDate','vehicleMake','vehicleModel',
+    'assignedAt','triggerNarrative','agentNotes','obsInsured','obsDriver','obsPillion','obsKyc','obsDl','obsFir',
+    'obsDamage','obsEvidences','result','conclusionStatus','groundOfDefence','conclusion','conclusionRemarks'];
+  const reportFields = {};
+  ids.forEach(id => { reportFields[id] = document.getElementById(id).value; });
+
+  const res = await fetch('/api/cases/' + caseId, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ reportFields })
+  });
+  if (res.ok) alert('Saved.'); else alert('Failed to save.');
+}
+
+loadCase();
+</script>
+</body>
+</html>

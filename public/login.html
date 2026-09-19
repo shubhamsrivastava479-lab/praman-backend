@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:system-ui,sans-serif;background:#10151f;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;}
+  .card{background:#fff;border-radius:12px;padding:30px;width:340px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+  h1{font-family:Georgia,serif;font-size:22px;margin:0 0 4px;}
+  .sub{font-size:12px;color:#888;margin-bottom:20px;}
+  input{width:100%;padding:10px 12px;border:1px solid #dde1e6;border-radius:7px;margin-bottom:10px;font-size:13.5px;box-sizing:border-box;}
+  button{width:100%;padding:11px;border:none;border-radius:7px;background:#c8781f;color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;}
+  .toggle{text-align:center;margin-top:14px;font-size:12.5px;color:#555;cursor:pointer;text-decoration:underline;}
+  .err{color:#b23a2c;font-size:12.5px;margin-bottom:10px;min-height:16px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>प्रमाण Praman</h1>
+  <div class="sub" id="modeSub">Vendor login</div>
+  <div class="err" id="err"></div>
+  <input id="vendorName" placeholder="Vendor / company name" style="display:none;">
+  <input id="email" placeholder="Email" type="email">
+  <input id="password" placeholder="Password" type="password">
+  <button id="submitBtn" onclick="submitForm()">Log in</button>
+  <div class="toggle" id="toggleMode" onclick="toggleMode()">New vendor? Create an account</div>
+</div>
+<script>
+let mode = 'login';
+function toggleMode(){
+  mode = mode === 'login' ? 'signup' : 'login';
+  document.getElementById('vendorName').style.display = mode === 'signup' ? 'block' : 'none';
+  document.getElementById('modeSub').textContent = mode === 'signup' ? 'Create vendor account' : 'Vendor login';
+  document.getElementById('submitBtn').textContent = mode === 'signup' ? 'Create account' : 'Log in';
+  document.getElementById('toggleMode').textContent = mode === 'signup' ? 'Already have an account? Log in' : 'New vendor? Create an account';
+  document.getElementById('err').textContent = '';
+}
+async function submitForm(){
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const vendorName = document.getElementById('vendorName').value.trim();
+  const errBox = document.getElementById('err');
+  errBox.textContent = '';
+  if(!email || !password){ errBox.textContent = 'Email and password required'; return; }
+  if(mode === 'signup' && !vendorName){ errBox.textContent = 'Vendor name required'; return; }
+
+  const url = mode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+  const body = mode === 'signup' ? { email, password, vendorName } : { email, password };
+  const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await res.json();
+  if(data.error){ errBox.textContent = data.error; return; }
+
+  if (data.pending) {
+    errBox.style.color = '#1f7a6c';
+    errBox.textContent = data.message || 'Account created — awaiting approval.';
+    toggleMode(); // flip back to the login form
+    return;
+  }
+
+  localStorage.setItem('praman_token', data.token);
+  localStorage.setItem('praman_user', JSON.stringify(data.user));
+  location.href = data.user.role === 'super_admin' ? '/super-admin.html' : '/index.html';
+}
+</script>
+</body>
+</html>

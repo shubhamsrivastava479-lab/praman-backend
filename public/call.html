@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Live Call (Agent)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  body{margin:0;background:#11151d;color:#e9ecf1;font-family:system-ui,sans-serif;padding:20px;}
+  h1{font-size:16px;font-weight:600;}
+  video{width:100%;background:#000;border-radius:10px;max-height:60vh;}
+  .status{font-size:12px;color:#8b93a4;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+  .rec-badge{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#ff7a68;font-weight:600;}
+  .rec-badge .dot{width:8px;height:8px;border-radius:50%;background:#ff5546;animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .captions{background:#1c2230;border-radius:10px;padding:14px;margin-top:14px;min-height:70px;}
+  .cap-line{margin-bottom:8px;font-size:13.5px;}
+  .cap-line .orig{color:#9aa1ab;font-size:11.5px;}
+  .cap-line .eng{font-weight:600;}
+  .endbtn{margin-top:14px;width:100%;padding:12px;border:none;border-radius:8px;background:#b23a2c;color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;}
+  .endbtn:disabled{background:#555;}
+  .savemsg{font-size:12px;color:#7CFF9E;margin-top:8px;text-align:center;}
+</style>
+</head>
+<body>
+<h1>Praman — Live Call (Agent view)</h1>
+<div class="status">
+  <span id="status">Connecting…</span>
+  <span class="rec-badge" id="recBadge" style="display:none;"><span class="dot"></span>Recording</span>
+</div>
+<video id="remoteVideo" autoplay playsinline></video>
+<div class="captions" id="captions"><i style="color:#666;">Live translated captions will appear here once the participant shares audio/screen.</i></div>
+<button class="endbtn" id="endBtn" onclick="endCallAndSave()">End call &amp; save recording to case</button>
+<div class="savemsg" id="saveMsg"></div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room');
+const caseId = params.get('case');
+const token = localStorage.getItem('praman_token'); // same-origin dashboard login, no token in URL needed
+const socket = io();
+const status = document.getElementById('status');
+const captionsBox = document.getElementById('captions');
+const remoteVideo = document.getElementById('remoteVideo');
+const recBadge = document.getElementById('recBadge');
+const saveMsg = document.getElementById('saveMsg');
+
+let pc, mediaRecorder, recordedChunks = [];
+
+async function initCall(){
+  const iceConfig = await fetch('/api/turn-config').then(r => r.json()).catch(() => ({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }));
+  pc = new RTCPeerConnection(iceConfig);
+  pc.ontrack = (e) => {
+    remoteVideo.srcObject = e.streams[0];
+    status.textContent = 'Receiving shared screen';
+    startRecording(e.streams[0]);
+  };
+  pc.onicecandidate = (e) => { if (e.candidate) socket.emit('signal', { roomId, data: { candidate: e.candidate } }); };
+
+  socket.emit('join-room', { roomId, role: 'agent' });
+  status.textContent = `Waiting for participant to join room ${roomId}…`;
+}
+initCall();
+
+function startRecording(stream){
+  if (mediaRecorder) return; // already recording
+  try {
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' });
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.start(1000); // 1s chunks so nothing is lost if the tab closes unexpectedly
+    recBadge.style.display = 'flex';
+  } catch (err) {
+    console.warn('Recording not supported in this browser:', err.message);
+  }
+}
+
+async function uploadRecording(){
+  if (!recordedChunks.length) return false;
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const formData = new FormData();
+  formData.append('recording', blob, `call-${roomId}.webm`);
+  saveMsg.textContent = 'Uploading recording to case…';
+  try {
+    const res = await fetch(`/api/cases/${caseId}/recording`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.error) { saveMsg.textContent = 'Failed to save recording: ' + data.error; return false; }
+    saveMsg.textContent = '✓ Recording saved to case evidence vault.';
+    return true;
+  } catch (err) {
+    saveMsg.textContent = 'Failed to upload recording (check connection).';
+    return false;
+  }
+}
+
+async function endCallAndSave(){
+  document.getElementById('endBtn').disabled = true;
+  document.getElementById('endBtn').textContent = 'Saving…';
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    await new Promise(resolve => { mediaRecorder.onstop = resolve; mediaRecorder.stop(); });
+  }
+  recBadge.style.display = 'none';
+  await uploadRecording();
+  document.getElementById('endBtn').textContent = 'Call ended';
+}
+
+// Auto-save if the participant stops sharing (call effectively over) —
+// agent can still press the button again if they restart sharing later.
+socket.on('peer-joined', ({ role }) => {
+  if (role === 'participant') status.textContent = 'Participant joined — waiting for screen share…';
+});
+
+socket.on('signal', async ({ data, from }) => {
+  if (from !== 'participant' || !pc) return;
+  if (data.sdp) {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    if (data.sdp.type === 'offer') {
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit('signal', { roomId, data: { sdp: pc.localDescription } });
+    }
+  } else if (data.candidate) {
+    try { await pc.addIceCandidate(data.candidate); } catch (e) { console.warn(e); }
+  }
+});
+
+socket.on('screen-share-started', () => { status.textContent = 'Screen share active'; });
+socket.on('screen-share-stopped', () => { status.textContent = 'Screen share stopped — press "End call" to save the recording'; });
+
+socket.on('caption', ({ speaker, original, english, language }) => {
+  const line = document.createElement('div');
+  line.className = 'cap-line';
+  line.innerHTML = `<div class="orig">${speaker} (${language}): ${original}</div><div class="eng">${english}</div>`;
+  captionsBox.prepend(line);
+  if (captionsBox.children.length > 12) captionsBox.removeChild(captionsBox.lastChild);
+});
+
+window.addEventListener('beforeunload', () => {
+  // Best-effort: if there's an active recording and the tab is closing
+  // without pressing "End call", at least stop cleanly (upload may not
+  // finish in time — pressing the button is the reliable path).
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+});
+</script>
+</body>
+</html>
+

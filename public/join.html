@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Investigation Call</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  body{margin:0;background:#f1f3f5;font-family:system-ui,sans-serif;padding:24px;color:#10151f;}
+  .card{background:#fff;border-radius:12px;padding:22px;max-width:420px;margin:0 auto;box-shadow:0 2px 10px rgba(0,0,0,.06);}
+  h1{font-size:18px;margin:0 0 6px;}
+  p{font-size:13.5px;color:#555;line-height:1.5;}
+  button{width:100%;padding:13px;border:none;border-radius:8px;background:#c8781f;color:#fff;font-weight:600;font-size:14px;margin-top:12px;cursor:pointer;}
+  button:disabled{background:#ccc;}
+  .status{font-size:12.5px;color:#1f7a6c;margin-top:10px;}
+  .note{font-size:11.5px;color:#888;margin-top:16px;border-top:1px solid #eee;padding-top:10px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Praman Investigation Call</h1>
+  <p>Your insurance investigator has requested a screen share to review documents or photos during this call. Nothing is shared until you tap the button below <b>and</b> confirm it in your browser's own permission prompt — you choose exactly what's shown, and can stop at any time.</p>
+  <button id="shareBtn">Share my screen</button>
+  <button id="micBtn" style="background:#1f7a6c;">Allow microphone (for live translation)</button>
+  <div class="status" id="status"></div>
+  <div class="note">This page runs entirely in your browser. No app install is required. Ending the call stops all sharing immediately.</div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const roomId = params.get('room');
+const caseId = params.get('case');
+const speakerName = params.get('name') || 'Participant';
+const socket = io();
+const status = document.getElementById('status');
+
+let pc;
+async function initCall(){
+  const iceConfig = await fetch('/api/turn-config').then(r => r.json()).catch(() => ({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }));
+  pc = new RTCPeerConnection(iceConfig);
+  pc.onicecandidate = (e) => { if (e.candidate) socket.emit('signal', { roomId, data: { candidate: e.candidate } }); };
+  socket.emit('join-room', { roomId, role: 'participant' });
+}
+initCall();
+captureLocation();
+
+// Records the date/time and (if permitted) GPS coordinates at the moment
+// this call started — an evidentiary detail for both motor claim
+// investigation calls and PIVC. Best-effort: if location is denied or
+// unavailable, the call still proceeds normally.
+function captureLocation(){
+  const deviceInfo = {
+    platform: navigator.platform || navigator.userAgentData?.platform || 'unknown',
+    screen: `${screen.width}x${screen.height}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    userAgent: navigator.userAgent.slice(0, 120)
+  };
+  const send = (latitude, longitude, accuracy) => {
+    fetch(`/api/participant/${caseId}/location`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude, longitude, accuracy, deviceInfo })
+    }).catch(() => {});
+  };
+  if (!navigator.geolocation) { send(null, null, null); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => send(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => send(null, null, null),
+    { timeout: 8000 }
+  );
+}
+
+socket.on('signal', async ({ data, from }) => {
+  if (from !== 'agent' || !pc) return;
+  if (data.sdp) {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  } else if (data.candidate) {
+    try { await pc.addIceCandidate(data.candidate); } catch (e) { console.warn(e); }
+  }
+});
+
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  try {
+    if (!pc) { status.textContent = 'Still connecting, try again in a second.'; return; }
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('signal', { roomId, data: { sdp: pc.localDescription } });
+    socket.emit('screen-share-started', { roomId, caseId });
+    status.textContent = 'Screen sharing active — your investigator can now see your screen.';
+
+    stream.getVideoTracks()[0].onended = () => {
+      socket.emit('screen-share-stopped', { roomId, caseId });
+      status.textContent = 'Screen sharing stopped.';
+    };
+  } catch (err) {
+    status.textContent = 'Screen share cancelled.';
+  }
+});
+
+document.getElementById('micBtn').addEventListener('click', async () => {
+  try {
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    status.textContent = 'Microphone active — your investigator will see live translated captions.';
+    const recorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
+    recorder.ondataavailable = async (e) => {
+      if (e.data.size < 500) return;
+      const base64Audio = await blobToBase64(e.data);
+      socket.emit('audio-chunk', { roomId, caseId, base64Audio, mimeType: 'audio/webm', speaker: speakerName });
+    };
+    recorder.start();
+    setInterval(() => { recorder.stop(); recorder.start(); }, 4000);
+  } catch (err) {
+    status.textContent = 'Microphone permission denied.';
+  }
+});
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+</script>
+</body>
+</html>

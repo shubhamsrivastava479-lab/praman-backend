@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Agent Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:system-ui,sans-serif;background:#f1f3f5;margin:0;color:#10151f;}
+  .shell{display:grid;grid-template-columns:280px 1fr;min-height:100vh;}
+  .sidebar{background:#10151f;color:#e8eaf0;padding:20px;position:relative;}
+  .sidebar h1{font-size:18px;margin:0 0 4px;}
+  .navbtn{display:block;width:100%;text-align:left;background:#1a2130;color:#e8eaf0;border:none;padding:9px 10px;border-radius:7px;margin-bottom:8px;font-size:12.5px;cursor:pointer;}
+  .navbtn.active{background:#c8781f;color:#fff;}
+  .case-item{padding:10px;border-radius:8px;cursor:pointer;margin-bottom:6px;background:#1a2130;font-size:13px;}
+  .case-item:hover{background:#232c3f;}
+  .main{padding:26px 34px;max-width:900px;}
+  input,select,button,textarea{font-family:inherit;font-size:13px;}
+  .form-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+  input,select{padding:8px 10px;border:1px solid #dde1e6;border-radius:6px;flex:1;min-width:140px;}
+  button{padding:9px 14px;border:none;border-radius:6px;background:#c8781f;color:#fff;font-weight:600;cursor:pointer;}
+  button.secondary{background:#10151f;}
+  button.link{background:#1f7a6c;}
+  button.danger{background:#b23a2c;padding:5px 10px;font-size:11px;}
+  .card{background:#fff;border:1px solid #dde1e6;border-radius:10px;padding:16px;margin-bottom:16px;}
+  .evidence-item{border-bottom:1px solid #f0f1f3;padding:8px 0;font-size:12.5px;}
+  .custody-item{font-family:monospace;font-size:11.5px;color:#555;padding:4px 0;}
+  .tag{font-size:10px;background:#dcefec;color:#1f7a6c;padding:2px 6px;border-radius:5px;margin-left:6px;}
+  .wa-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f1f3;font-size:13px;}
+  .hint{font-size:11.5px;color:#888;line-height:1.5;margin-top:6px;}
+  code{background:#f1f3f5;padding:2px 5px;border-radius:4px;font-size:11.5px;}
+  #view{display:none;}
+  #view.active{display:block;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="sidebar">
+    <h1>प्रमाण Praman</h1>
+    <div style="font-size:11.5px;color:#aab;margin-bottom:14px;" id="vendorLabel"></div>
+    <button class="navbtn active" id="navCases" onclick="showView('cases')">Cases</button>
+    <button class="navbtn" id="navWA" onclick="showView('whatsapp')">WhatsApp Connection</button>
+    <button class="navbtn" id="navTeam" onclick="showView('team')" style="display:none;">Team / Agents</button>
+    <button class="navbtn" id="navPerf" onclick="showView('performance')">Performance</button>
+    <div id="caseList" style="margin-top:14px;"></div>
+    <div style="position:absolute;bottom:16px;left:16px;">
+      <button class="secondary" onclick="logout()" style="padding:6px 12px;font-size:11.5px;">Log out</button>
+    </div>
+  </div>
+  <div class="main">
+
+    <div id="view-cases" class="view active">
+      <div class="card">
+        <b>New case</b>
+        <div class="form-row" style="margin-top:10px;">
+          <select id="caseTypeSelect">
+            <option value="claim_investigation">Claim Investigation</option>
+            <option value="policy_verification">Policy Issuance Verification (PIVC)</option>
+          </select>
+          <input id="claimNo" placeholder="Claim / Policy No.">
+          <input id="insuredName" placeholder="Insured name">
+          <input id="whatsappNumber" placeholder="Field WhatsApp number (digits)">
+          <input id="policyValue" type="number" placeholder="Policy/claim value (₹, optional)">
+          <select id="whatsappAccountSelect"></select>
+        </div>
+        <div class="hint">If policy/claim value is above ₹10,00,000, self-verification is disabled for that case — only a live executive call is allowed.</div>
+        <button onclick="createCase()">Create case</button>
+        <div class="hint" id="noWaHint" style="display:none;">You haven't connected a WhatsApp number yet — go to <b>WhatsApp Connection</b> in the sidebar first, otherwise evidence can't be auto-filed for this case.</div>
+      </div>
+
+      <div class="card">
+        <b>Bulk upload cases (Excel/CSV)</b>
+        <p style="font-size:12px;color:#666;">Columns: <code>claimNo</code>, <code>insuredName</code>, <code>whatsappNumber</code>, <code>vehicleNo</code>, <code>district</code>, <code>policyNo</code>, <code>caseType</code> (claim_investigation or policy_verification). Column names are case-insensitive.</p>
+        <div class="form-row">
+          <input type="file" id="bulkFile" accept=".xlsx,.xls,.csv">
+          <input id="bulkTemplateName" placeholder="WhatsApp template name" value="claim_investigation_intake">
+        </div>
+        <button onclick="bulkUpload()">Upload & send call links</button>
+        <div id="bulkResults" style="margin-top:10px;"></div>
+      </div>
+      <div id="caseDetail"></div>
+    </div>
+
+    <div id="view-whatsapp" class="view">
+      <div class="card">
+        <h2 style="margin-top:0;">Connect your WhatsApp Business number</h2>
+        <p style="font-size:12.5px;color:#555;">Each vendor connects their own WhatsApp Business API credentials from their own Meta Developer App. Your recipients will see messages from <b>your</b> business number, not a shared one.</p>
+        <div class="form-row">
+          <input id="waToken" placeholder="Access Token">
+          <input id="waPhoneId" placeholder="Phone Number ID">
+          <input id="waAppSecret" placeholder="App Secret (optional but recommended)">
+        </div>
+        <button onclick="connectWhatsApp()">Verify & connect</button>
+        <div id="waConnectMsg" style="font-size:12.5px;margin-top:8px;"></div>
+      </div>
+
+      <div class="card">
+        <b>Connected numbers</b>
+        <div id="waAccountsList" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card">
+        <b>Webhook setup (do this once per Meta App)</b>
+        <p style="font-size:12.5px;color:#555;">In your Meta App Dashboard → WhatsApp → Configuration, set:</p>
+        <div class="hint">
+          Callback URL: <code id="webhookUrl"></code><br>
+          Verify Token: <code id="verifyTokenHint">(same value your platform admin set as WHATSAPP_VERIFY_TOKEN)</code><br>
+          Subscribe to the <code>messages</code> field.
+        </div>
+      </div>
+    </div>
+
+    <div id="view-team" class="view">
+      <div class="card">
+        <h2 style="margin-top:0;">Team / Agents</h2>
+        <p style="font-size:12.5px;color:#555;">Add an agent login per person handling calls. Agents share your company's cases and WhatsApp connection — so multiple calls can run at the same time.</p>
+        <div class="form-row">
+          <input id="agentName" placeholder="Agent name">
+          <input id="agentEmail" placeholder="Agent email" type="email">
+          <input id="agentPassword" placeholder="Agent password" type="password">
+        </div>
+        <button onclick="createAgent()">Add agent</button>
+        <div id="agentMsg" style="font-size:12.5px;margin-top:8px;"></div>
+      </div>
+      <div class="card">
+        <b>Agents</b>
+        <div id="agentList" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div id="view-performance" class="view">
+      <div class="card">
+        <h2 style="margin-top:0;" id="perfTitle">Performance</h2>
+        <div id="perfSummary" class="grid-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;"></div>
+      </div>
+      <div class="card">
+        <b>Cases created — last 7 days</b>
+        <div id="perfTrend" style="margin-top:10px;font-size:12px;"></div>
+      </div>
+      <div class="card" id="perfAgentsCard" style="display:none;">
+        <b>By Agent</b>
+        <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;">
+          <tr style="text-align:left;color:#888;font-size:11px;text-transform:uppercase;"><th>Agent</th><th>Assigned</th><th>Completed</th><th>Avg. Resolution</th></tr>
+          <tbody id="perfAgentRows"></tbody>
+        </table>
+      </div>
+      <div class="card" id="perfActivityCard" style="display:none;">
+        <b>Recent Activity</b>
+        <div id="perfActivity" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = '';
+let currentCaseId = null;
+let waAccounts = [];
+
+const token = localStorage.getItem('praman_token');
+const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
+if (!token || !user) { location.href = '/login.html'; }
+
+function authHeaders(extra) { return Object.assign({ Authorization: 'Bearer ' + token }, extra || {}); }
+function logout() { localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
+
+function showView(name){
+  document.getElementById('view-cases').classList.toggle('active', name === 'cases');
+  document.getElementById('view-whatsapp').classList.toggle('active', name === 'whatsapp');
+  document.getElementById('view-team').classList.toggle('active', name === 'team');
+  document.getElementById('view-performance').classList.toggle('active', name === 'performance');
+  document.getElementById('navCases').classList.toggle('active', name === 'cases');
+  document.getElementById('navWA').classList.toggle('active', name === 'whatsapp');
+  document.getElementById('navTeam').classList.toggle('active', name === 'team');
+  document.getElementById('navPerf').classList.toggle('active', name === 'performance');
+  if (name === 'whatsapp') loadWhatsappAccounts();
+  if (name === 'team') loadAgents();
+  if (name === 'performance') loadPerformance();
+}
+
+function statCard(label, value){
+  return `<div class="cell"><div class="k">${label}</div><div class="v">${value}</div></div>`;
+}
+
+async function loadPerformance(){
+  const isAgent = user.role === 'agent';
+  document.getElementById('perfTitle').textContent = isAgent ? 'My Performance' : 'Company Performance';
+
+  if (isAgent) {
+    const res = await fetch(API + '/api/analytics/mine', { headers: authHeaders() });
+    const d = await res.json();
+    document.getElementById('perfSummary').innerHTML =
+      statCard('My Cases', d.cases.total) +
+      statCard('In Progress', d.cases.byStatus.in_progress || 0) +
+      statCard('Completed', d.cases.byStatus.completed || 0) +
+      statCard('Avg. Resolution', d.cases.avgResolutionHours ? d.cases.avgResolutionHours + ' hrs' : '—');
+    document.getElementById('perfTrend').innerHTML = trendBars(d.trend7Days);
+    document.getElementById('perfActivityCard').style.display = 'block';
+    document.getElementById('perfActivity').innerHTML = d.recentActivity.map(a =>
+      `<div class="custody-item">${new Date(a.timestamp).toLocaleString()} — ${a.event}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No activity yet.</div>';
+  } else {
+    const res = await fetch(API + '/api/analytics/company', { headers: authHeaders() });
+    const d = await res.json();
+    document.getElementById('perfSummary').innerHTML =
+      statCard('Total Cases', d.cases.total) +
+      statCard('Completed', d.cases.byStatus.completed || 0) +
+      statCard('Evidence Collected', d.evidenceCollected) +
+      statCard('Calls Made', d.callsCount) +
+      statCard('KYC Checks', d.kycChecksCount) +
+      statCard('Recordings Saved', d.recordingsCount) +
+      statCard('Agents', d.agentCount) +
+      statCard('Avg. Resolution', d.cases.avgResolutionHours ? d.cases.avgResolutionHours + ' hrs' : '—');
+    document.getElementById('perfTrend').innerHTML = trendBars(d.trend7Days);
+    document.getElementById('perfAgentsCard').style.display = d.perAgent.length ? 'block' : 'none';
+    document.getElementById('perfAgentRows').innerHTML = d.perAgent.map(a => `
+      <tr><td>${a.name}</td><td>${a.assigned}</td><td>${a.completed}</td><td>${a.avgResolutionHours ? a.avgResolutionHours + ' hrs' : '—'}</td></tr>`).join('') ||
+      '<tr><td colspan="4" style="color:#999;">No agents yet.</td></tr>';
+  }
+}
+
+function trendBars(trend){
+  const max = Math.max(1, ...trend.map(t => t.count));
+  return `<div style="display:flex;gap:8px;align-items:flex-end;height:80px;">` +
+    trend.map(t => `
+      <div style="flex:1;text-align:center;">
+        <div style="background:#c8781f;height:${Math.max(4, (t.count/max)*60)}px;border-radius:3px 3px 0 0;"></div>
+        <div style="font-size:9.5px;color:#888;margin-top:4px;">${t.date.slice(5)}</div>
+        <div style="font-size:10.5px;font-weight:600;">${t.count}</div>
+      </div>`).join('') + `</div>`;
+}
+
+async function loadAgents(){
+  const res = await fetch(API + '/api/auth/agents', { headers: authHeaders() });
+  if (!res.ok) { document.getElementById('agentList').textContent = 'Only the company admin account can manage agents.'; return; }
+  const agents = await res.json();
+  document.getElementById('agentList').innerHTML = agents.map(a => `
+    <div class="wa-row">
+      <span><b>${a.name}</b> — ${a.email}</span>
+      <button class="danger" onclick="deleteAgent('${a.id}')">Remove</button>
+    </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No agents added yet.</div>';
+}
+
+async function createAgent(){
+  const name = document.getElementById('agentName').value.trim();
+  const email = document.getElementById('agentEmail').value.trim();
+  const password = document.getElementById('agentPassword').value;
+  if(!name || !email || !password){ alert('Fill in all fields'); return; }
+  const res = await fetch(API + '/api/auth/agents', {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ name, email, password })
+  });
+  const data = await res.json();
+  if(data.error){ document.getElementById('agentMsg').textContent = data.error; return; }
+  document.getElementById('agentMsg').textContent = `Agent "${name}" added — share their email/password with them to log in.`;
+  document.getElementById('agentName').value = '';
+  document.getElementById('agentEmail').value = '';
+  document.getElementById('agentPassword').value = '';
+  loadAgents();
+}
+
+async function deleteAgent(id){
+  if(!confirm('Remove this agent? They will no longer be able to log in.')) return;
+  await fetch(API + '/api/auth/agents/' + id, { method:'DELETE', headers: authHeaders() });
+  loadAgents();
+}
+
+// ---------- WhatsApp accounts ----------
+async function loadWhatsappAccounts(){
+  const res = await fetch(API + '/api/whatsapp-accounts', { headers: authHeaders() });
+  waAccounts = await res.json();
+  document.getElementById('waAccountsList').innerHTML = waAccounts.map(a => `
+    <div class="wa-row">
+      <span><b>${a.verifiedName || a.displayPhoneNumber}</b> — ${a.displayPhoneNumber}</span>
+      <button class="danger" onclick="disconnectWA('${a.id}')">Disconnect</button>
+    </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No WhatsApp number connected yet.</div>';
+
+  document.getElementById('webhookUrl').textContent = location.origin + '/webhooks/whatsapp/webhook';
+
+  const sel = document.getElementById('whatsappAccountSelect');
+  sel.innerHTML = waAccounts.map(a => `<option value="${a.id}">${a.verifiedName || a.displayPhoneNumber}</option>`).join('');
+  document.getElementById('noWaHint').style.display = waAccounts.length === 0 ? 'block' : 'none';
+}
+
+async function connectWhatsApp(){
+  const token_ = document.getElementById('waToken').value.trim();
+  const phoneNumberId = document.getElementById('waPhoneId').value.trim();
+  const appSecret = document.getElementById('waAppSecret').value.trim();
+  const msg = document.getElementById('waConnectMsg');
+  if(!token_ || !phoneNumberId){ msg.textContent = 'Token and Phone Number ID are required.'; msg.style.color = '#b23a2c'; return; }
+  msg.textContent = 'Verifying with Meta…'; msg.style.color = '#555';
+  const res = await fetch(API + '/api/whatsapp-accounts', {
+    method: 'POST', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ token: token_, phoneNumberId, appSecret })
+  });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.style.color = '#b23a2c'; return; }
+  msg.textContent = `Connected: ${data.verifiedName || data.displayPhoneNumber}`; msg.style.color = '#1f7a6c';
+  document.getElementById('waToken').value = '';
+  document.getElementById('waPhoneId').value = '';
+  document.getElementById('waAppSecret').value = '';
+  loadWhatsappAccounts();
+}
+
+async function disconnectWA(id){
+  if(!confirm('Disconnect this WhatsApp number? Existing cases linked to it will stop receiving evidence.')) return;
+  await fetch(API + '/api/whatsapp-accounts/' + id, { method:'DELETE', headers: authHeaders() });
+  loadWhatsappAccounts();
+}
+
+// ---------- Cases ----------
+async function loadCases(){
+  const res = await fetch(API + '/api/cases', { headers: authHeaders() });
+  if (res.status === 401) { logout(); return; }
+  const cases = await res.json();
+  document.getElementById('caseList').innerHTML = cases.map(c => `
+    <div class="case-item" onclick="openCase('${c.id}')">
+      <b>${c.claimNo}</b><br>${c.insuredName || '—'}<br>
+      <span style="opacity:.6">${c.status}</span>
+      ${c.assignedAgentName ? `<br><span style="color:#c8781f;font-size:11px;">👤 ${c.assignedAgentName}</span>` : ''}
+    </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No cases yet</div>';
+}
+
+async function bulkUpload(){
+  const fileInput = document.getElementById('bulkFile');
+  const templateName = document.getElementById('bulkTemplateName').value.trim();
+  if(!fileInput.files.length){ alert('Choose a file first'); return; }
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  formData.append('templateName', templateName);
+
+  document.getElementById('bulkResults').textContent = 'Uploading and processing…';
+  const res = await fetch(API + '/api/cases/bulk-upload', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token }, // no Content-Type — browser sets multipart boundary
+    body: formData
+  });
+  const data = await res.json();
+  if(data.error){ document.getElementById('bulkResults').textContent = data.error; return; }
+
+  document.getElementById('bulkResults').innerHTML = `
+    <div style="font-size:13px;margin-bottom:8px;"><b>${data.created}</b> cases created, <b>${data.skipped}</b> rows skipped.</div>
+    ${data.results.map(r => `
+      <div class="evidence-item">
+        ${r.status === 'created'
+          ? `✅ ${r.row.claimNo || r.row.ClaimNo || ''} — WhatsApp: ${r.whatsapp}`
+          : `⚠️ Skipped: ${r.reason} — ${JSON.stringify(r.row)}`}
+      </div>`).join('')}
+  `;
+  loadCases();
+}
+
+async function createCase(){
+  const claimNo = document.getElementById('claimNo').value.trim();
+  const insuredName = document.getElementById('insuredName').value.trim();
+  const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
+  const whatsappAccountId = document.getElementById('whatsappAccountSelect').value;
+  const caseType = document.getElementById('caseTypeSelect').value;
+  const policyValue = document.getElementById('policyValue').value.trim();
+  if(!claimNo || !whatsappNumber){ alert('Claim No. and WhatsApp number are required'); return; }
+  const res = await fetch(API + '/api/cases', {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ claimNo, insuredName, whatsappNumber, whatsappAccountId, caseType, policyValue })
+  });
+  const c = await res.json();
+  await loadCases();
+  openCase(c.id);
+}
+
+const PIVC_STEPS = [
+  { key: 'identity', label: 'Identity (Name, DOB, Address match)' },
+  { key: 'healthDisclosure', label: 'Health / Medical Disclosure' },
+  { key: 'incomeOccupation', label: 'Income / Occupation' },
+  { key: 'nominee', label: 'Nominee Details' },
+  { key: 'policyDetails', label: 'Policy Details Explained (premium, term, benefits)' }
+];
+const PIVC_RESULTS = [
+  ['verified', 'Verified'],
+  ['unverified', 'Unverified'],
+  ['partially_verified', 'Partially Verified'],
+  ['pending_verification', 'Pending Verification'],
+  ['found_discrepancy', 'Found Discrepancy']
+];
+
+function pivcCard(c){
+  const checklist = c.pivcChecklist || {};
+  const rows = PIVC_STEPS.map(step => {
+    const item = checklist[step.key] || { status: 'pending', notes: '' };
+    return `
+      <div class="evidence-item">
+        <b>${step.label}</b>
+        <div class="form-row" style="margin-top:6px;">
+          <select id="pivc_${step.key}_status">
+            <option value="pending" ${item.status==='pending'?'selected':''}>Pending</option>
+            <option value="confirmed" ${item.status==='confirmed'?'selected':''}>Confirmed</option>
+            <option value="discrepancy" ${item.status==='discrepancy'?'selected':''}>Discrepancy</option>
+          </select>
+          <input id="pivc_${step.key}_notes" placeholder="Notes" value="${(item.notes||'').replace(/"/g,'&quot;')}">
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <b>Policy Issuance Verification Checklist</b>
+      ${rows}
+      <div class="form-row" style="margin-top:10px;">
+        <select id="pivcResultSelect">
+          ${PIVC_RESULTS.map(([v,l]) => `<option value="${v}" ${c.pivcResult===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <button onclick="savePivc('${c.id}')">Save checklist</button>
+      </div>
+    </div>`;
+}
+
+async function savePivc(caseId){
+  const pivcChecklist = {};
+  PIVC_STEPS.forEach(step => {
+    pivcChecklist[step.key] = {
+      status: document.getElementById(`pivc_${step.key}_status`).value,
+      notes: document.getElementById(`pivc_${step.key}_notes`).value
+    };
+  });
+  const pivcResult = document.getElementById('pivcResultSelect').value;
+  const res = await fetch(API + '/api/cases/' + caseId, {
+    method: 'PATCH', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ pivcChecklist, pivcResult })
+  });
+  if (res.ok) { alert('Checklist saved.'); loadCases(); } else alert('Failed to save.');
+}
+
+async function openCase(id){
+  currentCaseId = id;
+  const res = await fetch(API + '/api/cases/' + id, { headers: authHeaders() });
+  const c = await res.json();
+  const roomId = 'room_' + c.id;
+  const joinUrl = `${location.origin}/verify.html?room=${roomId}&case=${c.id}&name=Insured`;
+  const callUrl = `${location.origin}/call.html?room=${roomId}&case=${c.id}`;
+  const isPivc = c.caseType === 'policy_verification';
+
+  document.getElementById('caseDetail').innerHTML = `
+    <div class="card">
+      <h2>${c.claimNo} <span class="tag">${c.status}</span> ${isPivc ? '<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC</span>' : ''}</h2>
+      <div style="font-size:12.5px;color:#555;">${c.insuredName || ''} · WhatsApp: ${c.whatsappNumber}</div>
+      ${c.lastKnownLocation ? `<div style="font-size:11.5px;color:#888;margin-top:2px;">📍 Last captured location: ${c.lastKnownLocation.latitude.toFixed(5)}, ${c.lastKnownLocation.longitude.toFixed(5)} (±${Math.round(c.lastKnownLocation.accuracy||0)}m) — ${new Date(c.lastKnownLocation.capturedAt).toLocaleString()} <a href="https://maps.google.com/?q=${c.lastKnownLocation.latitude},${c.lastKnownLocation.longitude}" target="_blank">View on map</a></div>` : ''}
+      ${c.spotCheckRequired ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f4e3cc;color:#8a5416;">🎯 Selected for spot-check review</span></div>` : ''}
+      ${c.verificationFlags && c.verificationFlags.length ? `<div style="font-size:11.5px;margin-top:4px;color:#b23a2c;">⚠️ ${c.verificationFlags.join(' · ')}</div>` : ''}
+      ${c.requiresMandatoryCall ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f6e0db;color:#7a1f1f;">High-value — video call required</span></div>` : ''}
+      <div style="font-size:12.5px;margin-top:4px;display:flex;gap:10px;align-items:center;">
+        ${c.assignedAgentName
+          ? `👤 Assigned to <b>${c.assignedAgentName}</b>`
+          : `<button class="link" style="padding:5px 10px;font-size:11.5px;" onclick="claimCase('${c.id}')">Claim this case</button>`}
+        ${c.status === 'completed'
+          ? `<button class="secondary" style="padding:5px 10px;font-size:11.5px;" onclick="reopenCase('${c.id}')">Reopen case</button>`
+          : `<button class="link" style="padding:5px 10px;font-size:11.5px;background:#1f7a6c;" onclick="completeCase('${c.id}')">Mark complete</button>`}
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <button onclick="sendIntake('${c.id}')">Send WhatsApp intake message</button>
+        <button class="secondary" onclick="window.open('${callUrl}','_blank')">Open call (agent)</button>
+        <button class="link" onclick="navigator.clipboard.writeText('${joinUrl}');alert('Verification link copied — send it via WhatsApp. Insured can choose self-verification or talk to an executive.')">Copy verification link</button>
+        ${isPivc ? '' : `<button class="secondary" onclick="window.open('/report.html?case=${c.id}','_blank')">Open formatted report</button>`}
+        <button class="secondary" onclick="getShareLink('${c.id}')">Get shareable link for company</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <b>Phone Verification (OTP via WhatsApp)</b>
+      <div class="form-row" style="margin-top:8px;">
+        <button onclick="sendPhoneOtp('${c.id}')">Send OTP to ${c.whatsappNumber}</button>
+        <input id="otpInput" placeholder="Enter 6-digit code" style="max-width:140px;">
+        <button class="link" onclick="verifyPhoneOtp('${c.id}')">Verify</button>
+      </div>
+      <div id="otpMsg" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+
+    <div class="card">
+      <b>KYC Verification ${isPivc ? '(do this before the call)' : ''}</b>
+      <div class="hint">Driving Licence</div>
+      <div class="form-row">
+        <input id="dlNumber" placeholder="DL Number">
+        <input id="dlDob" type="date">
+        <button onclick="verifyDL('${c.id}')">Verify DL</button>
+      </div>
+      <div class="hint">Aadhaar (OTP-based)</div>
+      <div class="form-row">
+        <input id="aadhaarNumber" placeholder="Aadhaar Number">
+        <button onclick="generateAadhaarOtp('${c.id}')">Send Aadhaar OTP</button>
+      </div>
+      <div class="form-row">
+        <input id="aadhaarOtp" placeholder="OTP received">
+        <button class="link" onclick="verifyAadhaarOtp('${c.id}')">Verify Aadhaar</button>
+      </div>
+      <div id="kycMsg" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+
+    ${isPivc ? pivcCard(c) : ''}
+
+    <div class="card">
+      <b>WhatsApp Evidence Vault (${c.evidence.length})</b>
+      <div id="evidenceList">
+        ${c.evidence.map(e => `
+          <div class="evidence-item">
+            <b>${e.type}</b> from ${e.senderName || e.sender} — ${new Date(e.receivedAt).toLocaleString()}
+            ${e.fileUrl ? `<br><a href="${e.fileUrl}" target="_blank">Open file</a>` : ''}
+            ${e.caption ? `<br>Caption: ${e.caption}` : ''}
+            ${e.analysis ? `<br><i>Gemini: ${e.analysis.documentType} — ${e.analysis.visibleText || ''} ${e.analysis.notableDetails || ''}</i>` : ''}
+          </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No evidence received yet.</div>'}
+      </div>
+    </div>
+
+    <div class="card">
+      <b>Call Transcript (${c.transcripts.length} segments)</b>
+      ${c.transcripts.map(t => `<div class="evidence-item"><b>${t.speaker}</b> (${t.language}): ${t.english}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No call yet.</div>'}
+    </div>
+
+    <div class="card">
+      <b>Chain of Custody</b>
+      ${c.custody.map(x => `<div class="custody-item">${new Date(x.timestamp).toLocaleString()} — ${x.event} (${x.actor})</div>`).join('')}
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <b>AI Report</b>
+        <button onclick="generateReport('${c.id}')">Generate with Gemini</button>
+      </div>
+      <div id="reportBox" style="margin-top:10px;">${c.report ? c.report.html : '<span style="opacity:.6;">No report generated yet.</span>'}</div>
+    </div>
+  `;
+}
+
+async function sendPhoneOtp(caseId){
+  const res = await fetch(API + `/api/kyc/phone-otp/send/${caseId}`, { method:'POST', headers: authHeaders() });
+  const data = await res.json();
+  document.getElementById('otpMsg').textContent = data.error || `OTP sent to ${data.sentTo}`;
+}
+async function verifyPhoneOtp(caseId){
+  const otp = document.getElementById('otpInput').value.trim();
+  const res = await fetch(API + `/api/kyc/phone-otp/verify/${caseId}`, {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ otp })
+  });
+  const data = await res.json();
+  document.getElementById('otpMsg').textContent = data.error || 'Phone number verified ✓';
+}
+
+async function verifyDL(caseId){
+  const dlNumber = document.getElementById('dlNumber').value.trim();
+  const dateOfBirth = document.getElementById('dlDob').value;
+  const res = await fetch(API + `/api/kyc/dl-verify/${caseId}`, {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ dlNumber, dateOfBirth })
+  });
+  const data = await res.json();
+  document.getElementById('kycMsg').textContent = data.error ? data.error : 'DL verified — saved to evidence vault.';
+  if(!data.error) openCase(caseId);
+}
+
+let lastAadhaarRef = null;
+async function generateAadhaarOtp(caseId){
+  const aadhaarNumber = document.getElementById('aadhaarNumber').value.trim();
+  const res = await fetch(API + `/api/kyc/aadhaar-otp/generate/${caseId}`, {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ aadhaarNumber })
+  });
+  const data = await res.json();
+  if(data.error){ document.getElementById('kycMsg').textContent = data.error; return; }
+  lastAadhaarRef = data.data?.reference_id || data.reference_id;
+  document.getElementById('kycMsg').textContent = 'OTP sent to Aadhaar-linked mobile number.';
+}
+async function verifyAadhaarOtp(caseId){
+  const otp = document.getElementById('aadhaarOtp').value.trim();
+  const res = await fetch(API + `/api/kyc/aadhaar-otp/verify/${caseId}`, {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ referenceId: lastAadhaarRef, otp })
+  });
+  const data = await res.json();
+  document.getElementById('kycMsg').textContent = data.error ? data.error : 'Aadhaar verified — saved to evidence vault.';
+  if(!data.error) openCase(caseId);
+}
+
+async function getShareLink(caseId){
+  const res = await fetch(API + `/api/cases/${caseId}/share-link`, { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({}) });
+  const data = await res.json();
+  if(data.error){ alert(data.error); return; }
+  const url = `${location.origin}/shared-report.html?token=${data.token}`;
+  navigator.clipboard.writeText(url);
+  alert('Shareable link copied!\n\nAnyone with this link can view the report and evidence — no login needed. Send it to the company.\n\n' + url);
+}
+
+async function completeCase(caseId){
+  await fetch(API + '/api/cases/' + caseId, {
+    method:'PATCH', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ status: 'completed', completedAt: new Date().toISOString(), actor: user.email })
+  });
+  openCase(caseId); loadCases();
+}
+async function reopenCase(caseId){
+  await fetch(API + '/api/cases/' + caseId, {
+    method:'PATCH', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ status: 'in_progress', completedAt: null, actor: user.email })
+  });
+  openCase(caseId); loadCases();
+}
+
+async function claimCase(caseId){
+  await fetch(API + '/api/cases/' + caseId, {
+    method:'PATCH', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ assignedAgentName: user.role === 'agent' ? user.email.split('@')[0] : user.vendorName, assignedAgentId: user.id, actor: user.email })
+  });
+  openCase(caseId);
+  loadCases();
+}
+
+async function sendIntake(caseId){
+  const r = await fetch(API + `/webhooks/whatsapp/send-intake/${caseId}`, { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({}) });
+  const data = await r.json();
+  if(data.error) alert('Failed: ' + data.error);
+  else alert('Intake template sent.');
+}
+
+async function generateReport(caseId){
+  document.getElementById('reportBox').innerHTML = 'Generating…';
+  const res = await fetch(API + `/api/cases/${caseId}/generate-report`, { method:'POST', headers: authHeaders() });
+  const data = await res.json();
+  if(data.error){ document.getElementById('reportBox').innerHTML = 'Error: ' + data.error; return; }
+  document.getElementById('reportBox').innerHTML = data.html;
+}
+
+document.getElementById('vendorLabel').textContent = user ? user.vendorName + (user.role === 'agent' ? ' · Agent: ' + user.email : ' · Admin: ' + user.email) : '';
+if (user && user.role !== 'agent') document.getElementById('navTeam').style.display = 'block';
+loadCases();
+loadWhatsappAccounts();
+</script>
+</body>
+</html>

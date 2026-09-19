@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Super Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:system-ui,sans-serif;background:#f1f3f5;margin:0;color:#10151f;}
+  .topbar{background:#10151f;color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;}
+  .topbar h1{font-size:16px;margin:0;}
+  .topbar button{background:#3a4356;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;}
+  .main{padding:26px;max-width:900px;margin:0 auto;}
+  .card{background:#fff;border:1px solid #dde1e6;border-radius:10px;padding:18px;margin-bottom:18px;}
+  .card h2{font-size:15px;margin:0 0 12px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;padding:8px;border-bottom:2px solid #eee;font-size:11px;text-transform:uppercase;color:#888;}
+  td{padding:8px;border-bottom:1px solid #f0f1f3;}
+  .tag{font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600;}
+  .tag.pending{background:#f4e3cc;color:#8a5416;}
+  .tag.approved{background:#dcefec;color:#1f7a6c;}
+  button.action{padding:6px 12px;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;font-weight:600;}
+  button.approve{background:#1f7a6c;color:#fff;}
+  button.suspend{background:#b23a2c;color:#fff;}
+  .form-row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+  input{flex:1;min-width:200px;padding:9px 11px;border:1px solid #dde1e6;border-radius:6px;font-size:13px;}
+  button.save{background:#c8781f;color:#fff;border:none;padding:9px 16px;border-radius:6px;font-weight:600;cursor:pointer;}
+  .hint{font-size:11.5px;color:#888;margin-top:4px;}
+  .source-tag{font-size:10px;padding:2px 7px;border-radius:5px;background:#eef1f4;color:#666;margin-left:6px;}
+  .cell{background:#f8f9fa;border-radius:8px;padding:12px;}
+  .cell .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px;}
+  .cell .v{font-size:18px;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>प्रमाण Praman — Super Admin</h1>
+  <button onclick="logout()">Log out</button>
+</div>
+<div class="main">
+
+  <div class="card">
+    <h2>Platform Performance</h2>
+    <div id="perfSummary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;"></div>
+    <b style="font-size:12.5px;">Cases created — last 7 days</b>
+    <div id="perfTrend" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <b>Top Vendors by Case Volume</b>
+    <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;">
+      <tr style="text-align:left;color:#888;font-size:11px;text-transform:uppercase;"><th style="padding:6px;">Vendor</th><th style="padding:6px;">Cases</th></tr>
+      <tbody id="topVendorRows"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Vendor Companies</h2>
+    <table>
+      <tr><th>Company</th><th>Email</th><th>Cases</th><th>Agents</th><th>WhatsApp</th><th>Status</th><th></th></tr>
+      <tbody id="vendorRows"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Platform Settings</h2>
+    <p class="hint">These keys power every vendor's AI features and KYC checks — vendors never see them.</p>
+
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12.5px;font-weight:600;">Gemini API Key <span class="source-tag" id="geminiSourceTag"></span></label>
+      <div class="form-row" style="margin-top:6px;">
+        <input id="geminiApiKey" placeholder="Leave blank to keep current key" type="password">
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12.5px;font-weight:600;">Gridlines API Key <span class="source-tag" id="gridlinesSourceTag"></span></label>
+      <div class="form-row" style="margin-top:6px;">
+        <input id="gridlinesApiKey" placeholder="Leave blank to keep current key" type="password">
+        <input id="gridlinesAuthType" placeholder="Auth type (default: API-Key)">
+      </div>
+    </div>
+
+    <button class="save" onclick="saveSettings()">Save Settings</button>
+    <div id="settingsMsg" style="font-size:12.5px;margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Evidence Storage <span class="source-tag" id="storageSourceTag"></span></h2>
+    <p class="hint">By default, WhatsApp photos, documents, and call recordings save to this server's local disk — most hosts (including Render's free tier) wipe this on restart or redeploy. Connect S3-compatible object storage (Cloudflare R2 recommended — cheap, no egress fees) so evidence is never lost.</p>
+    <div id="storageWarning" style="display:none;background:#fdf1ee;border:1px solid #e8c4b8;border-radius:8px;padding:10px;font-size:12px;color:#7a1f1f;margin-bottom:12px;"></div>
+
+    <div class="form-row">
+      <input id="s3Endpoint" placeholder="Endpoint (e.g. https://xxxx.r2.cloudflarestorage.com)">
+      <input id="s3Bucket" placeholder="Bucket name">
+    </div>
+    <div class="form-row">
+      <input id="s3AccessKeyId" placeholder="Access Key ID" type="password">
+      <input id="s3SecretAccessKey" placeholder="Secret Access Key" type="password">
+    </div>
+    <div class="form-row">
+      <input id="s3Region" placeholder="Region (default: auto)">
+      <input id="s3PublicBaseUrl" placeholder="Public base URL (optional, e.g. a CDN domain)">
+    </div>
+    <button class="save" onclick="saveStorageSettings()">Save Storage Settings</button>
+    <div id="storageMsg" style="font-size:12.5px;margin-top:8px;"></div>
+  </div>
+
+</div>
+
+<script>
+const token = localStorage.getItem('praman_token');
+const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
+if (!token || !user || user.role !== 'super_admin') location.href = '/login.html';
+
+function authHeaders(extra){ return Object.assign({ Authorization: 'Bearer ' + token }, extra || {}); }
+function logout(){ localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
+
+async function loadVendors(){
+  const res = await fetch('/api/super-admin/vendors', { headers: authHeaders() });
+  if (res.status === 403) { logout(); return; }
+  const vendors = await res.json();
+  document.getElementById('vendorRows').innerHTML = vendors.map(v => `
+    <tr>
+      <td><b>${v.vendorName}</b></td>
+      <td>${v.email}</td>
+      <td>${v.caseCount}</td>
+      <td>${v.agentCount}</td>
+      <td>${v.whatsappConnected ? '✅' : '—'}</td>
+      <td><span class="tag ${v.approved ? 'approved' : 'pending'}">${v.approved ? 'Approved' : 'Pending'}</span></td>
+      <td>${v.approved
+        ? `<button class="action suspend" onclick="suspendVendor('${v.id}')">Suspend</button>`
+        : `<button class="action approve" onclick="approveVendor('${v.id}')">Approve</button>`}</td>
+    </tr>`).join('') || '<tr><td colspan="7" style="color:#999;">No vendors yet.</td></tr>';
+}
+
+async function approveVendor(id){
+  await fetch(`/api/super-admin/vendors/${id}/approve`, { method:'POST', headers: authHeaders() });
+  loadVendors();
+}
+async function suspendVendor(id){
+  if(!confirm('Suspend this vendor? They and their agents will not be able to log in.')) return;
+  await fetch(`/api/super-admin/vendors/${id}/suspend`, { method:'POST', headers: authHeaders() });
+  loadVendors();
+}
+
+async function loadSettings(){
+  const res = await fetch('/api/super-admin/settings', { headers: authHeaders() });
+  const s = await res.json();
+  document.getElementById('geminiApiKey').placeholder = s.geminiApiKey ? `Current: ${s.geminiApiKey}` : 'Not set — enter a key';
+  document.getElementById('geminiSourceTag').textContent = s.geminiSource;
+  document.getElementById('gridlinesApiKey').placeholder = s.gridlinesApiKey ? `Current: ${s.gridlinesApiKey}` : 'Not set — enter a key';
+  document.getElementById('gridlinesSourceTag').textContent = s.gridlinesSource;
+  document.getElementById('gridlinesAuthType').value = s.gridlinesAuthType || '';
+
+  document.getElementById('s3Endpoint').value = s.s3Endpoint || '';
+  document.getElementById('s3Bucket').value = s.s3Bucket || '';
+  document.getElementById('s3AccessKeyId').placeholder = s.s3AccessKeyId ? `Current: ${s.s3AccessKeyId}` : 'Access Key ID';
+  document.getElementById('s3Region').value = s.s3Region || 'auto';
+  document.getElementById('s3PublicBaseUrl').value = s.s3PublicBaseUrl || '';
+  document.getElementById('storageSourceTag').textContent = s.storageSource;
+}
+
+async function saveStorageSettings(){
+  const body = {
+    s3Endpoint: document.getElementById('s3Endpoint').value.trim(),
+    s3Bucket: document.getElementById('s3Bucket').value.trim(),
+    s3AccessKeyId: document.getElementById('s3AccessKeyId').value.trim(),
+    s3SecretAccessKey: document.getElementById('s3SecretAccessKey').value.trim(),
+    s3Region: document.getElementById('s3Region').value.trim(),
+    s3PublicBaseUrl: document.getElementById('s3PublicBaseUrl').value.trim()
+  };
+  const res = await fetch('/api/super-admin/settings', {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  document.getElementById('storageMsg').textContent = data.ok ? 'Saved — new uploads will go to cloud storage.' : (data.error || 'Failed to save.');
+  document.getElementById('s3SecretAccessKey').value = '';
+  loadSettings();
+}
+
+async function saveSettings(){
+  const geminiApiKey = document.getElementById('geminiApiKey').value.trim();
+  const gridlinesApiKey = document.getElementById('gridlinesApiKey').value.trim();
+  const gridlinesAuthType = document.getElementById('gridlinesAuthType').value.trim();
+  const res = await fetch('/api/super-admin/settings', {
+    method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
+    body: JSON.stringify({ geminiApiKey, gridlinesApiKey, gridlinesAuthType })
+  });
+  const data = await res.json();
+  document.getElementById('settingsMsg').textContent = data.ok ? 'Saved.' : (data.error || 'Failed to save.');
+  document.getElementById('geminiApiKey').value = '';
+  document.getElementById('gridlinesApiKey').value = '';
+  loadSettings();
+}
+
+function statCard(label, value){
+  return `<div class="cell"><div class="k">${label}</div><div class="v">${value}</div></div>`;
+}
+function trendBars(trend){
+  const max = Math.max(1, ...trend.map(t => t.count));
+  return `<div style="display:flex;gap:8px;align-items:flex-end;height:80px;">` +
+    trend.map(t => `
+      <div style="flex:1;text-align:center;">
+        <div style="background:#c8781f;height:${Math.max(4, (t.count/max)*60)}px;border-radius:3px 3px 0 0;"></div>
+        <div style="font-size:9.5px;color:#888;margin-top:4px;">${t.date.slice(5)}</div>
+        <div style="font-size:10.5px;font-weight:600;">${t.count}</div>
+      </div>`).join('') + `</div>`;
+}
+
+async function loadPlatformPerformance(){
+  const res = await fetch('/api/super-admin/analytics', { headers: authHeaders() });
+  const d = await res.json();
+  document.getElementById('perfSummary').innerHTML =
+    statCard('Total Vendors', d.vendors.total) +
+    statCard('Pending Approval', d.vendors.pending) +
+    statCard('Total Cases', d.cases.total) +
+    statCard('Total Agents', d.agentCount) +
+    statCard('Evidence Collected', d.evidenceCollected) +
+    statCard('Calls Made', d.callsCount) +
+    statCard('KYC Checks', d.kycChecksCount) +
+    statCard('Recordings Saved', d.recordingsCount);
+  document.getElementById('perfTrend').innerHTML = trendBars(d.trend7Days);
+  document.getElementById('topVendorRows').innerHTML = d.topVendors.map(v =>
+    `<tr><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${v.vendorName}</td><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${v.caseCount}</td></tr>`
+  ).join('') || '<tr><td colspan="2" style="color:#999;padding:6px;">No vendors yet.</td></tr>';
+
+  const warnBox = document.getElementById('storageWarning');
+  if (!d.storage.usingCloud) {
+    warnBox.style.display = 'block';
+    warnBox.textContent = `⚠️ Not using cloud storage — ${d.storage.localDiskMB} MB of evidence is on local disk right now and may be lost on restart/redeploy. Connect S3/R2 below.`;
+  } else {
+    warnBox.style.display = 'none';
+  }
+}
+
+loadVendors();
+loadSettings();
+loadPlatformPerformance();
+</script>
+</body>
+</html>

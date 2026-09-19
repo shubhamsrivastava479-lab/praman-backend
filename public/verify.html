@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Verification</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{margin:0;background:#f1f3f5;font-family:system-ui,sans-serif;padding:20px;color:#10151f;}
+  .card{background:#fff;border-radius:14px;padding:24px;max-width:440px;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,.08);}
+  h1{font-size:19px;margin:0 0 6px;}
+  p{font-size:13.5px;color:#555;line-height:1.55;}
+  .choice-btn{display:block;width:100%;text-align:left;padding:16px;border-radius:10px;border:1px solid #dde1e6;background:#fff;margin-top:12px;cursor:pointer;}
+  .choice-btn b{display:block;font-size:14.5px;margin-bottom:3px;}
+  .choice-btn span{font-size:12px;color:#666;}
+  .choice-btn.ai{border-color:#c8781f;}
+  .choice-btn.human{border-color:#1f7a6c;}
+  .step{display:none;}
+  .step.active{display:block;}
+  .prompt{background:#f4f1ea;border-radius:10px;padding:14px;font-size:13.5px;margin-bottom:14px;border-left:4px solid #c8781f;}
+  input[type=text], input[type=file]{width:100%;padding:11px;border:1px solid #dde1e6;border-radius:8px;margin-bottom:10px;font-size:13.5px;box-sizing:border-box;}
+  button.primary{width:100%;padding:13px;border:none;border-radius:8px;background:#c8781f;color:#fff;font-weight:600;font-size:14px;cursor:pointer;}
+  button.primary:disabled{background:#ccc;}
+  .progress{display:flex;gap:5px;margin-bottom:16px;}
+  .progress div{flex:1;height:4px;border-radius:2px;background:#e2e5e9;}
+  .progress div.done{background:#1f7a6c;}
+  .status-msg{font-size:12px;margin-top:8px;min-height:16px;}
+  .status-msg.err{color:#b23a2c;}
+  .status-msg.ok{color:#1f7a6c;}
+  .extracted{background:#eef7f4;border-radius:8px;padding:10px;font-size:12px;margin-bottom:10px;}
+  .backlink{font-size:12px;color:#888;text-align:center;margin-top:14px;cursor:pointer;text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <h1>Praman Verification</h1>
+  <p>Choose your preferred language, then how you'd like to complete this step.</p>
+
+  <select id="langSelect" style="width:100%;padding:11px;border:1px solid #dde1e6;border-radius:8px;margin-bottom:14px;font-size:13.5px;">
+    <option value="English">English</option>
+    <option value="Hindi" selected>हिंदी (Hindi)</option>
+    <option value="Tamil">தமிழ் (Tamil)</option>
+    <option value="Telugu">తెలుగు (Telugu)</option>
+    <option value="Marathi">मराठी (Marathi)</option>
+    <option value="Bengali">বাংলা (Bengali)</option>
+    <option value="Gujarati">ગુજરાતી (Gujarati)</option>
+    <option value="Kannada">ಕನ್ನಡ (Kannada)</option>
+    <option value="Punjabi">ਪੰਜਾਬੀ (Punjabi)</option>
+  </select>
+
+  <div id="mandatoryCallNotice" style="display:none;background:#fdf1ee;border:1px solid #e8c4b8;border-radius:8px;padding:10px;font-size:12px;color:#7a1f1f;margin-bottom:12px;">Due to the value of this case, only a live executive call is available — self-verification is not offered.</div>
+
+  <div class="choice-btn ai" id="selfVerifyBtn" onclick="startSelfVerify()">
+    <b>🤖 Quick Self-Verification</b>
+    <span>Guided step-by-step, takes about 3 minutes. Upload your ID, confirm an OTP.</span>
+  </div>
+  <div class="choice-btn human" onclick="talkToExecutive()">
+    <b>👤 Talk to an Executive</b>
+    <span>Prefer to speak with someone? Connect to a call with screen share.</span>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const caseId = params.get('case');
+const roomId = params.get('room');
+const name = params.get('name') || 'Insured';
+
+let selectedLanguage = 'Hindi';
+let audioEl = new Audio();
+
+// Records date/time + GPS (best-effort) the moment this verification link
+// is opened — regardless of which path (self-verify or talk to executive)
+// the participant ends up choosing.
+(function captureLocation(){
+  const deviceInfo = {
+    platform: navigator.platform || navigator.userAgentData?.platform || 'unknown',
+    screen: `${screen.width}x${screen.height}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    userAgent: navigator.userAgent.slice(0, 120)
+  };
+  const send = (latitude, longitude, accuracy) => {
+    fetch(`/api/participant/${caseId}/location`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude, longitude, accuracy, deviceInfo })
+    }).catch(() => {});
+  };
+  if (!navigator.geolocation) { send(null, null, null); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => send(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => send(null, null, null),
+    { timeout: 8000 }
+  );
+})();
+
+// If this case is above the high-value threshold, self-verification is
+// disabled — only the executive call path is offered.
+fetch(`/api/participant/${caseId}/info`).then(r => r.json()).then(info => {
+  if (info.requiresMandatoryCall) {
+    document.getElementById('mandatoryCallNotice').style.display = 'block';
+    document.getElementById('selfVerifyBtn').style.display = 'none';
+  }
+}).catch(() => {});
+
+async function speak(text){
+  // Gemini-generated voice in the participant's chosen language, with a
+  // silent no-op fallback if the request fails (visible prompt text is
+  // always shown regardless, so the wizard still works without audio).
+  try {
+    const res = await fetch(`/api/participant/${caseId}/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language: selectedLanguage })
+    });
+    if (!res.ok) throw new Error('tts failed');
+    const blob = await res.blob();
+    audioEl.pause();
+    audioEl.src = URL.createObjectURL(blob);
+    audioEl.play().catch(() => {}); // autoplay can be blocked until the user has interacted — fine, text is still visible
+  } catch (e) {
+    // Fallback to the browser's own free voice if Gemini TTS is unreachable
+    try {
+      if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(text);
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+      }
+    } catch(e2){}
+  }
+}
+
+function talkToExecutive(){
+  location.href = `/join.html?room=${roomId}&case=${caseId}&name=${encodeURIComponent(name)}`;
+}
+
+function startSelfVerify(){
+  selectedLanguage = document.getElementById('langSelect').value;
+  document.getElementById('card').innerHTML = wizardHtml();
+  goToStep(1);
+}
+
+function wizardHtml(){
+  return `
+    <div class="progress" id="progress"><div></div><div></div><div></div><div></div><div></div><div></div></div>
+
+    <div class="step" id="step1">
+      <div class="prompt" id="prompt1">Welcome! To verify your identity, please upload a clear photo of your Aadhaar card.</div>
+      <input type="file" id="aadhaarImg" accept="image/*" capture="environment">
+      <button class="primary" onclick="uploadAadhaarImage()">Upload &amp; Continue</button>
+      <div class="status-msg" id="msg1"></div>
+    </div>
+
+    <div class="step" id="step2">
+      <div class="prompt" id="prompt2">Please confirm your 12-digit Aadhaar number so we can send an OTP.</div>
+      <div class="extracted" id="extracted2" style="display:none;"></div>
+      <input type="text" id="aadhaarNumber" placeholder="Aadhaar number">
+      <button class="primary" onclick="sendAadhaarOtp()">Send OTP</button>
+      <div class="status-msg" id="msg2"></div>
+    </div>
+
+    <div class="step" id="step3">
+      <div class="prompt">An OTP has been sent to the mobile number linked to your Aadhaar. Please enter it below.</div>
+      <input type="text" id="aadhaarOtp" placeholder="Enter OTP">
+      <button class="primary" onclick="verifyAadhaarOtp()">Verify Aadhaar</button>
+      <div class="status-msg" id="msg3"></div>
+    </div>
+
+    <div class="step" id="step4">
+      <div class="prompt">Great! Now please upload a photo of your PAN card.</div>
+      <input type="file" id="panImg" accept="image/*" capture="environment">
+      <button class="primary" onclick="uploadPanImage()">Upload PAN</button>
+      <div class="status-msg" id="msg4"></div>
+    </div>
+
+    <div class="step" id="step5">
+      <div class="extracted" id="extracted5" style="display:none;"></div>
+      <input type="text" id="panNumber" placeholder="PAN number">
+      <input type="text" id="panName" placeholder="Name as on PAN">
+      <input type="text" id="panDob" placeholder="Date of birth (DD/MM/YYYY)">
+      <button class="primary" onclick="verifyPan()">Verify PAN</button>
+      <div class="status-msg" id="msg5"></div>
+    </div>
+
+    <div class="step" id="step6">
+      <div class="prompt">One last check: please write the code <b id="challengeCodeDisplay"></b> on a piece of paper, hold it up next to your face, and take a live selfie.</div>
+      <video id="selfieVideo" autoplay playsinline style="width:100%;border-radius:8px;background:#000;margin-bottom:10px;"></video>
+      <canvas id="selfieCanvas" style="display:none;"></canvas>
+      <button class="primary" onclick="captureLivenessSelfie()">Capture Selfie</button>
+      <div class="status-msg" id="msg6"></div>
+    </div>
+
+    <div class="step" id="step7">
+      <div class="prompt">Would you like to add any other documents (address proof, income proof, photograph)? This is optional.</div>
+      <select id="docLabel" style="width:100%;padding:11px;border:1px solid #dde1e6;border-radius:8px;margin-bottom:10px;font-size:13.5px;">
+        <option>Address Proof</option>
+        <option>Income Proof</option>
+        <option>Bank Passbook</option>
+        <option>Photograph</option>
+        <option>Signature</option>
+        <option>Other</option>
+      </select>
+      <input type="file" id="extraDoc" accept="image/*" capture="environment">
+      <button class="primary" onclick="uploadExtraDocument()">Add Document</button>
+      <button class="primary" style="background:#3a4356;margin-top:8px;" onclick="finishWizard()">Skip / Finish</button>
+      <div class="status-msg" id="msg7"></div>
+      <div id="extraDocList" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="step" id="stepDone">
+      <div class="prompt" style="border-left-color:#1f7a6c;background:#eef7f4;">✅ Verification complete! Thank you. Your details have been sent to the investigation team.</div>
+    </div>
+
+    <div class="backlink" onclick="talkToExecutive()">Having trouble? Talk to an executive instead</div>
+  `;
+}
+
+let currentStep = 1;
+function goToStep(n){
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(n === 'done' ? 'stepDone' : 'step' + n);
+  if (el) el.classList.add('active');
+  const bars = document.querySelectorAll('#progress div');
+  bars.forEach((b,i) => b.classList.toggle('done', typeof n === 'number' && i < n));
+  currentStep = n;
+  const prompts = {
+    1: 'Welcome! To verify your identity, please upload a clear photo of your Aadhaar card.',
+    2: 'Please confirm your Aadhaar number so we can send an OTP.',
+    3: 'An OTP has been sent to your mobile number. Please enter it.',
+    4: 'Now please upload a photo of your PAN card.',
+    5: 'Please confirm your PAN details to verify.',
+    6: 'For a final liveness check, please write down the code shown, hold it next to your face, and take a selfie.',
+    7: 'You may add any other supporting documents now, or finish if you are done.',
+    done: 'Verification complete. Thank you.'
+  };
+  if (prompts[n]) speak(prompts[n]);
+  if (n === 6) initSelfieCamera();
+}
+
+async function uploadAadhaarImage(){
+  const file = document.getElementById('aadhaarImg').files[0];
+  const msg = document.getElementById('msg1');
+  if(!file){ msg.textContent = 'Please choose a photo first.'; msg.className='status-msg err'; return; }
+  msg.textContent = 'Reading document…'; msg.className = 'status-msg';
+  const fd = new FormData(); fd.append('image', file);
+  const res = await fetch(`/api/participant/${caseId}/upload-id`, { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.className='status-msg err'; return; }
+  document.getElementById('extracted2').style.display = 'block';
+  document.getElementById('extracted2').textContent = 'Detected: ' + (data.extracted || 'could not read all fields — please type manually');
+  const numMatch = (data.extracted || '').match(/\d{4}\s?\d{4}\s?\d{4}/);
+  if (numMatch) document.getElementById('aadhaarNumber').value = numMatch[0].replace(/\s/g,'');
+  goToStep(2);
+}
+
+async function sendAadhaarOtp(){
+  const aadhaarNumber = document.getElementById('aadhaarNumber').value.trim();
+  const msg = document.getElementById('msg2');
+  if(!aadhaarNumber){ msg.textContent = 'Enter your Aadhaar number.'; msg.className='status-msg err'; return; }
+  msg.textContent = 'Sending OTP…'; msg.className='status-msg';
+  const res = await fetch(`/api/participant/${caseId}/aadhaar-otp/generate`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ aadhaarNumber })
+  });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.className='status-msg err'; return; }
+  window._aadhaarRef = data.referenceId;
+  goToStep(3);
+}
+
+async function verifyAadhaarOtp(){
+  const otp = document.getElementById('aadhaarOtp').value.trim();
+  const msg = document.getElementById('msg3');
+  msg.textContent = 'Verifying…'; msg.className='status-msg';
+  const res = await fetch(`/api/participant/${caseId}/aadhaar-otp/verify`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ referenceId: window._aadhaarRef, otp })
+  });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.className='status-msg err'; return; }
+  goToStep(4);
+}
+
+async function uploadPanImage(){
+  const file = document.getElementById('panImg').files[0];
+  const msg = document.getElementById('msg4');
+  if(!file){ msg.textContent = 'Please choose a photo first.'; msg.className='status-msg err'; return; }
+  msg.textContent = 'Reading document…'; msg.className='status-msg';
+  const fd = new FormData(); fd.append('image', file);
+  const res = await fetch(`/api/participant/${caseId}/upload-id`, { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.className='status-msg err'; return; }
+  document.getElementById('extracted5').style.display = 'block';
+  document.getElementById('extracted5').textContent = 'Detected: ' + (data.extracted || 'could not read all fields — please type manually');
+  const panMatch = (data.extracted || '').match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/);
+  if (panMatch) document.getElementById('panNumber').value = panMatch[0];
+  goToStep(5);
+}
+
+async function verifyPan(){
+  const panNumber = document.getElementById('panNumber').value.trim().toUpperCase();
+  const nameOnPan = document.getElementById('panName').value.trim();
+  const dateOfBirth = document.getElementById('panDob').value.trim();
+  const msg = document.getElementById('msg5');
+  if(!panNumber || !nameOnPan || !dateOfBirth){ msg.textContent = 'Please fill all fields.'; msg.className='status-msg err'; return; }
+  msg.textContent = 'Verifying…'; msg.className='status-msg';
+  const res = await fetch(`/api/participant/${caseId}/pan-verify`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ panNumber, nameOnPan, dateOfBirth })
+  });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.className='status-msg err'; return; }
+  goToStep(6);
+}
+
+// ---------- Liveness check + full session recording ----------
+// From this point on (liveness through any extra documents), the camera
+// feed is recorded end-to-end as an additional evidentiary record of the
+// self-verification session — not just the single liveness selfie.
+let challengeCode = '';
+let selfieStream = null;
+let sessionRecorder = null;
+let sessionChunks = [];
+
+async function initSelfieCamera(){
+  challengeCode = String(Math.floor(1000 + Math.random() * 9000));
+  document.getElementById('challengeCodeDisplay').textContent = challengeCode;
+  try {
+    selfieStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    document.getElementById('selfieVideo').srcObject = selfieStream;
+    sessionChunks = [];
+    sessionRecorder = new MediaRecorder(selfieStream, { mimeType: 'video/webm;codecs=vp8' });
+    sessionRecorder.ondataavailable = (e) => { if (e.data.size > 0) sessionChunks.push(e.data); };
+    sessionRecorder.start(1000);
+  } catch (err) {
+    document.getElementById('msg6').textContent = 'Camera permission is needed for the liveness check.';
+    document.getElementById('msg6').className = 'status-msg err';
+  }
+}
+
+async function captureLivenessSelfie(){
+  const video = document.getElementById('selfieVideo');
+  const canvas = document.getElementById('selfieCanvas');
+  const msg = document.getElementById('msg6');
+  if (!selfieStream) { msg.textContent = 'Camera not ready yet.'; msg.className = 'status-msg err'; return; }
+
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  msg.textContent = 'Checking…'; msg.className = 'status-msg';
+
+  canvas.toBlob(async (blob) => {
+    const fd = new FormData();
+    fd.append('selfie', blob, 'selfie.jpg');
+    fd.append('challengeCode', challengeCode);
+    const res = await fetch(`/api/participant/${caseId}/liveness-check`, { method:'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { msg.textContent = data.error; msg.className = 'status-msg err'; return; }
+    // Camera keeps running (session recording continues) — only the still
+    // frame was captured above, not the live stream itself.
+    if (data.passed) {
+      msg.textContent = '✓ Liveness confirmed.'; msg.className = 'status-msg ok';
+      setTimeout(() => goToStep(7), 800);
+    } else {
+      msg.textContent = 'Could not confirm liveness automatically — this will be reviewed by an agent, continuing anyway.';
+      msg.className = 'status-msg';
+      setTimeout(() => goToStep(7), 1500);
+    }
+  }, 'image/jpeg', 0.85);
+}
+
+// Stops the session recording, uploads it, runs the automated
+// spot-check/cross-check/geofencing checks, then shows completion.
+async function finishWizard(){
+  if (sessionRecorder && sessionRecorder.state !== 'inactive') {
+    await new Promise(resolve => { sessionRecorder.onstop = resolve; sessionRecorder.stop(); });
+  }
+  if (selfieStream) selfieStream.getTracks().forEach(t => t.stop());
+
+  if (sessionChunks.length) {
+    const blob = new Blob(sessionChunks, { type: 'video/webm' });
+    const fd = new FormData();
+    fd.append('recording', blob, 'session.webm');
+    fetch(`/api/participant/${caseId}/session-recording`, { method: 'POST', body: fd }).catch(() => {});
+  }
+  fetch(`/api/participant/${caseId}/finalize`, { method: 'POST' }).catch(() => {});
+  goToStep('done');
+}
+
+// ---------- Additional documents ----------
+async function uploadExtraDocument(){
+  const file = document.getElementById('extraDoc').files[0];
+  const label = document.getElementById('docLabel').value;
+  const msg = document.getElementById('msg7');
+  if(!file){ msg.textContent = 'Choose a file first.'; msg.className = 'status-msg err'; return; }
+  msg.textContent = 'Uploading…'; msg.className = 'status-msg';
+  const fd = new FormData(); fd.append('document', file); fd.append('label', label);
+  const res = await fetch(`/api/participant/${caseId}/upload-document`, { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.error){ msg.textContent = data.error; msg.className = 'status-msg err'; return; }
+  msg.textContent = '✓ Added.'; msg.className = 'status-msg ok';
+  document.getElementById('extraDocList').innerHTML += `<div style="font-size:12px;color:#1f7a6c;">✓ ${label} added</div>`;
+  document.getElementById('extraDoc').value = '';
+}
+</script>
+</body>
+</html>
