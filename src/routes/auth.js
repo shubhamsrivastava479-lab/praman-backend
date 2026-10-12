@@ -127,6 +127,64 @@ router.post('/reset-super-admin-password', async (req, res) => {
   res.json({ ok: true, email: target.email });
 });
 
+// ---------- Super Admin: Sign in with Google ----------
+// Only the Gmail set in SUPER_ADMIN_GOOGLE_EMAIL can get in this way.
+const GOOGLE_CLIENT_ID_DEFAULT = '445649274332-of8rk67v62ckk78619bia87vumu17idl.apps.googleusercontent.com';
+const GOOGLE_EMAIL_DEFAULT = 'shubhamsrivastava479@gmail.com';
+const googleClientId = () => process.env.GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID_DEFAULT;
+const googleAdminEmail = () => (process.env.SUPER_ADMIN_GOOGLE_EMAIL || GOOGLE_EMAIL_DEFAULT).trim().toLowerCase();
+
+router.get('/google-config', (req, res) => res.json({ clientId: googleClientId() }));
+
+const googleAttempts = new Map();
+router.post('/google-login', async (req, res) => {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const rec = googleAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  if (now > rec.resetAt) { rec.count = 0; rec.resetAt = now + 15 * 60 * 1000; }
+  rec.count++;
+  googleAttempts.set(ip, rec);
+  if (rec.count > 30) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+
+  const { credential } = req.body || {};
+  if (!credential) return res.status(400).json({ error: 'Missing Google credential.' });
+  try {
+    const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
+    const info = await r.json();
+    if (!r.ok || info.error_description || info.error) {
+      return res.status(401).json({ error: 'Google sign-in could not be verified.' });
+    }
+    if (info.aud !== googleClientId()) return res.status(401).json({ error: 'Google sign-in could not be verified.' });
+    if (!['accounts.google.com', 'https://accounts.google.com'].includes(info.iss)) {
+      return res.status(401).json({ error: 'Google sign-in could not be verified.' });
+    }
+    if (String(info.email_verified) !== 'true') return res.status(401).json({ error: 'Google email is not verified.' });
+    if (Number(info.exp) * 1000 < Date.now()) return res.status(401).json({ error: 'Google sign-in expired. Try again.' });
+    const gmail = String(info.email || '').toLowerCase();
+    if (gmail !== googleAdminEmail()) {
+      return res.status(403).json({ error: 'This Google account is not allowed to be Super Admin.' });
+    }
+
+    await db.read();
+    let admin = db.data.users.find(u => u.role === 'super_admin' && u.email.toLowerCase() === gmail)
+      || db.data.users.find(u => u.role === 'super_admin');
+    if (!admin) {
+      admin = {
+        id: uid('user'), email: gmail, vendorName: 'Platform', role: 'super_admin',
+        parentVendorId: null, approved: true,
+        passwordHash: await hashPassword(require('crypto').randomBytes(24).toString('hex')),
+        createdAt: new Date().toISOString()
+      };
+      db.data.users.push(admin);
+      await db.write();
+    }
+    const token = signToken({ ...admin, vendorRootId: admin.id });
+    res.json({ token, user: { id: admin.id, email: admin.email, vendorName: admin.vendorName, role: admin.role } });
+  } catch (e) {
+    res.status(502).json({ error: 'Could not reach Google. Try again.' });
+  }
+});
+
 // ---------- Agent accounts (created by a vendor_admin, for concurrent calls) ----------
 
 router.get('/agents', requireAuth, async (req, res) => {
