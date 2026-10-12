@@ -130,9 +130,8 @@ router.post('/reset-super-admin-password', async (req, res) => {
 // ---------- Super Admin: Sign in with Google ----------
 // Only the Gmail set in SUPER_ADMIN_GOOGLE_EMAIL can get in this way.
 const GOOGLE_CLIENT_ID_DEFAULT = '445649274332-of8rk67v62ckk78619bia87vumu17idl.apps.googleusercontent.com';
-const GOOGLE_EMAIL_DEFAULT = 'shubhamsrivastava479@gmail.com';
 const googleClientId = () => process.env.GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID_DEFAULT;
-const googleAdminEmail = () => (process.env.SUPER_ADMIN_GOOGLE_EMAIL || GOOGLE_EMAIL_DEFAULT).trim().toLowerCase();
+const googleAdminEmail = () => (process.env.SUPER_ADMIN_GOOGLE_EMAIL || '').trim().toLowerCase();
 
 router.get('/google-config', (req, res) => res.json({ clientId: googleClientId() }));
 
@@ -161,7 +160,7 @@ router.post('/google-login', async (req, res) => {
     if (String(info.email_verified) !== 'true') return res.status(401).json({ error: 'Google email is not verified.' });
     if (Number(info.exp) * 1000 < Date.now()) return res.status(401).json({ error: 'Google sign-in expired. Try again.' });
     const gmail = String(info.email || '').toLowerCase();
-    if (gmail !== googleAdminEmail()) {
+    if (!googleAdminEmail() || gmail !== googleAdminEmail()) {
       return res.status(403).json({ error: 'This Google account is not allowed to be Super Admin.' });
     }
 

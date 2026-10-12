@@ -24,10 +24,6 @@
   <input id="email" placeholder="Email" type="email">
   <input id="password" placeholder="Password" type="password">
   <button id="submitBtn" onclick="submitForm()">Log in</button>
-  <div id="gWrap" style="margin-top:16px;border-top:1px solid #eee;padding-top:14px;">
-    <div style="font-size:11.5px;color:#888;text-align:center;margin-bottom:8px;">Platform admin</div>
-    <div id="gBtn" style="display:flex;justify-content:center;"></div>
-  </div>
   <div class="toggle" id="toggleMode" onclick="toggleMode()">New vendor? Create an account</div>
 </div>
 <script>
@@ -67,29 +63,6 @@ async function submitForm(){
   location.href = data.user.role === 'super_admin' ? '/super-admin.html' : '/index.html';
 }
 
-async function onGoogle(resp){
-  const errBox = document.getElementById('err'); errBox.style.color='#b23a2c'; errBox.textContent='';
-  try{
-    const res = await fetch('/api/auth/google-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
-    const data = await res.json();
-    if(data.error){ errBox.textContent = data.error; return; }
-    localStorage.setItem('praman_token', data.token);
-    localStorage.setItem('praman_user', JSON.stringify(data.user));
-    location.href = '/super-admin.html';
-  }catch(e){ errBox.textContent = 'Server not reachable. Try again in 30s.'; }
-}
-(async function initGoogle(){
-  try{
-    const cfg = await (await fetch('/api/auth/google-config')).json();
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
-    s.onload = () => {
-      google.accounts.id.initialize({ client_id: cfg.clientId, callback: onGoogle });
-      google.accounts.id.renderButton(document.getElementById('gBtn'), { theme:'outline', size:'large', text:'signin_with', width:280 });
-    };
-    document.head.appendChild(s);
-  }catch(e){ document.getElementById('gWrap').style.display='none'; }
-})();
 </script>
 </body>
 </html>

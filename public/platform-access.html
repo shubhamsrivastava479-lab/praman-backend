@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Platform Access</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:system-ui,sans-serif;background:#10151f;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;}
+  .card{background:#fff;border-radius:12px;padding:30px;width:340px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+  h1{font-family:Georgia,serif;font-size:22px;margin:0 0 4px;}
+  .sub{font-size:12px;color:#888;margin-bottom:20px;}
+  .err{color:#b23a2c;font-size:12.5px;margin-bottom:10px;min-height:16px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>प्रमाण Praman</h1>
+  <div class="sub">Platform access</div>
+  <div class="err" id="err"></div>
+  <div id="gBtn" style="display:flex;justify-content:center;"></div>
+</div>
+<script>
+async function onGoogle(resp){
+  const errBox = document.getElementById('err'); errBox.style.color='#b23a2c'; errBox.textContent='';
+  try{
+    const res = await fetch('/api/auth/google-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
+    const data = await res.json();
+    if(data.error){ errBox.textContent = data.error; return; }
+    localStorage.setItem('praman_token', data.token);
+    localStorage.setItem('praman_user', JSON.stringify(data.user));
+    location.href = '/super-admin.html';
+  }catch(e){ errBox.textContent = 'Server not reachable. Try again in 30s.'; }
+}
+(async function initGoogle(){
+  try{
+    const cfg = await (await fetch('/api/auth/google-config')).json();
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = () => {
+      google.accounts.id.initialize({ client_id: cfg.clientId, callback: onGoogle });
+      google.accounts.id.renderButton(document.getElementById('gBtn'), { theme:'outline', size:'large', text:'signin_with', width:280 });
+    };
+    document.head.appendChild(s);
+  }catch(e){ document.getElementById('err').textContent='Could not load Google sign-in.'; }
+})();
+
+</script>
+</body>
+</html>
