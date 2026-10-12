@@ -92,6 +92,41 @@ router.post('/bootstrap-super-admin', async (req, res) => {
   res.status(201).json({ token, user: { id: admin.id, email: admin.email, vendorName: admin.vendorName, role: admin.role } });
 });
 
+// ---------- Super Admin password reset (setup-key protected) ----------
+const resetAttempts = new Map(); // ip -> {count, resetAt}
+router.post('/reset-super-admin-password', async (req, res) => {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const rec = resetAttempts.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  if (now > rec.resetAt) { rec.count = 0; rec.resetAt = now + 15 * 60 * 1000; }
+  rec.count++;
+  resetAttempts.set(ip, rec);
+  if (rec.count > 8) return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
+
+  const { setupKey, email, newPassword } = req.body || {};
+  if (!process.env.SUPER_ADMIN_SETUP_KEY) {
+    return res.status(400).json({ error: 'SUPER_ADMIN_SETUP_KEY is not configured on the server.' });
+  }
+  if (!setupKey || setupKey !== process.env.SUPER_ADMIN_SETUP_KEY) {
+    return res.status(403).json({ error: 'Invalid setup key.' });
+  }
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  }
+  await db.read();
+  const admins = db.data.users.filter(u => u.role === 'super_admin');
+  if (!admins.length) return res.status(404).json({ error: 'No Super Admin exists yet. Use setup-super-admin.html instead.' });
+  // Email is optional: if left blank, the (first) Super Admin is reset and its email is shown.
+  const target = email
+    ? admins.find(u => u.email.toLowerCase() === email.trim().toLowerCase())
+    : admins[0];
+  if (!target) return res.status(404).json({ error: 'No Super Admin with that email. Leave email blank to reset the existing one.' });
+
+  target.passwordHash = await hashPassword(newPassword);
+  await db.write();
+  res.json({ ok: true, email: target.email });
+});
+
 // ---------- Agent accounts (created by a vendor_admin, for concurrent calls) ----------
 
 router.get('/agents', requireAuth, async (req, res) => {

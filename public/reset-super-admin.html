@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Reset Super Admin Password</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:system-ui,sans-serif;background:#10151f;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;}
+  .card{background:#fff;border-radius:12px;padding:30px;width:380px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+  h1{font-family:Georgia,serif;font-size:20px;margin:0 0 4px;}
+  .sub{font-size:12px;color:#888;margin-bottom:20px;line-height:1.5;}
+  input{width:100%;padding:10px 12px;border:1px solid #dde1e6;border-radius:7px;margin-bottom:10px;font-size:13.5px;box-sizing:border-box;}
+  button{width:100%;padding:11px;border:none;border-radius:7px;background:#c8781f;color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;}
+  .msg{font-size:12.5px;margin-bottom:10px;min-height:16px;}
+  .msg.err{color:#b23a2c;} .msg.ok{color:#1f7a6c;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>प्रमाण Praman</h1>
+  <div class="sub">Super Admin password reset. You need the <b>SUPER_ADMIN_SETUP_KEY</b> (Render → Environment). If you forgot the email, leave it blank — the existing Super Admin will be reset and its email shown.</div>
+  <div class="msg" id="msg"></div>
+  <input id="setupKey" placeholder="Setup key (from Render)" type="password">
+  <input id="email" placeholder="Super Admin email (optional)" type="email">
+  <input id="pw" placeholder="New password (min 8 characters)" type="password">
+  <button onclick="doReset()">Reset Password</button>
+</div>
+<script>
+async function doReset(){
+  const msg=document.getElementById('msg'); msg.textContent=''; msg.className='msg';
+  const setupKey=document.getElementById('setupKey').value.trim();
+  const email=document.getElementById('email').value.trim();
+  const newPassword=document.getElementById('pw').value;
+  if(!setupKey||!newPassword){msg.textContent='Setup key and new password are required.';msg.className='msg err';return;}
+  try{
+    const res=await fetch('/api/auth/reset-super-admin-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({setupKey,email,newPassword})});
+    const data=await res.json();
+    if(data.error){msg.textContent=data.error;msg.className='msg err';return;}
+    msg.textContent='Done! Login email: '+data.email+' — redirecting to login…';msg.className='msg ok';
+    setTimeout(()=>location.href='/login.html',3500);
+  }catch(e){msg.textContent='Server not reachable (Render may be waking up). Try again in 30s.';msg.className='msg err';}
+}
+</script>
+</body>
+</html>
