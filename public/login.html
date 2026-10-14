@@ -24,7 +24,7 @@
   <input id="email" placeholder="Email" type="email">
   <input id="password" placeholder="Password" type="password">
   <button id="submitBtn" onclick="submitForm()">Log in</button>
-  <div class="toggle" id="toggleMode" onclick="toggleMode()">New vendor? Create an account</div>
+  <a href="/vendor-access.html" style="display:block;text-align:center;margin-top:14px;padding:10px;border:1px solid #dde1e6;border-radius:7px;font-size:13px;color:#333;text-decoration:none;font-weight:600;">Sign in / Register with Google</a>
 </div>
 <script>
 let mode = 'login';
@@ -33,7 +33,7 @@ function toggleMode(){
   document.getElementById('vendorName').style.display = mode === 'signup' ? 'block' : 'none';
   document.getElementById('modeSub').textContent = mode === 'signup' ? 'Create vendor account' : 'Vendor login';
   document.getElementById('submitBtn').textContent = mode === 'signup' ? 'Create account' : 'Log in';
-  document.getElementById('toggleMode').textContent = mode === 'signup' ? 'Already have an account? Log in' : 'New vendor? Create an account';
+  if(document.getElementById('toggleMode')) document.getElementById('toggleMode').textContent = mode === 'signup' ? 'Already have an account? Log in' : 'New vendor? Create an account';
   document.getElementById('err').textContent = '';
 }
 async function submitForm(){

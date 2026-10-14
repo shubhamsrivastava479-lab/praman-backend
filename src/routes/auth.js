@@ -5,31 +5,10 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.post('/signup', async (req, res) => {
-  const { email, password, vendorName } = req.body;
-  if (!email || !password || !vendorName) {
-    return res.status(400).json({ error: 'email, password and vendorName are required' });
-  }
-  await db.read();
-  if (db.data.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-    return res.status(409).json({ error: 'An account with this email already exists' });
-  }
-  const user = {
-    id: uid('user'),
-    email,
-    vendorName,
-    role: 'vendor_admin',
-    parentVendorId: null,
-    approved: false, // new vendors are pending until Super Admin approves them
-    passwordHash: await hashPassword(password),
-    createdAt: new Date().toISOString()
-  };
-  db.data.users.push(user);
-  await db.write();
-  res.status(201).json({
-    pending: true,
-    message: 'Account created. A platform admin needs to approve it before you can log in.'
-  });
+// Self-service signup now happens only through Google (vendor-access.html),
+// where firm details are collected and the Super Admin approves each vendor.
+router.post('/signup', (req, res) => {
+  res.status(410).json({ error: 'New vendors sign up with Google at /vendor-access.html' });
 });
 
 router.post('/login', async (req, res) => {
@@ -43,7 +22,7 @@ router.post('/login', async (req, res) => {
   // Approval gate: a vendor_admin must be approved; an agent's whole company
   // must be approved (their parent vendor_admin's status governs them).
   if (user.role === 'vendor_admin' && user.approved === false) {
-    return res.status(403).json({ error: 'Your account is pending approval by a platform admin.' });
+    return res.status(403).json({ error: user.status === 'suspended' ? 'Your account is suspended. Contact the platform admin.' : 'Your account is pending approval by a platform admin.' });
   }
   if (user.role === 'agent') {
     const parent = db.data.users.find(u => u.id === user.parentVendorId);
@@ -187,6 +166,124 @@ router.post('/google-login', async (req, res) => {
   } catch (e) {
     res.status(502).json({ error: 'Could not reach Google. Try again.' });
   }
+});
+
+// ---------- Vendor: Sign in / sign up with Google (+ firm details, Super Admin approval) ----------
+const jwtLib = require('jsonwebtoken');
+
+async function verifyGoogleIdToken(credential) {
+  const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
+  const info = await r.json();
+  if (!r.ok || info.error_description || info.error) throw new Error('verify');
+  if (info.aud !== googleClientId()) throw new Error('verify');
+  if (!['accounts.google.com', 'https://accounts.google.com'].includes(info.iss)) throw new Error('verify');
+  if (String(info.email_verified) !== 'true') throw new Error('unverified');
+  if (Number(info.exp) * 1000 < Date.now()) throw new Error('expired');
+  return { email: String(info.email || '').toLowerCase(), name: info.name || '' };
+}
+
+function rateLimit(map, ip, max) {
+  const now = Date.now();
+  const rec = map.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000 };
+  if (now > rec.resetAt) { rec.count = 0; rec.resetAt = now + 15 * 60 * 1000; }
+  rec.count++; map.set(ip, rec);
+  return rec.count > max;
+}
+
+const vendorGoogleAttempts = new Map();
+router.post('/vendor-google-login', async (req, res) => {
+  if (rateLimit(vendorGoogleAttempts, req.ip || 'x', 40)) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+  const { credential } = req.body || {};
+  if (!credential) return res.status(400).json({ error: 'Missing Google credential.' });
+  let g;
+  try { g = await verifyGoogleIdToken(credential); }
+  catch (e) {
+    if (e.message === 'unverified') return res.status(401).json({ error: 'Your Google email is not verified.' });
+    if (e.message === 'expired') return res.status(401).json({ error: 'Google sign-in expired. Try again.' });
+    if (e.message === 'verify') return res.status(401).json({ error: 'Google sign-in could not be verified.' });
+    return res.status(502).json({ error: 'Could not reach Google. Try again.' });
+  }
+  if (g.email === googleAdminEmail()) {
+    return res.status(403).json({ error: 'This account is for platform access. Use the platform access page.' });
+  }
+
+  await db.read();
+  const user = db.data.users.find(u => u.email.toLowerCase() === g.email && u.role !== 'super_admin');
+  if (!user) {
+    // New vendor: give a short-lived onboarding token; the firm details form uses it.
+    const onboardToken = jwtLib.sign({ purpose: 'vendor_onboard', email: g.email, name: g.name }, process.env.JWT_SECRET, { expiresIn: '30m' });
+    return res.json({ status: 'new', email: g.email, name: g.name, onboardToken });
+  }
+  if (user.role === 'vendor_admin' && user.approved === false) {
+    return res.json({ status: user.status === 'suspended' ? 'suspended' : 'pending', firmName: user.vendorName });
+  }
+  if (user.role === 'agent') {
+    const parent = db.data.users.find(u => u.id === user.parentVendorId);
+    if (!parent || parent.approved === false) return res.json({ status: 'pending', firmName: parent ? parent.vendorName : '' });
+  }
+  const vendorRootId = user.role === 'agent' ? user.parentVendorId : user.id;
+  const token = signToken({ ...user, vendorRootId });
+  res.json({ status: 'ok', token, user: { id: user.id, email: user.email, vendorName: user.vendorName, role: user.role || 'vendor_admin' } });
+});
+
+const GST_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const PAN_RE = /^[A-Z]{5}\d{4}[A-Z]$/;
+const clean = (v, max = 300) => String(v || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+const vendorRegAttempts = new Map();
+router.post('/vendor-register', async (req, res) => {
+  if (rateLimit(vendorRegAttempts, req.ip || 'x', 15)) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+  const b = req.body || {};
+  let ob;
+  try {
+    ob = jwtLib.verify(b.onboardToken || '', process.env.JWT_SECRET);
+    if (ob.purpose !== 'vendor_onboard') throw new Error('x');
+  } catch { return res.status(401).json({ error: 'Your sign-in expired. Please sign in with Google again.' }); }
+
+  const firmName = clean(b.firmName, 120);
+  const contactName = clean(b.contactName, 80);
+  const contactEmail = clean(b.contactEmail, 120).toLowerCase();
+  const mobile = String(b.mobile || '').replace(/[\s\-+]/g, '').replace(/^91(?=\d{10}$)/, '');
+  const gst = clean(b.gst, 20).toUpperCase();
+  const pan = clean(b.pan, 12).toUpperCase();
+  const address = clean(b.address, 400);
+  const city = clean(b.city, 80);
+  const state = clean(b.state, 80);
+  const pincode = String(b.pincode || '').trim();
+
+  if (firmName.length < 2) return res.status(400).json({ error: 'Firm name is required.' });
+  if (!/^[6-9]\d{9}$/.test(mobile)) return res.status(400).json({ error: 'Enter a valid 10-digit Indian mobile number.' });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contactEmail)) return res.status(400).json({ error: 'Enter a valid contact email.' });
+  if (!pan || !PAN_RE.test(pan)) return res.status(400).json({ error: 'Enter a valid PAN (like ABCDE1234F).' });
+  if (gst && !GST_RE.test(gst)) return res.status(400).json({ error: 'GST number format is not valid (15 characters).' });
+  if (gst && gst.slice(2, 12) !== pan) return res.status(400).json({ error: 'GST number does not match the PAN entered.' });
+  if (address.length < 10) return res.status(400).json({ error: 'Enter the full address.' });
+  if (!/^\d{6}$/.test(pincode)) return res.status(400).json({ error: 'Enter a valid 6-digit pincode.' });
+
+  await db.read();
+  if (db.data.users.find(u => u.email.toLowerCase() === ob.email)) {
+    return res.status(409).json({ error: 'This Google account is already registered. Sign in instead.' });
+  }
+  if (db.data.users.find(u => u.role === 'vendor_admin' && u.profile && u.profile.pan === pan)) {
+    return res.status(409).json({ error: 'A firm with this PAN is already registered. Contact the platform admin.' });
+  }
+
+  const user = {
+    id: uid('user'),
+    email: ob.email,
+    vendorName: firmName,
+    role: 'vendor_admin',
+    parentVendorId: null,
+    approved: false,
+    status: 'pending',
+    signupMethod: 'google',
+    profile: { firmName, contactName: contactName || ob.name || '', contactEmail, mobile, gst: gst || null, pan, address, city, state, pincode, submittedAt: new Date().toISOString() },
+    passwordHash: await hashPassword(require('crypto').randomBytes(24).toString('hex')),
+    createdAt: new Date().toISOString()
+  };
+  db.data.users.push(user);
+  await db.write();
+  res.status(201).json({ status: 'pending', message: 'Request submitted. You can sign in once the platform admin approves it.' });
 });
 
 // ---------- Agent accounts (created by a vendor_admin, for concurrent calls) ----------

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Live Video Call — Praman</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root{--ink:#22307A;--mist:#EEF1F8;--line:#D9DEEC;--text:#1A1F36;--muted:#5B6280;--leaf:#18865A;--alert:#B4372B;--turmeric:#E09A12;--bg:#0B0F1C;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:#E9ECF4;font-family:'Mukta',system-ui,sans-serif;font-size:15px;}
+  button{font-family:inherit;cursor:pointer;}
+  header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #1E2538;flex-wrap:wrap;}
+  header b{font-size:17px;} header .sub{color:#9AA3BD;font-size:14px;}
+  .rec{display:none;align-items:center;gap:6px;color:#FF7A6B;font-weight:600;font-size:14px;margin-left:auto;}
+  .rec i{width:9px;height:9px;border-radius:50%;background:#FF4D4D;animation:b 1.2s infinite;} @keyframes b{50%{opacity:.25}}
+  .grid{display:grid;grid-template-columns:1fr 330px;gap:14px;padding:14px;height:calc(100vh - 58px);}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr;height:auto;} }
+  .stage{position:relative;background:#000;border-radius:14px;overflow:hidden;min-height:60vh;}
+  #remote{width:100%;height:100%;object-fit:contain;background:#000;}
+  #local{position:absolute;right:12px;bottom:84px;width:180px;aspect-ratio:4/3;object-fit:cover;border-radius:10px;border:2px solid rgba(255,255,255,.7);transform:scaleX(-1);background:#222;}
+  .wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#9AA3BD;padding:20px;}
+  .controls{position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;justify-content:center;padding:12px;background:linear-gradient(to top,rgba(0,0,0,.75),transparent);flex-wrap:wrap;}
+  .c{border:none;border-radius:999px;padding:10px 16px;font-weight:600;font-size:14px;background:rgba(255,255,255,.16);color:#fff;}
+  .c.off{background:#fff;color:#111;} .c.photo{background:var(--turmeric);color:#111;} .c.end{background:var(--alert);}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .3s;} .flash.on{opacity:.8;transition:none;}
+  aside{display:flex;flex-direction:column;gap:12px;overflow:auto;}
+  .card{background:#151B2C;border:1px solid #232B42;border-radius:12px;padding:12px;}
+  .card h3{margin:0 0 8px;font-size:14.5px;color:#C9D0E6;}
+  .link{display:flex;gap:6px;} .link input{flex:1;min-width:0;background:#0B0F1C;border:1px solid #2A3350;color:#E9ECF4;border-radius:8px;padding:8px;font-size:12.5px;}
+  .b2{border:none;border-radius:8px;padding:8px 12px;font-weight:600;font-size:13.5px;background:var(--ink);color:#fff;}
+  .b2.green{background:#1F9D57;} .b2.ghost{background:#232B42;}
+  .kv{font-size:13.5px;line-height:1.6;} .kv span{color:#9AA3BD;}
+  .shots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+  .shots figure{margin:0;font-size:11px;color:#9AA3BD;} .shots img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;display:block;}
+  .msg{font-size:13px;margin-top:6px;color:#9AA3BD;min-height:18px;}
+  dialog{border:none;border-radius:14px;padding:18px;max-width:380px;width:calc(100% - 32px);}
+  dialog h4{margin:0 0 8px;color:var(--ink);font-size:17px;} dialog select,dialog input{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;margin-bottom:8px;}
+  dialog .row{display:flex;gap:8px;justify-content:flex-end;}
+</style>
+</head>
+<body>
+<header>
+  <b>Live video call</b><span class="sub" id="caseLine">Loading…</span>
+  <span class="rec" id="rec"><i></i>Recording <span id="timer">0:00</span></span>
+</header>
+<div class="grid">
+  <div class="stage">
+    <video id="remote" autoplay playsinline></video>
+    <div class="wait" id="wait">Send the link to the customer. The call starts as soon as they join.</div>
+    <video id="local" autoplay playsinline muted></video>
+    <div class="flash" id="flash"></div>
+    <div class="controls">
+      <button class="c" id="micBtn">Mute</button>
+      <button class="c" id="camBtn">Camera off</button>
+      <button class="c" id="backBtn" title="Ask the customer to switch to their back camera">Ask: back camera</button>
+      <button class="c" id="frontBtn" title="Ask the customer to show their face">Ask: front camera</button>
+      <button class="c photo" id="photoBtn">📸 Take photo</button>
+      <button class="c" id="reconBtn" title="Reconnect video">Reconnect</button>
+      <button class="c end" id="endBtn">End &amp; save recording</button>
+    </div>
+  </div>
+  <aside>
+    <div class="card">
+      <h3>Customer link</h3>
+      <div class="link"><input id="link" readonly><button class="b2 ghost" id="copyBtn">Copy</button></div>
+      <div style="display:flex;gap:6px;margin-top:8px;"><button class="b2 green" id="waBtn">Send on WhatsApp</button><button class="b2 ghost" id="newBtn" title="Create a new link; the old one stops working">New link</button></div>
+      <div class="msg" id="linkMsg"></div>
+    </div>
+    <div class="card">
+      <h3>Customer</h3>
+      <div class="kv" id="cust"><span>Not joined yet</span></div>
+    </div>
+    <div class="card">
+      <h3>Photos taken (<span id="shotCount">0</span>)</h3>
+      <div class="shots" id="shots"></div>
+      <div class="msg" id="shotMsg">Each photo is saved to the case with time and the customer's latitude/longitude.</div>
+    </div>
+    <div class="card"><div class="msg" id="saveMsg" style="margin:0;">The call is recorded (customer video + both voices, with date and time on the video) and saved to the case when you press End.</div></div>
+  </aside>
+</div>
+
+<dialog id="dlg">
+  <h4>What does this photo show?</h4>
+  <select id="lbl">
+    <option>Vehicle damage</option><option>Vehicle number plate</option><option>Chassis / engine number</option><option>Odometer</option>
+    <option>Document</option><option>Customer (face)</option><option>Place of incident</option><option>Hospital / patient</option><option>Other</option>
+  </select>
+  <input id="lblExtra" placeholder="Note (optional), e.g. rear bumper">
+  <div class="row"><button class="b2 ghost" id="dlgCancel">Cancel</button><button class="b2" id="dlgSave">Save photo</button></div>
+</dialog>
+
+<script>
+const caseId = new URLSearchParams(location.search).get('case');
+const jwt = (() => { try { return localStorage.getItem('praman_token'); } catch { return null; } })();
+if (!jwt) location.href = '/login.html';
+const auth = (h = {}) => ({ ...h, Authorization: 'Bearer ' + jwt });
+const $ = id => document.getElementById(id);
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+let socket, pc, ice, local, liveToken, custState = {}, pendingCandidates = [];
+let rec = null, recChunks = [], recCtx, recDest, canvas, cctx, drawTimer, remoteAudioSrc = null, t0 = 0, saved = false, shotN = 0;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: auth(opts.headers || {}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Request failed');
+  return d;
+}
+
+(async function init() {
+  try {
+    const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    liveToken = d.token; $('link').value = d.joinUrl;
+    $('caseLine').textContent = `${d.claimNo}${d.insuredName ? ' · ' + d.insuredName : ''}`;
+    ice = await api(`/api/live/case/${encodeURIComponent(caseId)}/ice`);
+    if (!ice.turn) $('linkMsg').textContent = 'Note: no TURN relay is set up (Super Admin → Live Video Call Relay). Calls on some mobile networks may not connect.';
+  } catch (e) { $('caseLine').textContent = e.message; return; }
+  try {
+    local = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch {
+    try { local = await navigator.mediaDevices.getUserMedia({ audio: true }); $('local').style.display = 'none'; }
+    catch { alert('Allow microphone (and camera) access to start the call.'); return; }
+  }
+  $('local').srcObject = local;
+  connect();
+})();
+
+function connect() {
+  socket = io({ transports: ['websocket', 'polling'] });
+  socket.on('connect', () => socket.emit('live-join', { token: liveToken, jwt }, res => {
+    if (!res || res.error) { $('wait').textContent = (res && res.error) || 'Could not join'; return; }
+    if ((res.peers || []).includes('customer')) socket.emit('live-cmd', { type: 'reoffer' });
+  }));
+  socket.on('live-peer', ({ role, event }) => {
+    if (role !== 'customer') return;
+    if (event === 'joined') { $('wait').style.display = 'flex'; $('wait').textContent = 'Customer joined — connecting video…'; }
+    else { $('wait').style.display = 'flex'; $('wait').textContent = 'Customer left or lost connection. They can rejoin with the same link.'; showCust(); }
+  });
+  socket.on('live-signal', async ({ data, from }) => {
+    if (from !== 'customer') return;
+    if (data.sdp && data.sdp.type === 'offer') await answer(data.sdp);
+    else if (data.candidate && pc) {
+      if (pc.remoteDescription) { try { await pc.addIceCandidate(data.candidate); } catch {} } else pendingCandidates.push(data.candidate);
+    }
+  });
+  socket.on('live-state', s => { custState = { ...custState, ...s }; showCust(); });
+  socket.on('live-replaced', () => { $('wait').style.display = 'flex'; $('wait').textContent = 'This call was opened in another tab.'; });
+}
+
+async function answer(offer) {
+  if (pc) { try { pc.close(); } catch {} }
+  pendingCandidates = [];
+  pc = new RTCPeerConnection({ iceServers: ice.iceServers || [] });
+  local.getTracks().forEach(t => pc.addTrack(t, local));
+  pc.ontrack = e => {
+    if (e.track.kind === 'video' || !$('remote').srcObject) $('remote').srcObject = e.streams[0];
+    $('wait').style.display = 'none';
+    if (e.track.kind === 'audio') attachRemoteAudio(e.streams[0]);
+    startRecording();
+  };
+  pc.onicecandidate = e => { if (e.candidate) socket.emit('live-signal', { candidate: e.candidate }); };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed') { $('wait').style.display = 'flex'; $('wait').textContent = 'Connection failed — press Reconnect. If it keeps failing, a TURN relay is needed.'; }
+  };
+  await pc.setRemoteDescription(offer);
+  for (const c of pendingCandidates.splice(0)) { try { await pc.addIceCandidate(c); } catch {} }
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  socket.emit('live-signal', { sdp: pc.localDescription });
+}
+
+function showCust() {
+  const l = custState.location;
+  $('cust').innerHTML = `
+    <div><span>Location:</span> ${l ? `<a style="color:#9EC1FF" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${Number(l.latitude)},${Number(l.longitude)}">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)}</a> (±${Math.round(l.accuracy || 0)} m)` : 'not shared'}</div>
+    <div><span>Camera:</span> ${custState.sharing ? 'sharing screen' : custState.facing === 'environment' ? 'back camera' : 'front camera'}</div>
+    <div><span>Last update:</span> ${custState.at ? new Date(custState.at).toLocaleTimeString('en-IN') : '—'}</div>`;
+}
+
+// ---- recording: customer video drawn on a canvas with a time stamp, + both voices ----
+function startRecording() {
+  if (rec) return;
+  try {
+    recCtx = new (window.AudioContext || window.webkitAudioContext)();
+    recDest = recCtx.createMediaStreamDestination();
+    if (local.getAudioTracks().length) recCtx.createMediaStreamSource(new MediaStream(local.getAudioTracks())).connect(recDest);
+    if ($('remote').srcObject) attachRemoteAudio($('remote').srcObject);
+    canvas = document.createElement('canvas'); canvas.width = 960; canvas.height = 540; cctx = canvas.getContext('2d');
+    drawTimer = setInterval(drawFrame, 66);
+    const stream = new MediaStream([...canvas.captureStream(15).getVideoTracks(), ...recDest.stream.getAudioTracks()]);
+    const types = ['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+    const mimeType = types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+    rec = new MediaRecorder(stream, mimeType ? { mimeType, videoBitsPerSecond: 900000 } : undefined);
+    rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+    rec.start(5000);
+    t0 = Date.now(); $('rec').style.display = 'flex';
+    setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); $('timer').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }, 1000);
+  } catch (e) { $('saveMsg').textContent = 'This browser cannot record the call. Use Chrome or Edge.'; }
+}
+function attachRemoteAudio(stream) {
+  if (!recCtx || !stream.getAudioTracks().length) return;
+  try { if (remoteAudioSrc) remoteAudioSrc.disconnect(); remoteAudioSrc = recCtx.createMediaStreamSource(new MediaStream(stream.getAudioTracks())); remoteAudioSrc.connect(recDest); } catch {}
+}
+function drawFrame() {
+  const v = $('remote'); cctx.fillStyle = '#000'; cctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (v.videoWidth) {
+    const k = Math.min(canvas.width / v.videoWidth, canvas.height / v.videoHeight);
+    const w = v.videoWidth * k, h = v.videoHeight * k;
+    cctx.drawImage(v, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+  }
+  const l = custState.location;
+  const text = `${new Date().toLocaleString('en-IN')}${l ? '  ·  ' + Number(l.latitude).toFixed(5) + ', ' + Number(l.longitude).toFixed(5) : ''}  ·  Praman live call`;
+  cctx.font = '16px sans-serif'; cctx.fillStyle = 'rgba(0,0,0,.55)'; cctx.fillRect(0, canvas.height - 28, canvas.width, 28);
+  cctx.fillStyle = '#fff'; cctx.fillText(text, 10, canvas.height - 9);
+}
+
+// ---- photo from the customer's video ----
+$('photoBtn').addEventListener('click', () => {
+  const v = $('remote'); if (!v.videoWidth) { alert('No video from the customer yet.'); return; }
+  const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+  const takenAt = new Date().toISOString(), loc = custState.location || null;
+  $('flash').classList.add('on'); setTimeout(() => $('flash').classList.remove('on'), 60);
+  c.toBlob(blob => {
+    $('lblExtra').value = '';
+    $('dlg').showModal();
+    $('dlgCancel').onclick = () => $('dlg').close();
+    $('dlgSave').onclick = async () => {
+      $('dlg').close();
+      const label = $('lbl').value + ($('lblExtra').value.trim() ? ' — ' + $('lblExtra').value.trim() : '');
+      const fd = new FormData(); fd.append('photo', blob, 'live.jpg'); fd.append('label', label); fd.append('takenAt', takenAt);
+      if (loc) { fd.append('lat', loc.latitude); fd.append('lng', loc.longitude); fd.append('acc', loc.accuracy || ''); }
+      try {
+        await api(`/api/live/case/${encodeURIComponent(caseId)}/photo`, { method: 'POST', body: fd });
+        shotN++; $('shotCount').textContent = shotN;
+        const url = URL.createObjectURL(blob);
+        $('shots').insertAdjacentHTML('afterbegin', `<figure><img src="${url}" alt=""><figcaption>${esc(label)}<br>${new Date(takenAt).toLocaleTimeString('en-IN')}${loc ? '' : ' · no location'}</figcaption></figure>`);
+        $('shotMsg').textContent = 'Saved to the case.';
+      } catch (e) { $('shotMsg').textContent = 'Photo not saved: ' + e.message; }
+    };
+  }, 'image/jpeg', 0.92);
+});
+
+// ---- controls ----
+$('micBtn').onclick = () => { const on = !local.getAudioTracks()[0]?.enabled; local.getAudioTracks().forEach(t => t.enabled = on); $('micBtn').classList.toggle('off', !on); $('micBtn').textContent = on ? 'Mute' : 'Unmute'; };
+$('camBtn').onclick = () => { const t = local.getVideoTracks()[0]; if (!t) return; t.enabled = !t.enabled; $('camBtn').classList.toggle('off', !t.enabled); $('camBtn').textContent = t.enabled ? 'Camera off' : 'Camera on'; };
+$('backBtn').onclick = () => socket.emit('live-cmd', { type: 'ask-back-camera' });
+$('frontBtn').onclick = () => socket.emit('live-cmd', { type: 'ask-front-camera' });
+$('reconBtn').onclick = () => socket.emit('live-cmd', { type: 'reoffer' });
+$('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('linkMsg').textContent = 'Link copied.'; } catch { $('link').select(); } };
+$('waBtn').onclick = async () => {
+  $('linkMsg').textContent = 'Sending…';
+  try { const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sendWhatsApp: true }) }); $('linkMsg').textContent = d.sent ? 'Sent to the customer on WhatsApp.' : ('Not sent: ' + d.sendError); }
+  catch (e) { $('linkMsg').textContent = e.message; }
+};
+$('newBtn').onclick = async () => {
+  if (!confirm('Create a new link? The old link will stop working.')) return;
+  const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newLink: true }) });
+  location.reload();
+};
+
+$('endBtn').onclick = async () => {
+  if (!confirm('End the call and save the recording to the case?')) return;
+  $('endBtn').disabled = true; $('endBtn').textContent = 'Saving…';
+  try { socket.emit('live-leave'); } catch {}
+  try { pc && pc.close(); } catch {}
+  if (rec && rec.state !== 'inactive') await new Promise(r => { rec.onstop = r; rec.stop(); });
+  clearInterval(drawTimer);
+  if (recChunks.length) {
+    const blob = new Blob(recChunks, { type: rec.mimeType || 'video/webm' });
+    const fd = new FormData(); fd.append('recording', blob, /mp4/.test(blob.type) ? 'live.mp4' : 'live.webm'); fd.append('kind', 'live_video');
+    $('saveMsg').textContent = `Uploading recording (${(blob.size / 1048576).toFixed(1)} MB)…`;
+    try { await api(`/api/cases/${encodeURIComponent(caseId)}/recording`, { method: 'POST', body: fd }); saved = true; $('saveMsg').textContent = '✓ Recording saved to the case. It appears in the report under Call recordings.'; }
+    catch (e) { $('saveMsg').textContent = 'Recording NOT saved: ' + e.message + ' — keep this tab open and try again.'; $('endBtn').disabled = false; $('endBtn').textContent = 'Retry save'; return; }
+  } else { saved = true; $('saveMsg').textContent = 'Call ended. There was no video to record.'; }
+  local.getTracks().forEach(t => t.stop());
+  $('endBtn').textContent = 'Call ended';
+};
+window.addEventListener('beforeunload', e => { if (rec && !saved) { e.preventDefault(); e.returnValue = ''; } });
+</script>
+</body>
+</html>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Verification Report — Praman</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#22307A; --ink-2:#E6E9F5; --text:#1A1F36; --muted:#5B6280; --line:#AEB6CE; --hair:#D9DEEC; --paper:#FFFFFF;
+    --ok:#156F4B; --ok-bg:#DDF1E7; --mid:#8A5800; --mid-bg:#FBEFD6; --bad:#A3311F; --bad-bg:#F8E1DE;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#E4E8F2;color:var(--text);font-family:'Mukta',system-ui,sans-serif;font-size:14px;line-height:1.45;}
+  a{color:var(--ink);}
+  .bar{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .bar .sp{flex:1;font-size:14px;opacity:.85;}
+  .bar button{border:none;border-radius:8px;padding:8px 14px;font:600 14px 'Mukta',sans-serif;cursor:pointer;background:rgba(255,255,255,.16);color:#fff;}
+  .bar button.main{background:#fff;color:var(--ink);}
+  .page{max-width:820px;margin:20px auto;background:var(--paper);padding:34px 40px 30px;box-shadow:0 4px 24px rgba(20,30,70,.12);}
+  @media (max-width:700px){ .page{padding:20px 14px;margin:0;} }
+  .print-only{display:none;}
+
+  /* letterhead */
+  header.top{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end;padding-bottom:10px;border-bottom:2.5px solid var(--ink);}
+  .firm{font-size:21px;font-weight:700;color:var(--ink);line-height:1.15;}
+  .firm small{display:block;font-size:12.5px;font-weight:500;color:var(--muted);margin-top:2px;}
+  .refs{font-size:12.5px;color:var(--muted);text-align:right;line-height:1.5;}
+  .refs b{color:var(--text);}
+  .titleband{margin:16px 0 12px;text-align:center;}
+  h1{font-size:21px;line-height:1.2;margin:0;color:var(--text);font-weight:700;}
+  .subtitle{color:var(--muted);font-size:14px;margin:2px 0 0;}
+
+  /* summary */
+  table.summary{margin-top:6px;}
+  table.summary td.v{font-weight:600;}
+  .verdict-cell{font-size:19px;font-weight:700;}
+  .verdict-cell.ok{color:var(--ok);} .verdict-cell.mid{color:var(--mid);} .verdict-cell.bad{color:var(--bad);}
+  .summary-text{border:1px solid var(--line);border-top:none;padding:9px 12px;font-size:13.5px;}
+  .summary-text .who{display:block;color:var(--muted);font-size:12.5px;margin-top:4px;}
+
+  /* sections */
+  section.sec{margin-top:20px;}
+  h2{font-size:14.5px;font-weight:700;color:#fff;background:var(--ink);margin:0 0 0;padding:5px 10px;break-after:avoid;page-break-after:avoid;}
+  h3{font-size:13.5px;margin:12px 0 0;padding:5px 10px;background:var(--ink-2);border:1px solid var(--line);border-bottom:none;display:flex;justify-content:space-between;gap:10px;align-items:center;break-after:avoid;page-break-after:avoid;}
+  .sec-note{border:1px solid var(--line);border-bottom:none;padding:5px 10px;font-size:12.5px;color:var(--muted);}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;vertical-align:top;padding:5px 9px;border:1px solid var(--line);}
+  th{font-size:12px;color:var(--text);font-weight:700;background:var(--ink-2);}
+  thead{display:table-header-group;}
+  tr{break-inside:avoid;page-break-inside:avoid;}
+  table.kv td:first-child{width:32%;color:var(--muted);background:#F7F8FC;}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+  .two table.kv:first-child{border-right:none;}
+  @media (max-width:700px){ .two{grid-template-columns:1fr;} }
+  .chip{display:inline-block;font-size:12px;font-weight:700;border-radius:4px;padding:0 7px;white-space:nowrap;}
+  .c-ok{background:var(--ok-bg);color:var(--ok);} .c-mid{background:var(--mid-bg);color:var(--mid);} .c-bad{background:var(--bad-bg);color:var(--bad);} .c-na{background:#EEF0F5;color:var(--muted);}
+  .orig{display:block;color:var(--muted);font-size:12.5px;}
+  .concern{display:block;color:var(--bad);font-size:12.5px;font-weight:600;}
+  .qno{width:34px;text-align:center;color:var(--muted);}
+
+  .photos{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border:1px solid var(--line);border-top:none;padding:8px;}
+  @media (max-width:700px){ .photos{grid-template-columns:repeat(2,1fr);} }
+  .photos figure{margin:0;border:1px solid var(--hair);break-inside:avoid;page-break-inside:avoid;}
+  .photos img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:#CDD3E3;}
+  .photos figcaption{padding:4px 6px;font-size:11.5px;line-height:1.3;color:var(--muted);}
+  .photos figcaption b{display:block;color:var(--text);font-size:12px;}
+  .boxnote{border:1px solid var(--line);border-top:none;padding:5px 10px;font-size:12px;color:var(--muted);}
+
+  ol.flags{margin:0;padding:8px 10px 8px 32px;border:1px solid var(--line);border-top:none;} ol.flags li{margin:2px 0;}
+  .plain{border:1px solid var(--line);border-top:none;padding:8px 10px;}
+  .note{font-size:12.5px;color:var(--muted);}
+  .review-form{border:1px solid var(--line);border-top:none;padding:12px;background:#FAFBFE;}
+  .review-form label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 2px;}
+  .review-form textarea,.review-form input,.review-form select{width:100%;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;}
+  .review-form textarea{min-height:90px;}
+  .review-form .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  @media (max-width:700px){ .review-form .row{grid-template-columns:1fr;} }
+
+  .sign{display:grid;grid-template-columns:1fr 1fr;gap:0;break-inside:avoid;page-break-inside:avoid;margin-top:20px;}
+  .sign > div{border:1px solid var(--line);padding:10px 12px;min-height:118px;display:flex;flex-direction:column;justify-content:flex-end;font-size:12.5px;}
+  .sign > div + div{border-left:none;}
+  .sign .lbl{border-top:1px solid var(--text);padding-top:4px;color:var(--muted);}
+  .sign .nm{font-weight:600;color:var(--text);}
+  .custody td{font-size:12px;}
+  .declaration{margin-top:16px;border:1px solid var(--line);padding:8px 12px;font-size:12px;color:var(--muted);break-inside:avoid;}
+  .declaration b{color:var(--text);}
+  .endmark{text-align:center;font-size:12px;color:var(--muted);margin-top:10px;}
+  .keep{break-inside:avoid;page-break-inside:avoid;}
+  .flink{font-weight:700;color:var(--ink);text-decoration:underline;}
+  .furl{display:block;font-size:10.5px;color:var(--muted);word-break:break-all;}
+  .docitem{border:1px solid var(--line);border-top:none;}
+  .dhead{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:7px 10px;background:#F7F8FC;break-inside:avoid;page-break-inside:avoid;break-after:avoid;}
+  .dno{font-weight:700;color:#fff;background:var(--ink);border-radius:4px;padding:0 6px;font-size:12px;margin-top:2px;}
+  .dtitle b{display:block;font-size:13.5px;} .dtitle span{font-size:12px;color:var(--muted);}
+  .dlink{text-align:right;max-width:240px;font-size:12.5px;}
+  .drow{display:grid;grid-template-columns:150px 1fr;gap:10px;padding:5px 10px;border-top:1px solid var(--hair);}
+  .drow > span{font-size:12px;color:var(--muted);}
+  .drow p{margin:0;font-size:13px;}
+  .dtext{white-space:pre-wrap;}
+  @media (max-width:700px){ .drow{grid-template-columns:1fr;gap:2px;} .dhead{grid-template-columns:auto 1fr;} .dlink{grid-column:1 / -1;text-align:left;max-width:none;} }
+  .empty{color:var(--muted);font-style:italic;}
+  .loading{padding:60px;text-align:center;color:var(--muted);}
+
+  @media print{
+    body{background:#fff;font-size:10.5pt;}
+    .bar,.no-print{display:none!important;}
+    .print-only{display:block;}
+    span.print-only{display:inline;}
+    .page{box-shadow:none;margin:0;max-width:none;padding:0;}
+    a{color:inherit;}
+    a.flink{color:#22307A;}
+    .drow p{font-size:9.5pt;}
+    table{font-size:9.5pt;}
+    th{font-size:9pt;}
+    .custody td{font-size:8.5pt;}
+    section.sec{margin-top:14px;}
+  }
+  @page{
+    size:A4; margin:20mm 13mm 17mm 13mm;
+    @bottom-center{content:"Page " counter(page) " of " counter(pages); font:9pt 'Mukta',sans-serif; color:#5B6280;}
+  }
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style>
+<style id="pageHead"></style>
+</head>
+<body>
+<div class="bar no-print" id="bar">
+  <span class="sp" id="barText">AI verification report</span>
+  <button class="main" onclick="downloadPdf()">Download PDF</button>
+  <button onclick="window.print()">Print</button>
+  <button id="shareBtn" style="display:none;" onclick="copyShare()">Copy share link</button>
+</div>
+<main class="page" id="page"><div class="loading">Loading report…</div></main>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const caseId = qs.get('case'), shareToken = qs.get('token');
+const authToken = (() => { try { return localStorage.getItem('praman_token'); } catch { return null; } })();
+const vendorMode = !!(caseId && authToken);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const dt = s => s ? new Date(s).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+const d = s => s ? new Date(s).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+const ll = l => l && l.latitude != null ? `<a href="https://www.google.com/maps?q=${Number(l.latitude)},${Number(l.longitude)}" target="_blank" rel="noopener">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)}</a>${l.accuracy ? ' <span class="note">±' + Math.round(l.accuracy) + ' m</span>' : ''}` : '<span class="empty">not available</span>';
+const VERDICT = {
+  verified: ['Verified', 'ok'], partially_verified: ['Partially verified', 'mid'], found_discrepancy: ['Discrepancy found', 'bad'],
+  unverified: ['Unverified', 'bad'], pending_verification: ['Pending review', 'mid'], handoff: ['Handed over to an executive', 'mid']
+};
+const RES = { match:['Match','ok'], pass:['Pass','ok'], partial:['Partial','mid'], mismatch:['Mismatch','bad'], fail:['Fail','bad'], unknown:['Not checked','na'], skipped:['Skipped','na'],
+  confirmed:['Confirmed','ok'], discrepancy:['Discrepancy','bad'], pending:['Pending','na'] };
+const chipT = (text, cls) => `<span class="chip c-${cls}">${esc(text)}</span>`;
+const vChip = v => { const x = VERDICT[v] || [v || '—', 'na']; return chipT(x[0], x[1]); };
+const chip = r => { const x = RES[r] || [r || '—', 'na']; return `<span class="chip c-${x[1]}">${esc(x[0])}</span>`; };
+
+let R = null;
+const abs = p => p ? (/^https?:/.test(p) ? p : location.origin + p) : '';
+const openLink = (p, label) => p ? `<a class="flink" href="${esc(abs(p))}" target="_blank" rel="noopener">${esc(label)}</a><span class="furl">${esc(abs(p))}</span>` : '<span class="empty">file not available</span>';
+
+(async function load(){
+  const page = document.getElementById('page');
+  try {
+    let res;
+    if (vendorMode) res = await fetch('/api/cases/' + encodeURIComponent(caseId) + '/ai-report', { headers: { Authorization: 'Bearer ' + authToken } });
+    else if (shareToken) res = await fetch('/api/public/ai-report/' + encodeURIComponent(shareToken));
+    else { page.innerHTML = '<div class="loading">This report link is not complete.</div>'; return; }
+    R = await res.json();
+    if (R.error) { page.innerHTML = '<div class="loading">' + esc(R.error) + '</div>'; return; }
+    render();
+    if (vendorMode) document.getElementById('shareBtn').style.display = '';
+  } catch (e) { page.innerHTML = '<div class="loading">The report could not be loaded. Refresh the page to try again.</div>'; }
+})();
+
+function render(){
+  const m = R.meta, c = R.case, call = R.call, res = R.result, rv = R.review;
+  const ai = VERDICT[res.decision] || ['Not completed', 'mid'];
+  const fin = rv && rv.finalVerdict && rv.finalVerdict !== 'pending_verification' ? VERDICT[rv.finalVerdict] : null;
+  const shown = fin || ai;
+  const fileName = `Praman_Verification_Report_${String(c.claimNo).replace(/[^A-Za-z0-9_-]/g, '')}`;
+  document.title = fileName;
+  document.getElementById('barText').textContent = `${m.caseTypeLabel} · ${c.claimNo}`;
+  // running header on every printed page
+  const q = t => '"' + String(t).replace(/["\\\n]/g, ' ') + '"';
+  document.getElementById('pageHead').textContent = `@page{
+    @top-left{content:${q(m.firm || 'Verification report')};font:600 9pt 'Mukta',sans-serif;color:#22307A;}
+    @top-right{content:${q('Report no. ' + m.reportNo + '  ·  Confidential')};font:9pt 'Mukta',sans-serif;color:#5B6280;}
+    @bottom-left{content:${q('AI-assisted verification report · ' + c.claimNo)};font:9pt 'Mukta',sans-serif;color:#5B6280;}
+    @bottom-right{content:"Generated by Praman";font:9pt 'Mukta',sans-serif;color:#5B6280;}
+  }
+  @page:first{ @top-left{content:none;} @top-right{content:none;} }`;
+
+  let n = 0;
+  const S = (title, body) => `<section class="sec"><h2>${++n}. ${esc(title)}</h2>${body}</section>`;
+  const kv = rows => `<table class="kv">${rows.filter(Boolean).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</table>`;
+  const T = (head, rows) => `<table><thead><tr>${head.map(h => `<th${h[1] ? ` style="width:${h[1]}"` : ''}>${esc(h[0])}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  const llP = l => l && l.latitude != null ? `${ll(l)}` : '<span class="empty">not available</span>';
+
+  // ---- summary (page 1) ----
+  const summary = `
+    <table class="summary kv">
+      <tr><td>Verification result</td><td><span class="verdict-cell ${shown[1]}">${esc(shown[0])}</span></td></tr>
+      <tr><td>Case no.</td><td class="v">${esc(c.caseRef || '—')}</td></tr>
+      <tr><td>Insured name</td><td class="v">${esc(c.insuredName || '—')}</td></tr>
+      <tr><td>${m.isPolicy ? 'Policy / proposal no.' : 'Claim no.'}</td><td class="v">${esc(c.claimNo)}</td></tr>
+      ${m.isPolicy ? `<tr><td>Product</td><td class="v">${m.policyType === 'term' ? 'Term insurance' : 'Life insurance'}${c.policyValue ? ' · ₹' + Number(c.policyValue).toLocaleString('en-IN') : ''}</td></tr>` : ''}
+      <tr><td>Verification call</td><td class="v">${dt(call.startedAt)}${call.durationMin ? ' · ' + call.durationMin + ' min' : ''}${call.language ? ' · ' + esc(call.language) : ''}</td></tr>
+      <tr><td>Location at call start</td><td class="v">${llP(call.startLocation)}</td></tr>
+      <tr><td>Red flags raised</td><td class="v">${res.flags.length}</td></tr>
+    </table>
+    <div class="summary-text">${res.summary ? esc(res.summary) : '<span class="empty">No AI summary available.</span>'}
+      <span class="who">${fin ? `Final verdict by ${esc(rv.reviewerName || 'investigator')}${rv.reviewerDesignation ? ', ' + esc(rv.reviewerDesignation) : ''}, on ${d(rv.reviewedAt)}. AI recommendation was: ${esc(ai[0])}.` : 'This is the AI’s recommendation. It has not been signed off by an investigator yet.'}${c.spotCheckRequired ? ' Selected for a random quality spot-check.' : ''}${c.needsExecutive ? ' Customer asked to speak to a person.' : ''}</span>
+    </div>`;
+
+  // ---- sections ----
+  const sCase = S('Case details', kv([
+    ['Insured name', esc(c.insuredName || '—')],
+    [m.isPolicy ? 'Policy / proposal no.' : 'Claim no.', esc(c.claimNo)],
+    c.policyNo && c.policyNo !== c.claimNo ? ['Policy no.', esc(c.policyNo)] : null,
+    m.isPolicy ? ['Product', m.policyType === 'term' ? 'Term insurance' : 'Life insurance'] : null,
+    c.vehicleNo ? ['Vehicle no.', esc(c.vehicleNo)] : null,
+    c.policyValue ? ['Sum assured / claim value', '₹' + Number(c.policyValue).toLocaleString('en-IN')] : null,
+    c.district ? ['District', esc(c.district)] : null,
+    ['Customer WhatsApp', esc(c.whatsapp || '—')],
+    ['Case opened', dt(c.createdAt)],
+    ['Verification type', esc(m.caseTypeLabel.replace(/^./, ch => ch.toUpperCase()))]
+  ]));
+
+  const sCall = S('Call details', kv([
+    ['Mode', 'Fully automated AI video call, joined by the customer from a WhatsApp link'],
+    ['Started', dt(call.startedAt)],
+    ['Ended', dt(call.endedAt)],
+    ['Duration', call.durationMin ? call.durationMin + ' minutes' : '—'],
+    ['Language chosen by customer', esc(call.language || '—')],
+    ['Customer told it is an AI call', call.aiDisclosed ? chipT('Yes — at the start of the call', 'ok') : chipT('Not recorded', 'na')],
+    ['Consent (recording, camera, mic, location)', call.consent ? chipT('Given before joining', 'ok') : chipT('Not recorded', 'na')],
+    ['Location at start', llP(call.startLocation)],
+    ['Device', esc(call.device || '—')],
+    ['Call recording (video + both voices)', call.recordingUrl ? openLink(call.recordingUrl, '▶ Play call recording') : '<span class="empty">Not uploaded</span>']
+  ]));
+
+  const sPhotos = S('Live photos and liveness', R.photos.length ? `<div class="photos">${R.photos.map(p => `
+      <figure>${p.url ? `<img src="${esc(p.url)}" alt="${esc(p.label)}">` : '<img alt="">'}
+        <figcaption><b>${esc(p.label)}</b>${dt(p.at)}<br>${p.location && p.location.latitude != null ? Number(p.location.latitude).toFixed(5) + ', ' + Number(p.location.longitude).toFixed(5) : 'No location'}${p.link ? `<br><a class="flink" href="${esc(abs(p.link))}" target="_blank" rel="noopener">Open photo</a>` : ''}</figcaption></figure>`).join('')}</div>
+      <div class="boxnote">All attempts are kept, including photos the AI asked the customer to retake.${res.apparentAge ? ' Apparent age range seen by AI in the full-body photo: ' + esc(res.apparentAge) + '.' : ''}</div>`
+    : '<div class="plain empty">No photos were captured.</div>');
+
+  const A = R.documents.aadhaar || {}, P = R.documents.pan || {};
+  const sDocs = S('Identity documents', T([['Detail', '30%'], ['Aadhaar card'], ['PAN card']], [
+      ['Number', A.masked || 'Not received', P.masked || 'Not received'],
+      ['Name', A.name, P.name],
+      ['Date of birth', A.dob, P.dob],
+      ['Gender', A.gender, ''],
+      ["Father's / husband's name", '', P.fatherName],
+      ['Address', A.address, '']
+    ].map(r => `<tr><td style="color:var(--muted);background:#F7F8FC;">${esc(r[0])}</td><td>${esc(r[1] || '—')}</td><td>${esc(r[2] || '—')}</td></tr>`)) +
+    `<div class="boxnote">Read by AI from photos the customer sent on WhatsApp during the call. Only the last four digits of Aadhaar and PAN are stored.</div>`);
+
+  const rec = R.received || [];
+  const docBlock = (x, i) => `
+    <div class="docitem">
+      <div class="dhead"><span class="dno">D${i + 1}</span><div class="dtitle"><b>${esc(x.title)}</b><span>${esc(x.kind)} · ${esc(x.source)}${x.from ? ' · from ' + esc(x.from) : ''} · ${dt(x.at)} · ID ${esc(x.id)}</span></div>
+        <div class="dlink">${x.hasFile ? openLink(x.link, x.kind === 'Video' ? '▶ Watch video' : x.kind === 'Voice note' ? '▶ Play voice note' : 'Open file') : ''}</div></div>
+      ${x.caption && x.caption !== x.title ? `<div class="drow"><span>Customer's message</span><p>${esc(x.caption)}</p></div>` : ''}
+      ${x.keyDetails ? `<div class="drow"><span>${x.kind === 'Video' ? 'What the video shows' : 'Key details'}</span><p>${esc(x.keyDetails).replace(/\n/g, '<br>')}</p></div>` : ''}
+      ${x.text ? `<div class="drow"><span>${x.kind === 'Video' || x.kind === 'Voice note' ? 'What was said' : 'Text in the document'}${x.language ? ' (' + esc(x.language) + ')' : ''}</span><p class="dtext">${esc(x.text)}</p></div>` : ''}
+      ${x.english ? `<div class="drow"><span>English translation</span><p class="dtext">${esc(x.english)}</p></div>` : ''}
+      ${x.observations ? `<div class="drow"><span>AI observations</span><p>${esc(x.observations)}</p></div>` : ''}
+      ${x.maskedAadhaar ? `<div class="drow"><span>Privacy</span><p>The first 8 digits of the Aadhaar number were blacked out before this image was stored.</p></div>` : ''}
+      ${x.note ? `<div class="drow"><span>Note</span><p>${esc(x.note)}</p></div>` : ''}
+    </div>`;
+  const sReceived = S('Documents and media received from the customer', rec.length
+    ? `<div class="boxnote" style="border-top:1px solid var(--line);border-bottom:none;">${rec.length} item(s). The text below was read by AI from each file; open the file to see the original. Links stay active as long as this report's share link is active.</div>${rec.map(docBlock).join('')}`
+    : '<div class="plain empty">No documents or media were received.</div>');
+  const recs = R.recordings || [];
+  const sRecs = recs.length ? S('Call recordings', T([['#', '34px'], ['Call'], ['Saved on', '170px'], ['Recording']], recs.map((x, i) => `<tr><td class="qno">${i + 1}</td><td>${esc(x.kind)}${x.notes ? `<span class="orig">${esc(x.notes)}</span>` : ''}</td><td>${dt(x.at)}</td><td>${openLink(x.link, '▶ Play recording')}</td></tr>`))) : '';
+
+  const CH = R.chatHistory || { rows: [] };
+  const chr = CH.review;
+  const showChats = !m.isPolicy || (CH.rows || []).length;
+  const consentTxt = { given: chipT('Customer agreed', 'ok'), declined: chipT('Customer did not agree', 'mid'), unclear: chipT('No clear answer', 'na') }[CH.consent] || (CH.rows.length ? chipT('Screenshots sent on WhatsApp', 'ok') : chipT('Not done', 'na'));
+  const sChats = showChats ? S('WhatsApp history check', kv([
+      ['What was done', 'The customer was asked to search their own WhatsApp for words related to the incident and send screenshots of the search results. Live screen sharing is not possible from a phone browser, so screenshots are used.'],
+      ['Consent', consentTxt],
+      CH.keywords && CH.keywords.length ? ['Words asked to search', CH.keywords.map(k => '“' + esc(k) + '”').join(', ')] : null,
+      chr && chr.assessment ? ['AI assessment', esc(chr.assessment) + (chr.consistent === false ? ' ' + chipT('Needs checking', 'bad') : chr.consistent === true ? ' ' + chipT('Fits the customer’s account', 'ok') : '')] : null,
+      chr && chr.firstMention && chr.firstMention.date ? ['Earliest mention found', esc(chr.firstMention.date) + (chr.firstMention.chat ? ' — with ' + esc(chr.firstMention.chat) : '')] : null,
+      chr && (chr.peopleTold || []).length ? ['Discussed with', chr.peopleTold.map(esc).join(', ')] : null,
+      chr && (chr.concerns || []).length ? ['Points to check', '<ol style="margin:0;padding-left:18px;">' + chr.concerns.map(x => `<li class="concern" style="display:list-item;">${esc(x)}</li>`).join('') + '</ol>'] : null
+    ]) + (CH.rows.length
+      ? T([['Search', '72px'], ['Chat / contact', '20%'], ['Date & time', '90px'], ['Message'], ['Screenshot', '82px']], CH.rows.map(x => `<tr><td>${esc(x.searchTerm || '—')}</td><td>${esc(x.chat || '—')}${x.sender && x.sender !== x.chat ? `<span class="orig">by ${esc(x.sender)}</span>` : ''}</td><td>${esc(x.date || '—')}${x.time ? '<br>' + esc(x.time) : ''}</td><td>${x.noResults ? '<span class="empty">No results for this search</span>' : esc(x.text)}${x.english ? `<span class="orig">English: ${esc(x.english)}</span>` : ''}</td><td>${x.link ? `<a href="${esc(abs(x.link))}" target="_blank" rel="noopener">${esc(x.screenshot || 'Open')}</a>` : esc(x.screenshot)}</td></tr>`))
+        + '<div class="boxnote">Messages were read by AI from the screenshots; open the screenshot (D-number) to see the original. The customer chose what to search and send.</div>'
+      : '<div class="plain empty">No WhatsApp screenshots were received.</div>')) : '';
+
+  const sChecks = S('Automatic matching and API checks', R.checks.length
+    ? T([['#', '34px'], ['Check'], ['Result', '96px'], ['Detail']], R.checks.map((k, i) => `<tr><td class="qno">${i + 1}</td><td>${esc(k.label)}</td><td>${chip(k.result)}</td><td>${esc(k.detail)}</td></tr>`))
+    : '<div class="plain empty">No automatic checks were run.</div>');
+
+  let qn = 0;
+  const sQ = S(m.isPolicy ? 'Verification questionnaire' : 'Investigation questionnaire', R.sections.map(s => `
+    <h3><span>${esc(s.label)}</span>${s.status ? chip(s.status) : ''}</h3>
+    ${s.notes ? `<div class="sec-note">${esc(s.notes)}</div>` : ''}
+    ${s.qa.length ? T([['#', '34px'], ['Question asked by AI', '43%'], ["Customer's answer"]], s.qa.map(q => `<tr><td class="qno">${++qn}</td><td>${esc(q.question)}</td><td>${q.answer ? esc(q.answer) : '<span class="empty">No clear answer</span>'}${q.original ? `<span class="orig">${esc(q.language)}: “${esc(q.original)}”</span>` : ''}${q.concern ? `<span class="concern">⚠ ${esc(q.concern)}</span>` : ''}</td></tr>`)) : ''}`).join('') || '<div class="plain empty">No questions were answered.</div>');
+
+  const sFlags = S('Red flags for the reviewer', res.flags.length ? `<ol class="flags">${res.flags.map(f => `<li>${esc(f)}</li>`).join('')}</ol>` : '<div class="plain">No red flags were raised.</div>');
+
+  const sLoc = S('Location trail', R.locations.length
+    ? T([['Moment'], ['Latitude, longitude'], ['Time', '170px']], R.locations.map(l => `<tr><td>${esc(l.what.replace(/^./, ch => ch.toUpperCase()))}</td><td>${ll(l)}</td><td>${dt(l.at)}</td></tr>`))
+    : '<div class="plain empty">The customer’s device did not share a location.</div>');
+
+  const VOPTS = [['pending_verification','Pending review'],['verified','Verified'],['partially_verified','Partially verified'],['found_discrepancy','Discrepancy found'],['unverified','Unverified']];
+  const staticReview = kv([
+    ['Final verdict', rv && rv.finalVerdict ? vChip(rv.finalVerdict) : '<span class="empty">Pending</span>'],
+    ['Investigator remarks', rv && rv.remarks ? esc(rv.remarks).replace(/\n/g, '<br>') : '<span class="empty">—</span>'],
+    ['Reviewed by', rv && rv.reviewerName ? esc(rv.reviewerName) + (rv.reviewerDesignation ? ', ' + esc(rv.reviewerDesignation) : '') : '<span class="empty">—</span>'],
+    ['Reviewed on', rv ? d(rv.reviewedAt) : '<span class="empty">—</span>']
+  ]);
+  const reviewForm = vendorMode ? `<div class="review-form no-print">
+      <label for="rvVerdict">Final verdict</label>
+      <select id="rvVerdict">${VOPTS.map(([v, l]) => `<option value="${v}" ${(rv ? rv.finalVerdict : (res.decision || 'pending_verification')) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <label for="rvRemarks">Investigator remarks</label>
+      <textarea id="rvRemarks" placeholder="Your observations after watching the recording and checking the photos">${esc(rv ? rv.remarks : '')}</textarea>
+      <div class="row">
+        <div><label for="rvName">Reviewed by</label><input id="rvName" value="${esc(rv ? rv.reviewerName : '')}"></div>
+        <div><label for="rvDesig">Designation</label><input id="rvDesig" value="${esc(rv ? rv.reviewerDesignation : '')}"></div>
+        <div><label>Reviewed on</label><input value="${rv ? d(rv.reviewedAt) : '—'}" disabled></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;"><button onclick="saveReview()" style="border:none;background:var(--ink);color:#fff;font:600 14px Mukta,sans-serif;padding:9px 18px;border-radius:8px;cursor:pointer;">Save sign-off</button><span id="rvMsg" class="note"></span></div>
+    </div><div class="print-only keep">${staticReview}</div>` : `<div class="keep">${staticReview}</div>`;
+  const sReview = S('Investigator sign-off', reviewForm + `
+    <div class="sign">
+      <div><span class="nm">${esc(rv && rv.reviewerName || '')}</span><span class="note">${esc(rv && rv.reviewerDesignation || '')}</span><div class="lbl" style="margin-top:6px;">Signature of investigator · Date</div></div>
+      <div><div class="lbl">Seal of ${esc(m.firm || 'the firm')}</div></div>
+    </div>`);
+
+  const sCustody = S('Chain of custody', T([['Time', '150px'], ['Event']], R.custody.map(x => `<tr><td>${dt(x.at)}</td><td>${esc(x.event)}</td></tr>`)));
+
+  document.getElementById('page').innerHTML = `
+    <header class="top">
+      <div class="firm">${esc(m.firm || 'Verification report')}<small>Insurance investigation and verification</small></div>
+      <div class="refs">Report no. <b>${esc(m.reportNo)}</b><br>Date of issue: <b>${d(m.generatedAt)}</b><br>Confidential</div>
+    </header>
+    <div class="titleband">
+      <h1>AI-Assisted ${m.isPolicy ? 'Policy Verification' : 'Claim Investigation'} Report</h1>
+      <p class="subtitle">${esc(m.caseTypeLabel.replace(/^./, ch => ch.toUpperCase()))}${m.isPolicy ? ' — pre-issuance verification call' : ''}</p>
+    </div>
+    ${summary}
+    ${sCase}${sCall}${sRecs}${sPhotos}${sDocs}${sReceived}${sChecks}${sQ}${sChats}${sFlags}${sLoc}${sReview}${sCustody}
+    <div class="declaration"><b>Note on this report.</b> The verification call was conducted by an automated AI assistant, and the customer was told so at the start. Answers were transcribed and translated by AI and may contain recognition errors; the call recording is the primary record. The AI result is a recommendation; the final verdict rests with the investigator who signs above. Full Aadhaar and PAN numbers are not stored.</div>
+    <div class="endmark">— End of report ${esc(m.reportNo)} —</div>`;
+  // number the sections in the order they appear on the page
+  document.querySelectorAll('section.sec > h2').forEach((h, i) => { h.textContent = h.textContent.replace(/^\d+\.\s*/, (i + 1) + '. '); });
+}
+
+function downloadPdf(){
+  // The browser's "Save as PDF" uses the page title as the file name.
+  alert('In the print window, choose "Save as PDF" as the printer (Destination), then press Save.');
+  window.print();
+}
+
+async function saveReview(){
+  const body = {
+    finalVerdict: document.getElementById('rvVerdict').value,
+    remarks: document.getElementById('rvRemarks').value,
+    reviewerName: document.getElementById('rvName').value,
+    reviewerDesignation: document.getElementById('rvDesig').value
+  };
+  const msg = document.getElementById('rvMsg');
+  msg.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/cases/' + encodeURIComponent(caseId) + '/ai-review', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Could not save');
+    R.review = j.review; render();
+    document.getElementById('rvMsg').textContent = 'Sign-off saved.';
+  } catch (e) { msg.textContent = 'Sign-off not saved: ' + e.message; }
+}
+
+async function copyShare(){
+  try {
+    const r = await fetch('/api/cases/' + encodeURIComponent(caseId) + '/share-link', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken }, body: '{}' });
+    const j = await r.json();
+    const url = `${location.origin}/ai-report.html?token=${j.token}`;
+    try { await navigator.clipboard.writeText(url); alert('Share link copied. Anyone with this link can view this report:\n\n' + url); }
+    catch { prompt('Copy this share link:', url); }
+  } catch { alert('Could not create the share link. Try again.'); }
+}
+</script>
+</body>
+</html>

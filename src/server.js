@@ -15,9 +15,11 @@ const publicRouter = require('./routes/public');
 const participantRouter = require('./routes/participant');
 const superAdminRouter = require('./routes/super-admin');
 const analyticsRouter = require('./routes/analytics');
+const aiCallRouter = require('./routes/ai-call');
 const gemini = require('./services/gemini');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
@@ -38,8 +40,11 @@ app.use('/api/public', publicRouter);
 app.use('/api/participant', participantRouter);
 app.use('/api/super-admin', superAdminRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/ai-call', aiCallRouter);
 app.use('/webhooks/whatsapp', whatsappRouter);
 app.use('/api/gemini', geminiRouter);
+app.use('/f', require('./routes/files'));
+app.use('/api/live', require('./routes/live'));
 
 app.use('/media', express.static(path.join(__dirname, '..', 'media')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -60,6 +65,8 @@ app.get('/api/turn-config', (req, res) => {
   }
   res.json({ iceServers });
 });
+
+require('./services/live-signaling').attach(io);
 
 // WebRTC signaling + live captioning (self-hosted, no Twilio/Agora needed)
 io.on('connection', socket => {

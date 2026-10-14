@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Vendor Access</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  *{box-sizing:border-box;}
+  body{font-family:system-ui,sans-serif;background:#10151f;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .card{background:#fff;border-radius:12px;padding:30px;width:100%;max-width:440px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+  h1{font-family:Georgia,serif;font-size:22px;margin:0 0 4px;}
+  .sub{font-size:12.5px;color:#777;margin-bottom:18px;line-height:1.5;}
+  label{display:block;font-size:11.5px;color:#555;margin:10px 0 4px;font-weight:600;}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid #dde1e6;border-radius:7px;font-size:13.5px;font-family:inherit;}
+  textarea{resize:vertical;min-height:62px;}
+  .row{display:flex;gap:10px;} .row>div{flex:1;}
+  button{width:100%;padding:11px;border:none;border-radius:7px;background:#c8781f;color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;margin-top:16px;}
+  button:disabled{opacity:.6;cursor:wait;}
+  .err{color:#b23a2c;font-size:12.5px;margin-bottom:10px;min-height:16px;}
+  .ok{background:#eaf6f3;color:#1f7a6c;border-radius:8px;padding:14px;font-size:13px;line-height:1.55;}
+  .warn{background:#fff4e5;color:#8a5a12;border-radius:8px;padding:14px;font-size:13px;line-height:1.55;}
+  .hint{font-size:11px;color:#999;margin-top:3px;}
+  .who{font-size:12px;background:#f3f5f8;border-radius:7px;padding:8px 10px;margin-bottom:6px;}
+  .back{display:block;text-align:center;margin-top:14px;font-size:12.5px;color:#666;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>प्रमाण Praman</h1>
+  <div id="stepSignin">
+    <div class="sub">Vendor access. Sign in with your Google account. New here? You will be asked for your firm details, and the platform admin approves your account before you can log in.</div>
+    <div class="err" id="err1"></div>
+    <div id="gBtn" style="display:flex;justify-content:center;"></div>
+    <a class="back" href="/login.html">← Back to email login</a>
+  </div>
+
+  <div id="stepForm" style="display:none;">
+    <div class="sub">Tell us about your firm. This is reviewed by the platform admin.</div>
+    <div class="who" id="who"></div>
+    <div class="err" id="err2"></div>
+    <label>Firm / company name *</label><input id="firmName" maxlength="120">
+    <label>Contact person name</label><input id="contactName" maxlength="80">
+    <div class="row">
+      <div><label>Mobile number *</label><input id="mobile" inputmode="numeric" maxlength="13" placeholder="10-digit number"></div>
+      <div><label>Contact email *</label><input id="contactEmail" type="email" maxlength="120"></div>
+    </div>
+    <div class="row">
+      <div><label>PAN *</label><input id="pan" maxlength="10" placeholder="ABCDE1234F" style="text-transform:uppercase;"></div>
+      <div><label>GST number</label><input id="gst" maxlength="15" placeholder="Optional" style="text-transform:uppercase;"></div>
+    </div>
+    <label>Full address *</label><textarea id="address" maxlength="400"></textarea>
+    <div class="row">
+      <div><label>City</label><input id="city" maxlength="80"></div>
+      <div><label>Pincode *</label><input id="pincode" inputmode="numeric" maxlength="6"></div>
+    </div>
+    <label>State</label>
+    <select id="state"><option value="">Select state</option></select>
+    <button id="submitBtn" onclick="submitForm()">Submit for approval</button>
+  </div>
+
+  <div id="stepDone" style="display:none;"></div>
+</div>
+<script>
+const STATES=['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi','Jammu and Kashmir','Ladakh','Chandigarh','Puducherry','Andaman and Nicobar Islands','Dadra and Nagar Haveli and Daman and Diu','Lakshadweep'];
+document.getElementById('state').innerHTML += STATES.map(s=>`<option>${s}</option>`).join('');
+const $ = id => document.getElementById(id);
+let onboardToken = null;
+
+function show(step){ ['stepSignin','stepForm','stepDone'].forEach(s => $(s).style.display = s === step ? 'block' : 'none'); }
+function done(cls, html){ $('stepDone').innerHTML = `<div class="${cls}">${html}</div><a class="back" href="/login.html">← Back to login</a>`; show('stepDone'); }
+
+async function onGoogle(resp){
+  $('err1').textContent = '';
+  try{
+    const res = await fetch('/api/auth/vendor-google-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
+    const d = await res.json();
+    if(d.error){ $('err1').textContent = d.error; return; }
+    if(d.status === 'ok'){
+      localStorage.setItem('praman_token', d.token);
+      localStorage.setItem('praman_user', JSON.stringify(d.user));
+      location.href = '/index.html'; return;
+    }
+    if(d.status === 'pending') return done('warn', '<b>Approval pending.</b><br>Your request' + (d.firmName ? ' for <b>' + esc(d.firmName) + '</b>' : '') + ' is with the platform admin. You can sign in here once it is approved.');
+    if(d.status === 'suspended') return done('warn', '<b>Account suspended.</b><br>Please contact the platform admin.');
+    if(d.status === 'new'){
+      onboardToken = d.onboardToken;
+      $('who').textContent = 'Signed in with Google: ' + d.email;
+      $('contactName').value = d.name || '';
+      $('contactEmail').value = d.email || '';
+      show('stepForm'); return;
+    }
+  }catch(e){ $('err1').textContent = 'Server not reachable (it may be waking up). Try again in 30 seconds.'; }
+}
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function submitForm(){
+  $('err2').textContent = '';
+  const body = { onboardToken };
+  ['firmName','contactName','contactEmail','mobile','pan','gst','address','city','state','pincode'].forEach(k => body[k] = $(k).value.trim());
+  const btn = $('submitBtn'); btn.disabled = true;
+  try{
+    const res = await fetch('/api/auth/vendor-register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d = await res.json();
+    if(d.error){ $('err2').textContent = d.error; return; }
+    done('ok', '<b>Request submitted.</b><br>The platform admin will review your firm details. After approval, come back to this page and sign in with the same Google account.');
+  }catch(e){ $('err2').textContent = 'Server not reachable. Try again in 30 seconds.'; }
+  finally{ btn.disabled = false; }
+}
+
+(async function(){
+  try{
+    const cfg = await (await fetch('/api/auth/google-config')).json();
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = () => {
+      google.accounts.id.initialize({ client_id: cfg.clientId, callback: onGoogle });
+      google.accounts.id.renderButton($('gBtn'), { theme:'outline', size:'large', text:'continue_with', width:300 });
+    };
+    document.head.appendChild(s);
+  }catch(e){ $('err1').textContent = 'Could not load Google sign-in.'; }
+})();
+</script>
+</body>
+</html>

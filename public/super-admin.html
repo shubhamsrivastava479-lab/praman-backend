@@ -105,6 +105,30 @@
     <div id="storageMsg" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
+  <div class="card">
+    <h2>Live Video Call Relay (TURN) <span class="source-tag" id="turnSourceTag"></span></h2>
+    <p class="hint">Live video calls between an executive and a customer connect directly when possible. On many mobile networks (Jio, Airtel, Vi) a direct connection fails and the call needs a relay (TURN server). Recommended: Cloudflare Realtime TURN — create a TURN key in the Cloudflare dashboard (Realtime → TURN Server) and paste the Key ID and API token here. Or enter any TURN server with fixed credentials.</p>
+    <div class="form-row">
+      <input id="cfTurnKeyId" placeholder="Cloudflare TURN Key ID">
+      <input id="cfTurnApiToken" placeholder="Cloudflare TURN API token" type="password">
+    </div>
+    <div style="font-size:12px;color:#777;margin:6px 0;">— or a TURN server with fixed credentials —</div>
+    <div class="form-row">
+      <input id="turnUrl" placeholder="turn:host:3478?transport=udp, turns:host:443">
+      <input id="turnUsername" placeholder="Username">
+      <input id="turnCredential" placeholder="Password" type="password">
+    </div>
+    <button class="save" onclick="saveTurnSettings()">Save TURN Settings</button>
+    <div id="turnMsg" style="font-size:12.5px;margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Database &amp; Backup</h2>
+    <div id="sysInfo" style="font-size:13px;">Checking…</div>
+    <button class="save" style="margin-top:10px;" onclick="downloadBackup()">Download full backup (JSON)</button>
+    <p class="hint">The backup contains all data including API keys. Keep it somewhere safe.</p>
+  </div>
+
 </div>
 
 <script>
@@ -115,23 +139,41 @@ if (!token || !user || user.role !== 'super_admin') location.href = '/login.html
 function authHeaders(extra){ return Object.assign({ Authorization: 'Bearer ' + token }, extra || {}); }
 function logout(){ localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
 
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let vendorCache = [];
 async function loadVendors(){
   const res = await fetch('/api/super-admin/vendors', { headers: authHeaders() });
   if (res.status === 403) { logout(); return; }
-  const vendors = await res.json();
-  document.getElementById('vendorRows').innerHTML = vendors.map(v => `
+  vendorCache = await res.json();
+  // pending requests first
+  vendorCache.sort((a,b) => (a.approved === b.approved ? 0 : a.approved ? 1 : -1));
+  document.getElementById('vendorRows').innerHTML = vendorCache.map(v => {
+    const label = v.status === 'approved' ? 'Approved' : v.status === 'suspended' ? 'Suspended' : 'Pending';
+    const cls = v.approved ? 'approved' : 'pending';
+    return `
     <tr>
-      <td><b>${v.vendorName}</b></td>
-      <td>${v.email}</td>
+      <td><b>${esc(v.vendorName)}</b></td>
+      <td>${esc(v.email)}</td>
       <td>${v.caseCount}</td>
       <td>${v.agentCount}</td>
       <td>${v.whatsappConnected ? '✅' : '—'}</td>
-      <td><span class="tag ${v.approved ? 'approved' : 'pending'}">${v.approved ? 'Approved' : 'Pending'}</span></td>
-      <td>${v.approved
-        ? `<button class="action suspend" onclick="suspendVendor('${v.id}')">Suspend</button>`
-        : `<button class="action approve" onclick="approveVendor('${v.id}')">Approve</button>`}</td>
-    </tr>`).join('') || '<tr><td colspan="7" style="color:#999;">No vendors yet.</td></tr>';
+      <td><span class="tag ${cls}">${label}</span></td>
+      <td style="white-space:nowrap;">
+        ${v.profile ? `<button class="action" style="background:#eef0f3;color:#333;" onclick="toggleDetails('${esc(v.id)}')">Details</button>` : ''}
+        ${v.approved
+          ? `<button class="action suspend" onclick="suspendVendor('${esc(v.id)}')">Suspend</button>`
+          : `<button class="action approve" onclick="approveVendor('${esc(v.id)}')">Approve</button>`}
+      </td>
+    </tr>
+    <tr id="det-${esc(v.id)}" style="display:none;"><td colspan="7" style="background:#f8f9fb;font-size:12.5px;line-height:1.7;">${v.profile ? `
+      <b>Firm:</b> ${esc(v.profile.firmName)} &nbsp;|&nbsp; <b>Contact:</b> ${esc(v.profile.contactName)}<br>
+      <b>Mobile:</b> ${esc(v.profile.mobile)} &nbsp;|&nbsp; <b>Contact email:</b> ${esc(v.profile.contactEmail)} &nbsp;|&nbsp; <b>Google login:</b> ${esc(v.email)}<br>
+      <b>PAN:</b> ${esc(v.profile.pan)} &nbsp;|&nbsp; <b>GST:</b> ${esc(v.profile.gst || 'Not provided')}<br>
+      <b>Address:</b> ${esc(v.profile.address)}, ${esc(v.profile.city)}, ${esc(v.profile.state)} - ${esc(v.profile.pincode)}<br>
+      <b>Requested:</b> ${esc(new Date(v.profile.submittedAt).toLocaleString())}` : ''}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" style="color:#999;">No vendors yet.</td></tr>';
 }
+function toggleDetails(id){ const r = document.getElementById('det-' + id); if (r) r.style.display = r.style.display === 'none' ? 'table-row' : 'none'; }
 
 async function approveVendor(id){
   await fetch(`/api/super-admin/vendors/${id}/approve`, { method:'POST', headers: authHeaders() });
@@ -158,6 +200,50 @@ async function loadSettings(){
   document.getElementById('s3Region').value = s.s3Region || 'auto';
   document.getElementById('s3PublicBaseUrl').value = s.s3PublicBaseUrl || '';
   document.getElementById('storageSourceTag').textContent = s.storageSource;
+  document.getElementById('cfTurnKeyId').value = s.cfTurnKeyId || '';
+  document.getElementById('cfTurnApiToken').placeholder = s.cfTurnApiToken ? `Current: ${s.cfTurnApiToken}` : 'Cloudflare TURN API token';
+  document.getElementById('turnUrl').value = s.turnUrl || '';
+  document.getElementById('turnUsername').value = s.turnUsername || '';
+  document.getElementById('turnCredential').placeholder = s.turnCredential ? `Current: ${s.turnCredential}` : 'Password';
+  document.getElementById('turnSourceTag').textContent = s.turnSource || '';
+  loadSystem();
+}
+
+async function saveTurnSettings(){
+  const body = {
+    cfTurnKeyId: document.getElementById('cfTurnKeyId').value.trim(),
+    cfTurnApiToken: document.getElementById('cfTurnApiToken').value.trim(),
+    turnUrl: document.getElementById('turnUrl').value.trim(),
+    turnUsername: document.getElementById('turnUsername').value.trim(),
+    turnCredential: document.getElementById('turnCredential').value.trim()
+  };
+  const res = await fetch('/api/super-admin/settings', { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify(body) });
+  const data = await res.json();
+  document.getElementById('turnMsg').textContent = data.ok ? 'Saved. New live calls will use this relay.' : (data.error || 'Failed to save.');
+  document.getElementById('cfTurnApiToken').value = ''; document.getElementById('turnCredential').value = '';
+  loadSettings();
+}
+
+async function loadSystem(){
+  try {
+    const d = await (await fetch('/api/super-admin/system', { headers: authHeaders() })).json();
+    const c = d.counts || {};
+    const it = d.integrity || {};
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    document.getElementById('sysInfo').innerHTML = `<b style="color:${d.persistent ? '#1f7a6c' : '#b23a2c'}">${d.persistent ? '✓ ' : '⚠️ '}${esc(d.database)}</b><br>Vendors/users: ${c.users || 0} · Cases: ${c.cases || 0} · Documents/media: ${c.evidence || 0} · Custody events: ${c.custody || 0}` +
+      (d.lastSaveError ? `<br><b style="color:#b23a2c">⚠️ Last save failed at ${esc(new Date(d.lastSaveError.at).toLocaleString('en-IN'))}: ${esc(d.lastSaveError.message)} — retrying automatically.</b>` : '') +
+      `<br><b style="color:${it.ok ? '#1f7a6c' : '#b23a2c'}">${it.ok ? '✓ Data check passed' : '⚠️ Data check found ' + (it.problems || []).length + ' problem(s)'}</b> — every document linked to an existing case, all IDs unique, no duplicate case or claim numbers.` +
+      (it.unassigned ? `<br>${it.unassigned} WhatsApp item(s) waiting to be attached to a case (vendors see them on their Cases page).` : '') +
+      (!it.ok ? '<ul style="margin:6px 0 0;padding-left:18px;">' + it.problems.slice(0, 20).map(p => `<li>${esc(p.kind)}: ${esc(p.detail)}</li>`).join('') + '</ul>' : '');
+  } catch { document.getElementById('sysInfo').textContent = 'Could not load.'; }
+}
+
+async function downloadBackup(){
+  const res = await fetch('/api/super-admin/backup', { headers: authHeaders() });
+  if (!res.ok) { alert('Backup failed.'); return; }
+  const blob = await res.blob();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `praman-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
 }
 
 async function saveStorageSettings(){

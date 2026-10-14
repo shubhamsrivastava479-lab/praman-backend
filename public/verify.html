@@ -62,6 +62,13 @@
 <script>
 const params = new URLSearchParams(location.search);
 const caseId = params.get('case');
+// The link's secret key goes with every request to the server.
+const caseKey = params.get('k') || '';
+const _fetch = window.fetch.bind(window);
+window.fetch = (url, opts = {}) => {
+  if (String(url).startsWith('/api/participant/')) { opts = { ...opts, headers: { ...(opts.headers || {}), 'X-Case-Key': caseKey } }; }
+  return _fetch(url, opts);
+};
 const roomId = params.get('room');
 const name = params.get('name') || 'Insured';
 
@@ -129,7 +136,7 @@ async function speak(text){
 }
 
 function talkToExecutive(){
-  location.href = `/join.html?room=${roomId}&case=${caseId}&name=${encodeURIComponent(name)}`;
+  location.href = `/join.html?room=${roomId}&case=${caseId}&k=${encodeURIComponent(caseKey)}&name=${encodeURIComponent(name)}`;
 }
 
 function startSelfVerify(){

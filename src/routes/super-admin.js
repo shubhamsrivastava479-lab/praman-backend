@@ -20,6 +20,9 @@ router.get('/vendors', async (req, res) => {
     email: v.email,
     vendorName: v.vendorName,
     approved: v.approved !== false,
+    status: v.approved !== false ? 'approved' : (v.status || 'pending'),
+    profile: v.profile || null,
+    signupMethod: v.signupMethod || 'password',
     createdAt: v.createdAt,
     caseCount: db.data.cases.filter(c => c.vendorId === v.id).length,
     agentCount: db.data.users.filter(u => u.role === 'agent' && u.parentVendorId === v.id).length,
@@ -33,6 +36,8 @@ router.post('/vendors/:id/approve', async (req, res) => {
   const v = db.data.users.find(u => u.id === req.params.id && u.role === 'vendor_admin');
   if (!v) return res.status(404).json({ error: 'Vendor not found' });
   v.approved = true;
+  v.status = 'approved';
+  v.approvedAt = new Date().toISOString();
   await db.write();
   res.json({ ok: true });
 });
@@ -42,6 +47,7 @@ router.post('/vendors/:id/suspend', async (req, res) => {
   const v = db.data.users.find(u => u.id === req.params.id && u.role === 'vendor_admin');
   if (!v) return res.status(404).json({ error: 'Vendor not found' });
   v.approved = false;
+  v.status = 'suspended';
   await db.write();
   res.json({ ok: true });
 });
@@ -71,14 +77,22 @@ router.get('/settings', async (req, res) => {
     s3AccessKeyId: mask(s.s3AccessKeyId || process.env.S3_ACCESS_KEY_ID),
     s3Region: s.s3Region || process.env.S3_REGION || 'auto',
     s3PublicBaseUrl: s.s3PublicBaseUrl || process.env.S3_PUBLIC_BASE_URL || null,
-    storageSource: s.s3Endpoint ? 'dashboard' : (process.env.S3_ENDPOINT ? 'env' : 'local disk (not configured)')
+    storageSource: s.s3Endpoint ? 'dashboard' : (process.env.S3_ENDPOINT ? 'env' : 'local disk (not configured)'),
+    // TURN relay for live video calls on mobile networks
+    cfTurnKeyId: s.cfTurnKeyId || process.env.CF_TURN_KEY_ID || null,
+    cfTurnApiToken: mask(s.cfTurnApiToken || process.env.CF_TURN_API_TOKEN),
+    turnUrl: s.turnUrl || process.env.TURN_URL || null,
+    turnUsername: s.turnUsername || process.env.TURN_USERNAME || null,
+    turnCredential: mask(s.turnCredential || process.env.TURN_CREDENTIAL),
+    turnSource: s.cfTurnKeyId ? 'Cloudflare (dashboard)' : s.turnUrl ? 'custom (dashboard)' : (process.env.CF_TURN_KEY_ID || process.env.TURN_URL) ? 'env' : 'not set — STUN only'
   });
 });
 
 router.post('/settings', async (req, res) => {
   const {
     geminiApiKey, gridlinesApiKey, gridlinesAuthType,
-    s3Endpoint, s3Bucket, s3AccessKeyId, s3SecretAccessKey, s3Region, s3PublicBaseUrl
+    s3Endpoint, s3Bucket, s3AccessKeyId, s3SecretAccessKey, s3Region, s3PublicBaseUrl,
+    cfTurnKeyId, cfTurnApiToken, turnUrl, turnUsername, turnCredential
   } = req.body;
   await db.read();
   db.data.platformSettings = db.data.platformSettings || {};
@@ -92,6 +106,11 @@ router.post('/settings', async (req, res) => {
   if (s3SecretAccessKey) s.s3SecretAccessKey = s3SecretAccessKey;
   if (s3Region) s.s3Region = s3Region;
   if (s3PublicBaseUrl) s.s3PublicBaseUrl = s3PublicBaseUrl;
+  if (cfTurnKeyId !== undefined) s.cfTurnKeyId = String(cfTurnKeyId || '').trim() || undefined;
+  if (cfTurnApiToken) s.cfTurnApiToken = String(cfTurnApiToken).trim();
+  if (turnUrl !== undefined) s.turnUrl = String(turnUrl || '').trim() || undefined;
+  if (turnUsername !== undefined) s.turnUsername = String(turnUsername || '').trim() || undefined;
+  if (turnCredential) s.turnCredential = String(turnCredential).trim();
   await db.write();
   res.json({ ok: true });
 });
@@ -145,6 +164,25 @@ router.get('/analytics', async (req, res) => {
     trend7Days: trend,
     topVendors
   });
+});
+
+// Storage status + a full backup download (JSON) for the Super Admin.
+router.get('/system', async (req, res) => {
+  const counts = {};
+  for (const [k, v] of Object.entries(db.data)) if (Array.isArray(v)) counts[k] = v.length;
+  const { checkIntegrity } = require('../services/integrity');
+  res.json({
+    database: db.mode === 'postgres' ? 'PostgreSQL (Supabase)' : 'Local file — data is lost on every deploy. Set DATABASE_URL.',
+    persistent: db.mode === 'postgres', counts,
+    lastSaveError: db.lastWriteError || null, lastSavedAt: db.lastWriteAt || null,
+    integrity: checkIntegrity(db.data)
+  });
+});
+router.get('/backup', async (req, res) => {
+  await db.read();
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  res.set('Content-Disposition', `attachment; filename="praman-backup-${stamp}.json"`);
+  res.json(db.data);
 });
 
 module.exports = router;

@@ -28,8 +28,21 @@
   .wa-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f1f3;font-size:13px;}
   .hint{font-size:11.5px;color:#888;line-height:1.5;margin-top:6px;}
   code{background:#f1f3f5;padding:2px 5px;border-radius:4px;font-size:11.5px;}
-  #view{display:none;}
-  #view.active{display:block;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .ai-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:8px;}
+  .ai-photos figure{margin:0;background:#f6f7f9;border:1px solid #e6e8ec;border-radius:8px;overflow:hidden;}
+  .ai-photos img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:#dfe2e8;}
+  .ai-photos figcaption{font-size:11px;padding:6px 7px;line-height:1.35;color:#444;}
+  .ai-photos figcaption b{display:block;font-size:11.5px;color:#10151f;}
+  .ai-photos a{font-size:11px;}
+  .result-pass{color:#1f7a6c;} .result-bad{color:#b23a2c;} .result-mid{color:#8a5416;}
+  @media (max-width: 820px){
+    .shell{grid-template-columns:1fr;}
+    .sidebar{padding:16px;}
+    .sidebar > div[style*="absolute"]{position:static!important;margin-top:10px;}
+    .main{padding:16px;}
+  }
 </style>
 </head>
 <body>
@@ -41,7 +54,8 @@
     <button class="navbtn" id="navWA" onclick="showView('whatsapp')">WhatsApp Connection</button>
     <button class="navbtn" id="navTeam" onclick="showView('team')" style="display:none;">Team / Agents</button>
     <button class="navbtn" id="navPerf" onclick="showView('performance')">Performance</button>
-    <div id="caseList" style="margin-top:14px;"></div>
+    <input id="caseSearch" placeholder="Search: case no., claim no., name, mobile" oninput="renderCaseList()" style="width:100%;margin-top:14px;box-sizing:border-box;background:#1a2130;border:1px solid #2b3446;color:#e8eaf0;">
+    <div id="caseList" style="margin-top:10px;"></div>
     <div style="position:absolute;bottom:16px;left:16px;">
       <button class="secondary" onclick="logout()" style="padding:6px 12px;font-size:11.5px;">Log out</button>
     </div>
@@ -52,9 +66,17 @@
       <div class="card">
         <b>New case</b>
         <div class="form-row" style="margin-top:10px;">
-          <select id="caseTypeSelect">
+          <select id="caseTypeSelect" onchange="document.getElementById('policyTypeSelect').style.display = this.value === 'policy_verification' ? '' : 'none'">
             <option value="claim_investigation">Claim Investigation</option>
             <option value="policy_verification">Policy Issuance Verification (PIVC)</option>
+          </select>
+          <select id="policyTypeSelect" title="Policy type" style="display:none;">
+            <option value="life">Life insurance</option>
+            <option value="term">Term insurance</option>
+          </select>
+          <select id="modeSelect" title="How the customer is verified">
+            <option value="executive">Executive call / self-verification</option>
+            <option value="full_automation">Full automation (AI voice call)</option>
           </select>
           <input id="claimNo" placeholder="Claim / Policy No.">
           <input id="insuredName" placeholder="Insured name">
@@ -62,6 +84,7 @@
           <input id="policyValue" type="number" placeholder="Policy/claim value (₹, optional)">
           <select id="whatsappAccountSelect"></select>
         </div>
+        <div class="hint"><b>Full automation:</b> the customer gets a WhatsApp link, joins a video call whenever free, and an AI voice agent does the whole verification: tells the customer it is an AI-assisted call, confirms details, takes a face photo and eye-blink check, and for Life/Term a full-body photo standing and sitting (each with date, time and lat/long), reads Aadhaar/PAN sent on WhatsApp and asks the investigation questions. Term policies get extra questions (sum assured, other policies, family history, medical test…). The customer can tap "Talk to a person" anytime.</div>
         <div class="hint">If policy/claim value is above ₹10,00,000, self-verification is disabled for that case — only a live executive call is allowed.</div>
         <button onclick="createCase()">Create case</button>
         <div class="hint" id="noWaHint" style="display:none;">You haven't connected a WhatsApp number yet — go to <b>WhatsApp Connection</b> in the sidebar first, otherwise evidence can't be auto-filed for this case.</div>
@@ -69,14 +92,23 @@
 
       <div class="card">
         <b>Bulk upload cases (Excel/CSV)</b>
-        <p style="font-size:12px;color:#666;">Columns: <code>claimNo</code>, <code>insuredName</code>, <code>whatsappNumber</code>, <code>vehicleNo</code>, <code>district</code>, <code>policyNo</code>, <code>caseType</code> (claim_investigation or policy_verification). Column names are case-insensitive.</p>
+        <p style="font-size:12px;color:#666;">Columns: <code>claimNo</code>, <code>insuredName</code>, <code>whatsappNumber</code>, <code>vehicleNo</code>, <code>district</code>, <code>policyNo</code>, <code>caseType</code> (claim_investigation or policy_verification), <code>policyType</code> (life or term — for PIVC), <code>verificationMode</code> (optional: full_automation or executive — overrides the choice below). Column names are case-insensitive.</p>
         <div class="form-row">
           <input type="file" id="bulkFile" accept=".xlsx,.xls,.csv">
+          <select id="bulkMode">
+            <option value="executive">Mode: Executive call / self-verification</option>
+            <option value="full_automation">Mode: Full automation (AI voice call)</option>
+          </select>
+          <select id="bulkPolicyType" title="Policy type when the Excel has no policyType column">
+            <option value="life">PIVC default: Life insurance</option>
+            <option value="term">PIVC default: Term insurance</option>
+          </select>
           <input id="bulkTemplateName" placeholder="WhatsApp template name" value="claim_investigation_intake">
         </div>
         <button onclick="bulkUpload()">Upload & send call links</button>
         <div id="bulkResults" style="margin-top:10px;"></div>
       </div>
+      <div class="card" id="unassignedBox" style="display:none;"></div>
       <div id="caseDetail"></div>
     </div>
 
@@ -197,7 +229,7 @@ async function loadPerformance(){
     document.getElementById('perfTrend').innerHTML = trendBars(d.trend7Days);
     document.getElementById('perfActivityCard').style.display = 'block';
     document.getElementById('perfActivity').innerHTML = d.recentActivity.map(a =>
-      `<div class="custody-item">${new Date(a.timestamp).toLocaleString()} — ${a.event}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No activity yet.</div>';
+      `<div class="custody-item">${new Date(a.timestamp).toLocaleString()} — ${escH(a.event)}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No activity yet.</div>';
   } else {
     const res = await fetch(API + '/api/analytics/company', { headers: authHeaders() });
     const d = await res.json();
@@ -308,16 +340,57 @@ async function disconnectWA(id){
 }
 
 // ---------- Cases ----------
+let allCases = [];
 async function loadCases(){
   const res = await fetch(API + '/api/cases', { headers: authHeaders() });
   if (res.status === 401) { logout(); return; }
-  const cases = await res.json();
-  document.getElementById('caseList').innerHTML = cases.map(c => `
+  allCases = (await res.json()).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  renderCaseList();
+  loadUnassigned();
+}
+function renderCaseList(){
+  const q = (document.getElementById('caseSearch').value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const list = q ? allCases.filter(c => [c.caseRef, c.claimNo, c.policyNo, c.insuredName, c.whatsappNumber, c.vehicleNo].some(v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(q))) : allCases;
+  document.getElementById('caseList').innerHTML = list.map(c => `
     <div class="case-item" onclick="openCase('${c.id}')">
-      <b>${c.claimNo}</b><br>${c.insuredName || '—'}<br>
-      <span style="opacity:.6">${c.status}</span>
-      ${c.assignedAgentName ? `<br><span style="color:#c8781f;font-size:11px;">👤 ${c.assignedAgentName}</span>` : ''}
-    </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No cases yet</div>';
+      <span style="font-size:10.5px;color:#c8781f;font-weight:700;">${escH(c.caseRef || '')}</span><br>
+      <b>${escH(c.claimNo)}</b><br>${escH(c.insuredName || '—')}<br>
+      <span style="opacity:.6">${escH(c.status)}</span>
+      ${c.assignedAgentName ? `<br><span style="color:#c8781f;font-size:11px;">👤 ${escH(c.assignedAgentName)}</span>` : ''}
+    </div>`).join('') || `<div style="opacity:.6;font-size:12px;">${q ? 'No matching case' : 'No cases yet'}</div>`;
+}
+
+// WhatsApp items from numbers with no case — kept, then attached to a case here.
+async function loadUnassigned(){
+  const box = document.getElementById('unassignedBox'); if (!box) return;
+  let items = [];
+  try { items = await (await fetch(API + '/api/cases/unassigned/items', { headers: authHeaders() })).json(); } catch {}
+  if (!Array.isArray(items) || !items.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = `<b>Unassigned WhatsApp items (${items.length})</b>
+    <div class="hint">These came from WhatsApp numbers that have no case. Nothing is lost — attach each one to the right case.</div>` +
+    items.map(e => `<div class="evidence-item"><b>${escH(e.title || e.type)}</b> from ${escH(e.senderName || '')} ${escH(e.sender || '')} — ${escH(new Date(e.receivedAt).toLocaleString('en-IN'))}
+      ${e.caption ? `<br>${escH(e.caption)}` : ''}${e.keyDetails ? `<br><i>${escH(e.keyDetails)}</i>` : ''}
+      ${e.fileUrl ? `<br><a href="${escH(e.fileUrl)}" target="_blank" rel="noopener">Open file</a>` : ''}
+      <br><span style="font-size:11px;color:#888;">ID: ${escH(e.id)}</span>
+      <br><button style="margin-top:6px;" onclick="assignItem('${e.id}')">Attach to case…</button></div>`).join('');
+}
+async function assignItem(evId){
+  const to = prompt('Attach to which case? Enter case no. (PRM26-…) or claim/policy no.');
+  if (!to) return;
+  const r = await fetch(API + `/api/cases/unassigned/${evId}/assign`, { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ to }) });
+  const d = await r.json();
+  alert(d.ok ? `Attached to case ${d.caseRef}.` : ('Not attached: ' + d.error));
+  loadUnassigned();
+}
+async function moveItem(caseId, evId){
+  const to = prompt('Move this item to which case? Enter case no. (PRM26-…) or claim/policy no.');
+  if (!to) return;
+  const reason = prompt('Reason (optional), e.g. customer has two claims') || '';
+  const r = await fetch(API + `/api/cases/${caseId}/evidence/${evId}/move`, { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ to, reason }) });
+  const d = await r.json();
+  alert(d.ok ? `Moved to case ${d.caseRef}.` : ('Not moved: ' + d.error));
+  openCase(caseId);
 }
 
 async function bulkUpload(){
@@ -327,6 +400,8 @@ async function bulkUpload(){
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
   formData.append('templateName', templateName);
+  formData.append('verificationMode', document.getElementById('bulkMode').value);
+  formData.append('policyType', document.getElementById('bulkPolicyType').value);
 
   document.getElementById('bulkResults').textContent = 'Uploading and processing…';
   const res = await fetch(API + '/api/cases/bulk-upload', {
@@ -342,8 +417,8 @@ async function bulkUpload(){
     ${data.results.map(r => `
       <div class="evidence-item">
         ${r.status === 'created'
-          ? `✅ ${r.row.claimNo || r.row.ClaimNo || ''} — WhatsApp: ${r.whatsapp}`
-          : `⚠️ Skipped: ${r.reason} — ${JSON.stringify(r.row)}`}
+          ? `✅ ${escH(r.caseRef || '')} · ${escH(r.row.claimNo || r.row.ClaimNo || '')} — WhatsApp: ${escH(r.whatsapp)}`
+          : `⚠️ Skipped: ${escH(r.reason)} — ${escH(JSON.stringify(r.row))}`}
       </div>`).join('')}
   `;
   loadCases();
@@ -356,12 +431,19 @@ async function createCase(){
   const whatsappAccountId = document.getElementById('whatsappAccountSelect').value;
   const caseType = document.getElementById('caseTypeSelect').value;
   const policyValue = document.getElementById('policyValue').value.trim();
+  const verificationMode = document.getElementById('modeSelect').value;
+  const policyType = document.getElementById('policyTypeSelect').value;
   if(!claimNo || !whatsappNumber){ alert('Claim No. and WhatsApp number are required'); return; }
   const res = await fetch(API + '/api/cases', {
     method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
-    body: JSON.stringify({ claimNo, insuredName, whatsappNumber, whatsappAccountId, caseType, policyValue })
+    body: JSON.stringify({ claimNo, insuredName, whatsappNumber, whatsappAccountId, caseType, policyValue, verificationMode, policyType })
   });
   const c = await res.json();
+  if (!res.ok) {
+    if (c.caseId && confirm((c.error || 'Could not create the case.') + '\n\nOpen the existing case?')) openCase(c.caseId);
+    else if (!c.caseId) alert(c.error || 'Could not create the case.');
+    return;
+  }
   await loadCases();
   openCase(c.id);
 }
@@ -380,6 +462,44 @@ const PIVC_RESULTS = [
   ['pending_verification', 'Pending Verification'],
   ['found_discrepancy', 'Found Discrepancy']
 ];
+
+
+const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+function aiCard(c){
+  const a = c.aiCall || {};
+  const stateLabel = { not_started: 'Link sent — customer has not joined yet', in_progress: 'Call in progress or paused (customer can rejoin)', completed: 'Call completed', handoff: '🙋 Customer asked to talk to a person — please do an executive call' }[a.status || 'not_started'];
+  const shotOrder = ['liveness_selfie', 'liveness_blink', 'body_standing', 'body_sitting'];
+  const shotName = { liveness_selfie: 'Face photo', liveness_blink: 'Eye blink', body_standing: 'Full body — standing', body_sitting: 'Full body — sitting' };
+  const photos = (c.evidence || []).filter(e => e.source === 'ai_call' && shotOrder.includes(e.type))
+    .sort((x, y) => shotOrder.indexOf(x.type) - shotOrder.indexOf(y.type) || new Date(x.receivedAt) - new Date(y.receivedAt));
+  const mapLink = l => l && l.latitude != null ? `<a href="https://www.google.com/maps?q=${Number(l.latitude)},${Number(l.longitude)}" target="_blank" rel="noopener">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)}</a>` : 'no location';
+  const photoGrid = photos.length ? `<div style="margin-top:12px;font-size:12.5px;"><b>Photos taken by AI (${photos.length})</b></div><div class="ai-photos">${photos.map(e => `
+      <figure>${e.fileUrl ? `<a href="${escH(e.fileUrl)}" target="_blank" rel="noopener"><img src="${escH(e.fileUrl)}" alt="${escH(shotName[e.type])}" loading="lazy"></a>` : ''}
+        <figcaption><b>${escH(shotName[e.type])}</b>${escH(new Date(e.receivedAt).toLocaleString('en-IN'))}<br>${mapLink(e.location)}</figcaption>
+      </figure>`).join('')}</div>` : '';
+  const locs = (a.locations || []).map(l => `<div class="evidence-item" style="font-size:11.5px;">📍 ${escH(l.what)} — ${mapLink(l)}${l.accuracy ? ' (±' + Number(l.accuracy) + 'm)' : ''} · ${escH(new Date(l.at).toLocaleString('en-IN'))}</div>`).join('');
+  const decision = { verified: ['✅ AI result: Verified', '#1f7a6c'], partially_verified: ['🟡 AI result: Partially verified', '#8a5416'], found_discrepancy: ['🔴 AI result: Discrepancy found', '#b23a2c'] }[a.decision];
+  const icon = r => ({ match:'✅', pass:'✅', partial:'🟡', mismatch:'❌', fail:'❌', unknown:'➖', skipped:'⏭️' }[r] || '➖');
+  const cls = r => ['match','pass'].includes(r) ? 'result-pass' : ['mismatch','fail'].includes(r) ? 'result-bad' : 'result-mid';
+  const checks = (a.checks || []).map(k => `<div class="evidence-item" style="font-size:12px;">${icon(k.result)} <b>${escH(k.label)}</b> — <span class="${cls(k.result)}">${escH(k.result)}</span>${k.detail ? ' · ' + escH(k.detail) : ''}</div>`).join('');
+  const answers = (a.answers || []).map(x => `<div class="evidence-item" style="font-size:12px;"><b>${escH(x.question)}</b><br>${escH(x.english || x.original || '(no answer)')}${x.concern ? `<div style="color:#b23a2c;">⚠️ ${escH(x.concern)}</div>` : ''}</div>`).join('');
+  const docs = a.docs || {};
+  return `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><b>🤖 Full-automation AI call</b>${['completed','handoff'].includes(a.status) ? `<button onclick="window.open('/ai-report.html?case=${encodeURIComponent(c.id)}','_blank')">Open AI verification report</button>` : ''}</div>
+      <div style="font-size:12px;color:#666;margin-top:4px;">${escH(stateLabel)}${a.startedAt ? ' · started ' + new Date(a.startedAt).toLocaleString() : ''}${a.completedAt ? ' · finished ' + new Date(a.completedAt).toLocaleString() : ''}</div>
+      ${decision ? `<div style="margin-top:8px;font-weight:700;color:${decision[1]};">${decision[0]}</div>` : ''}
+      ${a.summary ? `<p style="font-size:12.5px;line-height:1.55;">${escH(a.summary)}</p>` : ''}
+      ${(a.flags || []).length ? `<div style="font-size:12px;color:#b23a2c;margin:6px 0;">⚠️ ${a.flags.map(escH).join('<br>⚠️ ')}</div>` : ''}
+      ${docs.aadhaar && (docs.aadhaar.name || docs.aadhaar.masked) ? `<div class="evidence-item" style="font-size:12px;"><b>Aadhaar (read by AI)</b><br>Name: ${escH(docs.aadhaar.name || '—')} · DOB: ${escH(docs.aadhaar.dob || '—')} · Gender: ${escH(docs.aadhaar.gender || '—')} · Number: ${escH(docs.aadhaar.masked || '—')}<br>Address: ${escH(docs.aadhaar.address || '—')}</div>` : ''}
+      ${docs.pan && (docs.pan.name || docs.pan.masked) ? `<div class="evidence-item" style="font-size:12px;"><b>PAN (read by AI)</b><br>Name: ${escH(docs.pan.name || '—')} · DOB: ${escH(docs.pan.dob || '—')} · Number: ${escH(docs.pan.masked || '—')}</div>` : ''}
+      ${photoGrid}
+      ${checks ? `<div style="margin-top:10px;font-size:12.5px;"><b>Automatic matching</b></div>${checks}` : ''}
+      ${locs ? `<details style="margin-top:10px;"><summary style="font-size:12.5px;cursor:pointer;"><b>Location trail (${(a.locations||[]).length})</b></summary>${locs}</details>` : ''}
+      ${answers ? `<details style="margin-top:10px;"><summary style="font-size:12.5px;cursor:pointer;"><b>Questions and answers (${(a.answers||[]).length})</b></summary>${answers}</details>` : ''}
+      <div class="hint" style="margin-top:8px;">Full Aadhaar/PAN numbers are never stored — only the last 4 digits. The call recording appears in the evidence list below.</div>
+    </div>`;
+}
 
 function pivcCard(c){
   const checklist = c.pivcChecklist || {};
@@ -433,17 +553,19 @@ async function openCase(id){
   const res = await fetch(API + '/api/cases/' + id, { headers: authHeaders() });
   const c = await res.json();
   const roomId = 'room_' + c.id;
-  const joinUrl = `${location.origin}/verify.html?room=${roomId}&case=${c.id}&name=Insured`;
+  const joinUrl = c.customerLink || `${location.origin}/verify.html?room=${roomId}&case=${c.id}&name=Insured`;
+  const isAi = c.verificationMode === 'full_automation';
   const callUrl = `${location.origin}/call.html?room=${roomId}&case=${c.id}`;
   const isPivc = c.caseType === 'policy_verification';
 
   document.getElementById('caseDetail').innerHTML = `
     <div class="card">
-      <h2>${c.claimNo} <span class="tag">${c.status}</span> ${isPivc ? '<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC</span>' : ''}</h2>
-      <div style="font-size:12.5px;color:#555;">${c.insuredName || ''} · WhatsApp: ${c.whatsappNumber}</div>
+      <div style="font-size:12px;color:#c8781f;font-weight:700;">Case no. ${escH(c.caseRef || '')} <span style="color:#999;font-weight:400;">· ID ${escH(c.id)}</span></div>
+      <h2>${escH(c.claimNo)} <span class="tag">${escH(c.status)}</span> ${isPivc ? `<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC · ${c.policyType === 'term' ? 'Term' : 'Life'}</span>` : ''} ${isAi ? '<span class="tag" style="background:#e2e8fb;color:#2b3a8c;">🤖 AI call</span>' : ''}</h2>
+      <div style="font-size:12.5px;color:#555;">${escH(c.insuredName || '')} · WhatsApp: ${escH(c.whatsappNumber)}</div>
       ${c.lastKnownLocation ? `<div style="font-size:11.5px;color:#888;margin-top:2px;">📍 Last captured location: ${c.lastKnownLocation.latitude.toFixed(5)}, ${c.lastKnownLocation.longitude.toFixed(5)} (±${Math.round(c.lastKnownLocation.accuracy||0)}m) — ${new Date(c.lastKnownLocation.capturedAt).toLocaleString()} <a href="https://maps.google.com/?q=${c.lastKnownLocation.latitude},${c.lastKnownLocation.longitude}" target="_blank">View on map</a></div>` : ''}
       ${c.spotCheckRequired ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f4e3cc;color:#8a5416;">🎯 Selected for spot-check review</span></div>` : ''}
-      ${c.verificationFlags && c.verificationFlags.length ? `<div style="font-size:11.5px;margin-top:4px;color:#b23a2c;">⚠️ ${c.verificationFlags.join(' · ')}</div>` : ''}
+      ${c.verificationFlags && c.verificationFlags.length ? `<div style="font-size:11.5px;margin-top:4px;color:#b23a2c;">⚠️ ${c.verificationFlags.map(escH).join(' · ')}</div>` : ''}
       ${c.requiresMandatoryCall ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f6e0db;color:#7a1f1f;">High-value — video call required</span></div>` : ''}
       <div style="font-size:12.5px;margin-top:4px;display:flex;gap:10px;align-items:center;">
         ${c.assignedAgentName
@@ -454,9 +576,12 @@ async function openCase(id){
           : `<button class="link" style="padding:5px 10px;font-size:11.5px;background:#1f7a6c;" onclick="completeCase('${c.id}')">Mark complete</button>`}
       </div>
       <div class="form-row" style="margin-top:10px;">
+        <button class="link" onclick="window.open('/live.html?case=${encodeURIComponent(c.id)}','_blank')" title="Two-way video call with the customer: back camera, photos with location, recording">📹 Live video call</button>
+        <button class="secondary" onclick="openRecUpload('${c.id}')" title="Upload a WhatsApp video call (with screen share) that you recorded on your laptop">⬆ Upload call recording</button>
         <button onclick="sendIntake('${c.id}')">Send WhatsApp intake message</button>
+        ${isPivc ? '' : `<button class="secondary" onclick="requestHistory('${c.id}')" title="Ask the customer to search WhatsApp for accident / theft / police and send screenshots">Ask for WhatsApp search screenshots</button>`}
         <button class="secondary" onclick="window.open('${callUrl}','_blank')">Open call (agent)</button>
-        <button class="link" onclick="navigator.clipboard.writeText('${joinUrl}');alert('Verification link copied — send it via WhatsApp. Insured can choose self-verification or talk to an executive.')">Copy verification link</button>
+        <button class="link" onclick="navigator.clipboard.writeText('${joinUrl}');alert('${isAi ? 'AI call link copied — send it via WhatsApp. The customer can join any time.' : 'Verification link copied — send it via WhatsApp. Insured can choose self-verification or talk to an executive.'}')">Copy verification link</button>
         ${isPivc ? '' : `<button class="secondary" onclick="window.open('/report.html?case=${c.id}','_blank')">Open formatted report</button>`}
         <button class="secondary" onclick="getShareLink('${c.id}')">Get shareable link for company</button>
       </div>
@@ -492,6 +617,7 @@ async function openCase(id){
       <div id="kycMsg" style="font-size:12px;margin-top:6px;"></div>
     </div>
 
+    ${isAi ? aiCard(c) : ''}
     ${isPivc ? pivcCard(c) : ''}
 
     <div class="card">
@@ -499,22 +625,26 @@ async function openCase(id){
       <div id="evidenceList">
         ${c.evidence.map(e => `
           <div class="evidence-item">
-            <b>${e.type}</b> from ${e.senderName || e.sender} — ${new Date(e.receivedAt).toLocaleString()}
-            ${e.fileUrl ? `<br><a href="${e.fileUrl}" target="_blank">Open file</a>` : ''}
-            ${e.caption ? `<br>Caption: ${e.caption}` : ''}
-            ${e.analysis ? `<br><i>Gemini: ${e.analysis.documentType} — ${e.analysis.visibleText || ''} ${e.analysis.notableDetails || ''}</i>` : ''}
+            <b>${escH(e.type)}</b> from ${escH(e.senderName || e.sender || (e.source === 'ai_call' ? 'AI call' : '—'))} — ${escH(new Date(e.receivedAt).toLocaleString())}
+            ${e.fileUrl ? `<br><a href="${escH(e.fileUrl)}" target="_blank" rel="noopener">Open file</a>` : ''}
+            ${e.location && e.location.latitude != null ? `<br>📍 <a href="https://www.google.com/maps?q=${Number(e.location.latitude)},${Number(e.location.longitude)}" target="_blank" rel="noopener">${Number(e.location.latitude).toFixed(5)}, ${Number(e.location.longitude).toFixed(5)}</a>` : ''}
+            ${e.caption ? `<br>Caption: ${escH(e.caption)}` : ''}
+            ${e.analysis ? `<br><i>Gemini: ${escH(e.analysis.documentType)} — ${escH(e.analysis.visibleText || '')} ${escH(e.analysis.notableDetails || '')}</i>` : ''}
+            ${e.needsReview ? `<div style="color:#8a5416;background:#fbefd6;padding:4px 8px;border-radius:6px;margin-top:4px;">⚠️ ${escH(e.needsReview)}</div>` : ''}
+            <div style="font-size:11px;color:#999;margin-top:3px;">Document ID: ${escH(e.id)}${e.sha256 ? ' · SHA-256 ' + escH(String(e.sha256).slice(0, 12)) + '…' : ''}${e.movedFrom ? ' · moved here by ' + escH(e.movedBy || '') : ''}
+              · <a href="#" onclick="moveItem('${c.id}','${e.id}');return false;">Move to another case</a></div>
           </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No evidence received yet.</div>'}
       </div>
     </div>
 
     <div class="card">
       <b>Call Transcript (${c.transcripts.length} segments)</b>
-      ${c.transcripts.map(t => `<div class="evidence-item"><b>${t.speaker}</b> (${t.language}): ${t.english}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No call yet.</div>'}
+      ${c.transcripts.map(t => `<div class="evidence-item"><b>${escH(t.speaker)}</b> (${escH(t.language)}): ${escH(t.english)}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No call yet.</div>'}
     </div>
 
     <div class="card">
       <b>Chain of Custody</b>
-      ${c.custody.map(x => `<div class="custody-item">${new Date(x.timestamp).toLocaleString()} — ${x.event} (${x.actor})</div>`).join('')}
+      ${c.custody.map(x => `<div class="custody-item">${new Date(x.timestamp).toLocaleString()} — ${escH(x.event)} (${escH(x.actor)})</div>`).join('')}
     </div>
 
     <div class="card">
@@ -613,6 +743,13 @@ async function sendIntake(caseId){
   else alert('Intake template sent.');
 }
 
+async function requestHistory(caseId){
+  if(!confirm('Send the customer a WhatsApp message asking them to search their chats for accident / theft / police and send screenshots of the results?')) return;
+  const r = await fetch(API + `/webhooks/whatsapp/request-history/${caseId}`, { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: '{}' });
+  const data = await r.json();
+  alert(data.error ? 'Not sent: ' + data.error : 'Request sent. Screenshots the customer sends will be read by AI and shown in the report under "WhatsApp history check".');
+}
+
 async function generateReport(caseId){
   document.getElementById('reportBox').innerHTML = 'Generating…';
   const res = await fetch(API + `/api/cases/${caseId}/generate-report`, { method:'POST', headers: authHeaders() });
@@ -625,6 +762,58 @@ document.getElementById('vendorLabel').textContent = user ? user.vendorName + (u
 if (user && user.role !== 'agent') document.getElementById('navTeam').style.display = 'block';
 loadCases();
 loadWhatsappAccounts();
+</script>
+<dialog id="recDlg" style="border:none;border-radius:12px;padding:18px;max-width:460px;width:calc(100% - 32px);">
+  <b style="font-size:15px;">Upload a call recording</b>
+  <p style="font-size:12.5px;color:#555;line-height:1.5;margin:6px 0 10px;">For a WhatsApp video call where the customer shared their screen. Record it on your laptop with WhatsApp Desktop + OBS (Recording Format: MP4, 720p), then upload it here. It is saved to the case and linked in the report.</p>
+  <div class="form-row"><select id="recType"><option value="whatsapp_video">WhatsApp video call</option><option value="whatsapp_audio">WhatsApp voice call</option><option value="phone">Phone call</option><option value="other">Other</option></select>
+  <input id="recAt" type="datetime-local" title="When the call happened"></div>
+  <div class="form-row"><input id="recDur" type="number" min="0" placeholder="Duration (minutes)"><label style="font-size:12.5px;display:flex;gap:6px;align-items:center;flex:1;"><input type="checkbox" id="recScreen" checked style="flex:none;min-width:0;"> Customer shared screen</label></div>
+  <textarea id="recNotes" rows="4" placeholder="What did you see? e.g. chat with 'Pappu Garage' dated 25/09 about the bumper; FIR photo on phone; …" style="width:100%;padding:8px 10px;border:1px solid #dde1e6;border-radius:6px;font-family:inherit;font-size:13px;box-sizing:border-box;"></textarea>
+  <input id="recFile" type="file" accept="video/mp4,video/webm,video/quicktime,audio/*,.mp4,.webm,.mov,.m4a,.mp3" style="margin:8px 0;width:100%;">
+  <label style="font-size:12.5px;display:flex;gap:8px;align-items:flex-start;margin:4px 0 10px;"><input type="checkbox" id="recConsent" style="flex:none;min-width:0;margin-top:2px;"> The customer agreed on the call that it is being recorded and to share their screen.</label>
+  <div id="recProg" style="font-size:12.5px;color:#555;min-height:18px;"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="secondary" onclick="document.getElementById('recDlg').close()">Cancel</button><button id="recGo" onclick="uploadRec()">Upload</button></div>
+</dialog>
+<script>
+let recCaseId = null;
+function openRecUpload(caseId){
+  recCaseId = caseId;
+  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  document.getElementById('recAt').value = d.toISOString().slice(0, 16);
+  ['recDur','recNotes','recFile'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('recConsent').checked = false;
+  document.getElementById('recProg').textContent = '';
+  document.getElementById('recGo').disabled = false;
+  document.getElementById('recDlg').showModal();
+}
+function uploadRec(){
+  const f = document.getElementById('recFile').files[0];
+  const prog = document.getElementById('recProg');
+  if (!f) { prog.textContent = 'Choose the recording file.'; return; }
+  if (!document.getElementById('recConsent').checked) { prog.textContent = 'Tick the consent box (the customer must agree to the recording).'; return; }
+  if (/\.(mkv|flv)$/i.test(f.name)) { prog.textContent = 'MKV/FLV do not play in browsers. In OBS: File → Remux Recordings → MP4, then upload the MP4.'; return; }
+  const fd = new FormData();
+  fd.append('callType', document.getElementById('recType').value);
+  const at = document.getElementById('recAt').value; if (at) fd.append('callAt', new Date(at).toISOString());
+  fd.append('durationMin', document.getElementById('recDur').value || '');
+  fd.append('screenShared', document.getElementById('recScreen').checked ? '1' : '0');
+  fd.append('notes', document.getElementById('recNotes').value);
+  fd.append('consent', '1');
+  fd.append('recording', f, f.name);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', API + '/api/live/case/' + encodeURIComponent(recCaseId) + '/external-recording');
+  xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+  xhr.upload.onprogress = e => { if (e.lengthComputable) prog.textContent = `Uploading… ${Math.round(e.loaded / e.total * 100)}% (${(e.total / 1048576).toFixed(0)} MB) — keep this page open`; };
+  xhr.onload = () => {
+    let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status === 200 && d.ok) { prog.textContent = '✓ Saved to the case. It appears in the report under Call recordings.'; setTimeout(() => { document.getElementById('recDlg').close(); openCase(recCaseId); }, 1200); }
+    else { prog.textContent = 'Not saved: ' + (d.error || ('error ' + xhr.status)); document.getElementById('recGo').disabled = false; }
+  };
+  xhr.onerror = () => { prog.textContent = 'Upload failed — check the internet connection and try again.'; document.getElementById('recGo').disabled = false; };
+  document.getElementById('recGo').disabled = true;
+  xhr.send(fd);
+}
 </script>
 </body>
 </html>

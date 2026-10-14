@@ -9,6 +9,12 @@ const { getSetting } = require('../services/platform-settings');
 const { redactIdsInText, rateLimit } = require('../services/security');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const fs = require('fs');
+const os = require('os');
+// full session recordings can be large: temp file on disk, streamed to storage
+const uploadRec = multer({ storage: multer.diskStorage({ destination: os.tmpdir() }), limits: { fileSize: 600 * 1024 * 1024 } });
+const cleanTmp = (req, res, next) => { res.on('close', () => { if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {}); }); next(); };
+const { caseFileKey } = require('../services/ids');
 const router = express.Router();
 router.use(rateLimit({ windowMs: 60_000, max: 15 })); // protects against case-ID brute-forcing and API-cost abuse
 
@@ -22,16 +28,23 @@ function safeFail(res, err) {
   console.error('Participant KYC error:', err.message);
   res.status(400).json({ error: 'Verification could not be completed. Please check the details and try again.' });
 }
-async function findCase(caseId) {
+// The customer's link carries the case's secret key (?k=…). Every request
+// from verify.html sends it back (header X-Case-Key), so knowing a case id
+// alone is not enough to read or upload anything.
+async function findCase(caseId, req) {
   await db.read();
-  return db.data.cases.find(c => c.id === caseId);
+  const c = db.data.cases.find(x => x.id === caseId);
+  if (!c) return null;
+  const key = (req && (req.get('X-Case-Key') || req.query.k)) || '';
+  if (c.selfToken && key !== c.selfToken) return null;
+  return c;
 }
 
 // Minimal, safe info the verify.html entry page needs before the
 // participant picks a path — just whether self-verification is allowed for
 // this case (disabled above the high-value threshold). No PII returned.
 router.get('/:caseId/info', async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   res.json({ requiresMandatoryCall: !!c.requiresMandatoryCall });
 });
@@ -41,7 +54,7 @@ router.get('/:caseId/info', async (req, res) => {
 // chose a different language, it's translated first, then sent to Gemini's
 // speech-generation model. Returns a playable WAV file.
 router.post('/:caseId/speak', async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   const { text, language } = req.body;
   if (!text) return res.status(400).json({ error: 'text is required' });
@@ -67,7 +80,7 @@ router.post('/:caseId/speak', async (req, res) => {
 // browser may deny location permission, which is handled gracefully by the
 // frontend (the call/wizard still proceeds either way).
 router.post('/:caseId/location', async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   const { latitude, longitude, accuracy, deviceInfo } = req.body;
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
@@ -111,7 +124,7 @@ router.post('/:caseId/location', async (req, res) => {
 // any) for a same-person opinion. See services/gemini.js checkLiveness()
 // for what this catches and its limits.
 router.post('/:caseId/liveness-check', upload.single('selfie'), async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   if (!req.file) return res.status(400).json({ error: 'No selfie received' });
   const { challengeCode } = req.body;
@@ -131,16 +144,23 @@ router.post('/:caseId/liveness-check', upload.single('selfie'), async (req, res)
       try {
         const filePath = path.join(storage.mediaDir, lastIdPhoto.fileUrl.replace('/media/', ''));
         base64IdPhoto = fs.readFileSync(filePath).toString('base64');
-      } catch { /* file not on local disk (e.g. already on S3) — skip comparison */ }
+      } catch { /* file missing on local disk — skip comparison */ }
+    } else if (lastIdPhoto?.fileUrl) {
+      // stored in R2/S3: fetch it through a short-lived signed link
+      try {
+        const r = await fetch(await storage.signedUrl(lastIdPhoto.fileUrl));
+        if (r.ok) base64IdPhoto = Buffer.from(await r.arrayBuffer()).toString('base64');
+      } catch { /* comparison is optional */ }
     }
 
     const base64Selfie = req.file.buffer.toString('base64');
     const result = await gemini.checkLiveness(base64Selfie, challengeCode, base64IdPhoto);
-    const fileUrl = await storage.saveFile(req.file.buffer, `${uid('ev')}.jpg`, req.file.mimetype || 'image/jpeg');
+    const evId = uid('ev');
+    const fileUrl = await storage.saveFile(req.file.buffer, caseFileKey(c.id, evId, req.file.mimetype || 'image/jpeg'), req.file.mimetype || 'image/jpeg');
     const passed = result.faceVisible && result.codeMatches && !result.possibleSpoof;
 
     db.data.evidence.push({
-      id: uid('ev'), caseId: c.id, source: 'self_service_upload', type: 'liveness_selfie',
+      id: evId, caseId: c.id, vendorId: c.vendorId, source: 'self_service_upload', type: 'liveness_selfie',
       caption: `Liveness check — ${passed ? 'passed' : 'needs review'}`,
       fileUrl, mimeType: req.file.mimetype,
       analysis: { documentType: 'liveness', visibleText: JSON.stringify(result), notableDetails: result.possibleSpoof || '' },
@@ -163,7 +183,7 @@ router.post('/:caseId/liveness-check', upload.single('selfie'), async (req, res)
 // (address proof, income proof, bank passbook, photograph, signature,
 // etc.). Just OCR's and files it as evidence; no verification API call.
 router.post('/:caseId/upload-document', upload.single('document'), async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   if (!req.file) return res.status(400).json({ error: 'No file received' });
   const label = req.body.label || 'Additional document';
@@ -171,10 +191,11 @@ router.post('/:caseId/upload-document', upload.single('document'), async (req, r
   try {
     const base64 = req.file.buffer.toString('base64');
     const analysis = await gemini.analyzeImage(base64, req.file.mimetype || 'image/jpeg');
-    const fileUrl = await storage.saveFile(req.file.buffer, `${uid('ev')}.jpg`, req.file.mimetype || 'image/jpeg');
+    const evId = uid('ev');
+    const fileUrl = await storage.saveFile(req.file.buffer, caseFileKey(c.id, evId, req.file.mimetype || 'image/jpeg'), req.file.mimetype || 'image/jpeg');
 
     db.data.evidence.push({
-      id: uid('ev'), caseId: c.id, source: 'self_service_upload', type: 'image',
+      id: evId, caseId: c.id, vendorId: c.vendorId, source: 'self_service_upload', type: 'image',
       caption: `${label} (self-uploaded)`,
       fileUrl, mimeType: req.file.mimetype,
       analysis: { ...analysis, visibleText: redactIdsInText(analysis.visibleText) },
@@ -195,21 +216,22 @@ router.post('/:caseId/upload-document', upload.single('document'), async (req, r
 // Step 1: upload a photo of an ID document. Gemini Vision reads the visible
 // fields (name, number, DOB) and the image is saved as evidence either way.
 router.post('/:caseId/upload-id', upload.single('image'), async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   if (!req.file) return res.status(400).json({ error: 'No image received' });
 
   try {
     const base64 = req.file.buffer.toString('base64');
     const analysis = await gemini.analyzeImage(base64, req.file.mimetype || 'image/jpeg');
-    const fileUrl = await storage.saveFile(req.file.buffer, `${uid('ev')}.jpg`, req.file.mimetype || 'image/jpeg');
+    const evId = uid('ev');
+    const fileUrl = await storage.saveFile(req.file.buffer, caseFileKey(c.id, evId, req.file.mimetype || 'image/jpeg'), req.file.mimetype || 'image/jpeg');
 
     // The full extracted number is shown back to the participant in this
     // one response so they can confirm their own document — but what gets
     // SAVED to the database (which agents/vendors later view) is redacted,
     // so the full Aadhaar/PAN number never sits in the case record.
     db.data.evidence.push({
-      id: uid('ev'), caseId: c.id, source: 'self_service_upload', type: 'image',
+      id: evId, caseId: c.id, vendorId: c.vendorId, source: 'self_service_upload', type: 'image',
       caption: `Self-uploaded document (${analysis.documentType})`,
       fileUrl, mimeType: req.file.mimetype,
       analysis: { ...analysis, visibleText: redactIdsInText(analysis.visibleText) },
@@ -228,7 +250,7 @@ router.post('/:caseId/upload-id', upload.single('image'), async (req, res) => {
 });
 
 router.post('/:caseId/aadhaar-otp/generate', async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   const { aadhaarNumber } = req.body;
   if (!aadhaarNumber) return res.status(400).json({ error: 'Aadhaar number is required' });
@@ -239,7 +261,7 @@ router.post('/:caseId/aadhaar-otp/generate', async (req, res) => {
 });
 
 router.post('/:caseId/aadhaar-otp/verify', async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   const { referenceId, otp } = req.body;
   if (!referenceId || !otp) return res.status(400).json({ error: 'referenceId and otp are required' });
@@ -262,7 +284,7 @@ router.post('/:caseId/aadhaar-otp/verify', async (req, res) => {
 });
 
 router.post('/:caseId/pan-verify', async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   const { panNumber, nameOnPan, dateOfBirth } = req.body;
   if (!panNumber || !nameOnPan || !dateOfBirth) return res.status(400).json({ error: 'All fields are required' });
@@ -301,7 +323,7 @@ function distanceKm(lat1, lon1, lat2, lon2) {
 // isn't auto-approved or auto-rejected by any of this, it just surfaces
 // findings for the agent to review.
 router.post('/:caseId/finalize', async (req, res) => {
-  const c = await findCase(req.params.caseId);
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   const flags = [];
 
@@ -354,14 +376,15 @@ router.post('/:caseId/finalize', async (req, res) => {
 // Uploads the full self-service session recording (liveness + any
 // additional-document steps) as one evidence item — a fuller record than
 // just the single liveness selfie.
-router.post('/:caseId/session-recording', upload.single('recording'), async (req, res) => {
-  const c = await findCase(req.params.caseId);
+router.post('/:caseId/session-recording', cleanTmp, uploadRec.single('recording'), async (req, res) => {
+  const c = await findCase(req.params.caseId, req);
   if (!c) return res.status(404).json({ error: 'This verification link is invalid.' });
   if (!req.file) return res.status(400).json({ error: 'No recording received' });
   try {
-    const fileUrl = await storage.saveFile(req.file.buffer, `${uid('ev')}.webm`, 'video/webm');
+    const evId = uid('ev');
+    const fileUrl = await storage.saveFileFromPath(req.file.path, caseFileKey(c.id, evId, 'webm'), 'video/webm');
     db.data.evidence.push({
-      id: uid('ev'), caseId: c.id, source: 'self_service_upload', type: 'session_recording',
+      id: evId, caseId: c.id, vendorId: c.vendorId, size: req.file.size, source: 'self_service_upload', type: 'session_recording',
       caption: `Self-verification session recording — ${new Date().toLocaleString()}`,
       fileUrl, mimeType: 'video/webm', receivedAt: new Date().toISOString()
     });

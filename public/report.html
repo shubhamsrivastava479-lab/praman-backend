@@ -89,14 +89,20 @@
 
   <table class="wide">
     <tr><th colspan="6" style="background:#1a2f4b;">Call Recordings &amp; Sessions</th></tr>
-    <tr><th>#</th><th>Session</th><th>From</th><th>To</th><th>Date &amp; Time</th><th>Duration</th></tr>
+    <tr><th>#</th><th>Call</th><th>From</th><th>To</th><th>Date &amp; Time</th><th>Recording</th></tr>
     <tbody id="callRows"><tr><td colspan="6" style="color:#999;">No call sessions yet.</td></tr></tbody>
   </table>
 
   <table class="wide">
     <tr><th colspan="4" style="background:#1a2f4b;">Digital Evidence &amp; Document Vault</th></tr>
-    <tr><th>#</th><th>File</th><th>Category</th><th>Link</th></tr>
+    <tr><th>#</th><th>Document / media and text read by AI</th><th>Category</th><th>Link</th></tr>
     <tbody id="evidenceRows"><tr><td colspan="4" style="color:#999;">No evidence yet.</td></tr></tbody>
+  </table>
+
+  <table class="wide">
+    <tr><th colspan="5" style="background:#1a2f4b;">WhatsApp History Check (search results sent by the customer)</th></tr>
+    <tr><th>Search</th><th>Chat / contact</th><th>Date &amp; time</th><th>Message</th><th>Screenshot</th></tr>
+    <tbody id="chatRows"><tr><td colspan="5" style="color:#999;">No WhatsApp search screenshots received.</td></tr></tbody>
   </table>
 
   <table class="grid">
@@ -164,7 +170,7 @@ async function loadCase(){
 
   document.getElementById('claimNo').value = c.claimNo || '';
   document.getElementById('claimNoField').value = c.claimNo || '';
-  document.getElementById('caseIdField').value = c.id || '';
+  document.getElementById('caseIdField').value = (c.caseRef ? c.caseRef + '  ·  ' : '') + (c.id || '');
   document.getElementById('policyNo').value = c.policyNo || '';
   document.getElementById('insuredName').value = c.insuredName || '';
   document.getElementById('insuredMobile').value = c.whatsappNumber || '';
@@ -176,21 +182,31 @@ async function loadCase(){
   const f = c.reportFields || {};
   Object.keys(f).forEach(key => { const el = document.getElementById(key); if (el) el.value = f[key]; });
 
-  // Evidence vault table
-  const evRows = c.evidence.map((e,i) => `
+  // Evidence vault + call recordings, with the text read from each file and permanent links
+  const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const abs = p => p ? location.origin + p : '';
+  let files = { documents: [], recordings: [] };
+  try { files = await (await fetch('/api/cases/' + caseId + '/report-files', { headers: { Authorization: 'Bearer ' + token } })).json(); } catch {}
+  const link = (p, label) => p ? `<a href="${esc(abs(p))}" target="_blank" rel="noopener">${esc(label)}</a><div style="font-size:9px;color:#888;word-break:break-all;">${esc(abs(p))}</div>` : '—';
+  const evRows = (files.documents || []).map((x, i) => `
     <tr>
-      <td>${i+1}</td>
-      <td>${e.caption || e.type}</td>
-      <td>${e.source}</td>
-      <td>${e.fileUrl ? `<a href="${e.fileUrl}" target="_blank">Open File</a>` : '—'}</td>
+      <td>D${i + 1}</td>
+      <td><b>${esc(x.title)}</b><br><span style="color:#777;">${esc(x.kind)} · ${esc(x.source)} · ${new Date(x.at).toLocaleString('en-IN')} · ID ${esc(x.id)}</span>
+        ${x.keyDetails ? `<div style="margin-top:4px;white-space:pre-wrap;">${esc(x.keyDetails)}</div>` : ''}
+        ${x.text ? `<div style="margin-top:4px;white-space:pre-wrap;color:#333;"><i>Text${x.language ? ' (' + esc(x.language) + ')' : ''}:</i> ${esc(x.text)}</div>` : ''}
+        ${x.english ? `<div style="margin-top:4px;white-space:pre-wrap;"><i>English:</i> ${esc(x.english)}</div>` : ''}
+        ${x.note ? `<div style="margin-top:4px;color:#8a5416;">${esc(x.note)}</div>` : ''}</td>
+      <td>${esc(x.documentType || x.kind)}</td>
+      <td>${x.hasFile ? link(x.link, x.kind === 'Video' ? 'Watch video' : 'Open file') : '—'}</td>
     </tr>`).join('');
   document.getElementById('evidenceRows').innerHTML = evRows || '<tr><td colspan="4" style="color:#999;">No evidence yet.</td></tr>';
 
-  // Call/transcript sessions table (grouped by source=live_call)
-  const callSpeakers = [...new Set(c.transcripts.filter(t => t.source === 'live_call').map(t => t.speaker))];
-  const callRows = callSpeakers.map((s,i) => `
-    <tr><td>${i+1}</td><td>${c.claimNo} — call</td><td>Agent</td><td>${s}</td><td>${new Date(c.transcripts.find(t=>t.speaker===s).timestamp).toLocaleString()}</td><td>—</td></tr>`).join('');
-  document.getElementById('callRows').innerHTML = callRows || '<tr><td colspan="6" style="color:#999;">No call sessions yet.</td></tr>';
+  const recRows = (files.recordings || []).map((r, i) => `
+    <tr><td>${i + 1}</td><td>${esc(r.kind)}${r.notes ? '<br><span style="color:#777;">' + esc(r.notes) + '</span>' : ''}</td><td>Investigator</td><td>${esc(c.insuredName || 'Customer')}</td><td>${new Date(r.at).toLocaleString('en-IN')}</td><td>${link(r.link, 'Play recording')}</td></tr>`).join('');
+
+  const chatTable = rows => rows.length ? rows.map(x => `<tr><td>${esc(x.searchTerm || '—')}</td><td>${esc(x.chat || '—')}${x.sender && x.sender !== x.chat ? '<br><span style="color:#777;">by ' + esc(x.sender) + '</span>' : ''}</td><td>${esc(x.date || '—')}${x.time ? '<br>' + esc(x.time) : ''}</td><td>${x.noResults ? '<i style="color:#999;">No results for this search</i>' : esc(x.text)}${x.english ? '<br><span style="color:#777;">English: ' + esc(x.english) + '</span>' : ''}</td><td>${x.link ? `<a href="${esc(abs(x.link))}" target="_blank" rel="noopener">${esc(x.screenshot || 'Open')}</a>` : esc(x.screenshot)}</td></tr>`).join('') : '<tr><td colspan="5" style="color:#999;">No WhatsApp search screenshots received.</td></tr>';
+  document.getElementById('chatRows').innerHTML = chatTable(files.chats || []);
+  document.getElementById('callRows').innerHTML = recRows || '<tr><td colspan="6" style="color:#999;">No call recordings yet.</td></tr>';
 
   // If a Gemini report was generated, offer it as a starting point for Conclusion Remarks
   if (c.report && !f.conclusionRemarks) {

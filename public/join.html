@@ -30,6 +30,13 @@
 const params = new URLSearchParams(location.search);
 const roomId = params.get('room');
 const caseId = params.get('case');
+// The link's secret key goes with every request to the server.
+const caseKey = params.get('k') || '';
+const _fetch = window.fetch.bind(window);
+window.fetch = (url, opts = {}) => {
+  if (String(url).startsWith('/api/participant/')) { opts = { ...opts, headers: { ...(opts.headers || {}), 'X-Case-Key': caseKey } }; }
+  return _fetch(url, opts);
+};
 const speakerName = params.get('name') || 'Participant';
 const socket = io();
 const status = document.getElementById('status');

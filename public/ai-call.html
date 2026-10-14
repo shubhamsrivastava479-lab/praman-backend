@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<title>Praman Verification Call</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#22307A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#22307A; --ink-2:#3A4A9E; --paper:#FFFFFF; --mist:#EEF1F8; --line:#D9DEEC;
+    --text:#1A1F36; --muted:#5B6280; --turmeric:#E09A12; --leaf:#18865A; --alert:#B4372B;
+    --sheet:#FFFFFF; --cam:#05070F;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{background:var(--mist);color:var(--text);font-family:'Mukta',system-ui,sans-serif;font-size:17px;line-height:1.5;}
+  button{font-family:inherit;}
+  :focus-visible{outline:3px solid var(--turmeric);outline-offset:2px;}
+  @media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important;} }
+
+  /* ---------- start screen ---------- */
+  #start{max-width:520px;margin:0 auto;padding:20px 16px 120px;}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+  .seal{width:42px;height:42px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:700;font-size:20px;}
+  .brand b{font-size:21px;color:var(--ink);display:block;line-height:1.1;}
+  .brand small{color:var(--muted);font-size:14px;}
+  .ai-note{background:var(--ink);color:#fff;border-radius:16px;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;}
+  .ai-note svg{flex:none;margin-top:3px;}
+  .ai-note h1{font-size:20px;margin:0 0 2px;line-height:1.3;font-weight:700;}
+  .ai-note p{margin:0;font-size:15px;opacity:.88;}
+  h2{font-size:17px;margin:26px 0 10px;color:var(--ink);font-weight:700;}
+  .langs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .lang{border:2px solid var(--line);background:var(--paper);border-radius:12px;padding:10px 4px;font-size:16px;font-weight:600;color:var(--text);cursor:pointer;min-height:52px;}
+  .lang[aria-pressed="true"]{border-color:var(--ink);background:#E6E9F7;color:var(--ink);}
+  ol.steps{list-style:none;margin:0;padding:0;background:var(--paper);border-radius:16px;border:1px solid var(--line);}
+  ol.steps li{display:flex;gap:14px;padding:12px 16px;border-top:1px solid var(--mist);align-items:flex-start;}
+  ol.steps li:first-child{border-top:none;}
+  ol.steps .n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--mist);color:var(--ink);font-weight:700;display:grid;place-items:center;font-size:15px;margin-top:1px;}
+  ol.steps b{display:block;font-size:16px;line-height:1.35;}
+  ol.steps span{color:var(--muted);font-size:14.5px;}
+  .ready{display:flex;flex-wrap:wrap;gap:8px;}
+  .ready span{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:15px;}
+  .consent{display:flex;gap:12px;align-items:flex-start;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:22px;font-size:15px;cursor:pointer;}
+  .consent input{width:24px;height:24px;flex:none;margin-top:2px;accent-color:var(--ink);}
+  .cta-bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--mist) 70%,transparent);}
+  .cta-bar .in{max-width:520px;margin:0 auto;}
+  .btn{width:100%;border:none;border-radius:14px;padding:15px;font-size:18px;font-weight:700;cursor:pointer;min-height:56px;}
+  .btn.primary{background:var(--ink);color:#fff;}
+  .btn.primary:disabled{background:#A9AFC8;}
+  .btn.wa{background:#1F9D57;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;}
+  .btn.plain{background:transparent;color:var(--muted);font-size:15px;font-weight:500;min-height:44px;padding:8px;}
+  .err{color:var(--alert);font-size:15px;min-height:20px;margin:6px 0 0;}
+  .hint{color:var(--muted);font-size:14.5px;}
+
+  /* ---------- call screen ---------- */
+  #call{display:none;position:fixed;inset:0;background:var(--cam);color:#fff;}
+  #cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+  .top{position:absolute;top:0;left:0;right:0;padding:calc(10px + env(safe-area-inset-top)) 14px 24px;background:linear-gradient(to bottom,rgba(5,7,15,.75),transparent);z-index:3;}
+  .toprow{display:flex;justify-content:space-between;align-items:center;font-size:14px;}
+  .pill{background:rgba(255,255,255,.14);backdrop-filter:blur(6px);border-radius:999px;padding:4px 12px;display:inline-flex;gap:7px;align-items:center;}
+  .pill i{width:9px;height:9px;border-radius:50%;background:#FF4D4D;animation:blink 1.4s infinite;}
+  @keyframes blink{50%{opacity:.25}}
+  .phases{display:flex;gap:4px;margin-top:10px;}
+  .phases div{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.22);transition:background .3s;}
+  .phases div.done{background:#fff;} .phases div.now{background:var(--turmeric);}
+  .phase-name{font-size:15px;margin-top:6px;font-weight:600;}
+
+  /* guides: the one bold element */
+  .guide{position:absolute;top:150px;left:0;right:0;bottom:var(--sheetH,40vh);display:none;align-items:center;justify-content:center;pointer-events:none;z-index:2;}
+  .guide.show{display:flex;}
+  .oval{height:92%;max-height:380px;aspect-ratio:3/4;border-radius:50%;border:4px dashed rgba(255,255,255,.9);box-shadow:0 0 0 200vmax rgba(5,7,15,.45);}
+  .guide.blinking .oval{border-color:var(--turmeric);border-style:solid;}
+  .figure{height:94%;max-height:560px;opacity:.9;}
+  .countdown{position:absolute;top:150px;left:0;right:0;bottom:var(--sheetH,40vh);display:none;align-items:center;justify-content:center;z-index:4;pointer-events:none;}
+  .countdown.show{display:flex;}
+  .ring{position:relative;width:132px;height:132px;}
+  .ring svg{position:absolute;inset:0;transform:rotate(-90deg);}
+  .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:64px;font-weight:700;text-shadow:0 2px 14px rgba(0,0,0,.6);}
+  .countdown.corner{align-items:flex-start;justify-content:flex-end;padding:0 14px;}
+  .countdown.corner .ring{width:92px;height:92px;} .countdown.corner .ring b{font-size:44px;}
+  #call.body #cam{height:calc(100% - var(--sheetH,40vh));}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:5;transition:opacity .35s;}
+  .flash.on{opacity:.85;transition:none;}
+
+  .sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--sheet);color:var(--text);border-radius:22px 22px 0 0;padding:14px 18px calc(14px + env(safe-area-inset-bottom));max-height:62vh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.35);}
+  .who{display:flex;align-items:center;gap:10px;font-size:14.5px;color:var(--muted);font-weight:600;}
+  .orb{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--mist);}
+  .orb .bars{display:flex;gap:3px;align-items:center;height:16px;}
+  .orb .bars span{width:3px;height:6px;border-radius:2px;background:var(--muted);}
+  .st-ai .orb{background:#FBEFD6;} .st-ai .orb .bars span{background:var(--turmeric);animation:wave .9s infinite ease-in-out;}
+  .st-ai .orb .bars span:nth-child(2){animation-delay:.15s} .st-ai .orb .bars span:nth-child(3){animation-delay:.3s}
+  @keyframes wave{50%{height:16px}}
+  .st-listen .orb{background:#DDF1E7;box-shadow:0 0 0 calc(var(--lvl,0) * 14px) rgba(24,134,90,.25);transition:box-shadow .08s;}
+  .st-listen .orb .bars span{background:var(--leaf);}
+  .st-think .orb .bars span{background:var(--ink-2);animation:dots 1.2s infinite;}
+  .st-think .orb .bars span:nth-child(2){animation-delay:.2s} .st-think .orb .bars span:nth-child(3){animation-delay:.4s}
+  @keyframes dots{50%{opacity:.2}}
+  .st-wait .orb{background:#FBEFD6;} .st-wait .orb .bars span{background:var(--turmeric);}
+  .caption{font-size:21px;line-height:1.45;font-weight:500;margin:10px 0 4px;color:var(--text);}
+  .heard{font-size:14.5px;color:var(--muted);min-height:0;}
+  .heard:empty{display:none;}
+  .actions{display:flex;gap:8px;margin-top:12px;}
+  .actions .btn{font-size:16px;min-height:50px;padding:10px;}
+  .btn.done{background:var(--leaf);color:#fff;}
+  .btn.ghost{background:var(--mist);color:var(--ink);}
+  .docs{display:none;margin-top:12px;}
+  .docs.show{display:block;}
+  .docrow{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--mist);font-size:16px;}
+  .tag{font-size:14px;font-weight:600;border-radius:999px;padding:2px 12px;}
+  .tag.wait{background:#FBEFD6;color:#8A5A00;} .tag.ok{background:#DDF1E7;color:var(--leaf);}
+  .human{display:block;margin:10px auto 0;}
+  .kw{margin-top:10px;font-size:15px;color:var(--muted);}
+  .kw b{display:inline-block;background:var(--mist);color:var(--ink);border-radius:999px;padding:2px 12px;margin:4px 4px 0 0;font-size:16px;}
+  .netbar{display:none;background:var(--alert);color:#fff;font-size:14px;text-align:center;padding:6px;border-radius:10px;margin-top:10px;}
+  .netbar.show{display:block;}
+
+  /* ---------- end screen ---------- */
+  #end{display:none;max-width:520px;margin:0 auto;padding:60px 20px;text-align:center;}
+  #end .big{width:84px;height:84px;border-radius:50%;background:#DDF1E7;display:grid;place-items:center;margin:0 auto 18px;}
+  #end h1{font-size:26px;color:var(--ink);margin:0 0 8px;}
+  #end p{color:var(--muted);font-size:17px;}
+
+  dialog{border:none;border-radius:18px;padding:22px;max-width:360px;width:calc(100% - 32px);}
+  dialog::backdrop{background:rgba(5,7,15,.6);}
+  dialog h3{margin:0 0 6px;font-size:19px;color:var(--ink);}
+  dialog p{margin:0 0 16px;color:var(--muted);font-size:15.5px;}
+  dialog .row{display:flex;gap:8px;}
+</style>
+<script src="/open-in-browser.js"></script>
+</head>
+<body>
+
+<!-- ================= START ================= -->
+<main id="start">
+  <div class="brand">
+    <div class="seal">प्र</div>
+    <div><b>प्रमाण Praman</b><small id="firmLine"></small></div>
+  </div>
+
+  <section class="ai-note" aria-live="polite">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V4"/><circle cx="12" cy="3" r="1"/><circle cx="9" cy="13" r="1.2" fill="#fff"/><circle cx="15" cy="13" r="1.2" fill="#fff"/><path d="M2 12v3M22 12v3"/></svg>
+    <div>
+      <h1 data-t="aiTitle"></h1>
+      <p id="intro"></p>
+    </div>
+  </section>
+
+  <h2 data-t="chooseLang"></h2>
+  <div class="langs" id="langs" role="group"></div>
+
+  <h2 data-t="whatHappens"></h2>
+  <ol class="steps" id="steps"></ol>
+
+  <h2 data-t="keepReady"></h2>
+  <div class="ready" id="ready"></div>
+
+  <label class="consent">
+    <input type="checkbox" id="consent">
+    <span data-t="consent"></span>
+  </label>
+  <div data-browser-help></div>
+  <p class="err" id="startErr"></p>
+
+  <div class="cta-bar"><div class="in">
+    <button class="btn primary" id="startBtn" disabled data-t="startBtn"></button>
+  </div></div>
+</main>
+
+<!-- ================= CALL ================= -->
+<div id="call">
+  <video id="cam" autoplay playsinline muted></video>
+
+  <div class="top">
+    <div class="toprow">
+      <span class="pill"><i></i><span data-t="rec"></span> <span id="timer">0:00</span></span>
+      <span class="pill" data-t="aiBadge"></span>
+    </div>
+    <div class="phases" id="phases"></div>
+    <div class="phase-name" id="phaseName"></div>
+  </div>
+
+  <div class="guide" id="gFace"><div class="oval"></div></div>
+  <div class="guide" id="gStand">
+    <svg class="figure" viewBox="0 0 100 200" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="4" stroke-linecap="round" stroke-dasharray="7 6" aria-hidden="true">
+      <circle cx="50" cy="20" r="12"/><path d="M50 34v74M50 46l-20 50M50 46l20 50M50 108l-13 82M50 108l13 82"/>
+      <path d="M20 194h60" stroke-dasharray="0" stroke="var(--turmeric)"/>
+    </svg>
+  </div>
+  <div class="guide" id="gSit">
+    <svg class="figure" viewBox="0 0 100 200" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="4" stroke-linecap="round" stroke-dasharray="7 6" aria-hidden="true">
+      <circle cx="42" cy="44" r="12"/><path d="M42 58v62M42 70l22 38M42 120h36M78 120v66"/>
+      <path d="M30 128h58M34 128v60M84 128v60" stroke="var(--turmeric)" stroke-dasharray="0"/>
+    </svg>
+  </div>
+
+  <div class="countdown" id="countdown">
+    <div class="ring">
+      <svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="58" stroke="rgba(255,255,255,.25)" stroke-width="8" fill="none"/><circle id="ringArc" cx="66" cy="66" r="58" stroke="#fff" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="364.4" stroke-dashoffset="0"/></svg>
+      <b id="countNum"></b>
+    </div>
+  </div>
+  <div class="flash" id="flash"></div>
+
+  <section class="sheet" id="sheet">
+    <div class="who" id="who"><span class="orb"><span class="bars"><span></span><span></span><span></span></span></span><span id="statusText"></span></div>
+    <p class="caption" id="cap"></p>
+    <p class="heard" id="heard"></p>
+
+    <div class="docs" id="docs">
+      <a class="btn wa" id="waLink" target="_blank" rel="noopener">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7a11.4 11.4 0 0 1-4.4-3.9c-.3-.5-1.1-1.5-1.1-2.8s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.4.6-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.2.1.6-.1 1.2Z"/></svg>
+        <span data-t="openWa"></span>
+      </a>
+      <div id="chatKw" class="kw" style="display:none;"></div>
+      <div id="docRows" style="margin-top:8px;"></div>
+      <button class="btn done" id="chatDoneBtn" style="display:none;margin-top:10px;" data-t="chatDone" disabled></button>
+      <button class="btn plain" id="skipBtn" style="display:none;" data-t="cantSend"></button>
+    </div>
+
+    <div class="actions" id="actions">
+      <button class="btn ghost" id="repeatBtn" data-t="repeat"></button>
+      <button class="btn done" id="doneBtn" style="display:none;" data-t="doneSpeaking"></button>
+    </div>
+    <div class="netbar" id="netbar" data-t="net"></div>
+    <button class="btn plain human" id="humanBtn" data-t="human"></button>
+  </section>
+</div>
+
+<!-- ================= END ================= -->
+<main id="end">
+  <div class="big"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#18865A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+  <h1 data-t="thanks"></h1>
+  <p id="endMsg"></p>
+</main>
+
+<dialog id="humanDlg">
+  <h3 data-t="humanQ"></h3>
+  <p data-t="humanP"></p>
+  <div class="row">
+    <button class="btn ghost" id="humanNo" data-t="continueAi"></button>
+    <button class="btn primary" id="humanYes" data-t="yesPerson"></button>
+  </div>
+</dialog>
+
+<script>
+// ---------- text (Hindi + English; other languages: AI speaks them, screen text in English) ----------
+const T = {
+  hi: {
+    aiTitle:'यह AI-सहायता वाली कॉल है', loading:'लोड हो रहा है…', chooseLang:'अपनी भाषा चुनें', whatHappens:'कॉल में क्या होगा', keepReady:'ये तैयार रखें',
+    consent:'मैं सहमत हूँ कि यह वीडियो कॉल रिकॉर्ड होगी, और वेरिफिकेशन के लिए मेरा कैमरा, माइक और लोकेशन इस्तेमाल होगी।',
+    startBtn:'वीडियो कॉल शुरू करें', rec:'रिकॉर्डिंग', aiBadge:'🤖 AI कॉल', repeat:'🔁 फिर से सुनें', doneSpeaking:'✓ मेरी बात पूरी हुई',
+    openWa:'WhatsApp खोलें और फ़ोटो भेजें', cantSend:'अभी नहीं भेज सकता — आगे बढ़ें', net:'इंटरनेट धीमा है — दोबारा कोशिश कर रहे हैं…',
+    human:'किसी व्यक्ति से बात करनी है', thanks:'धन्यवाद', humanQ:'किसी व्यक्ति से बात करें?', humanP:'AI कॉल अभी रुक जाएगी और हमारी टीम आपको जल्दी कॉल करेगी।',
+    continueAi:'AI के साथ जारी रखें', yesPerson:'हाँ, कॉल करवाएँ',
+    s_ai:'AI बोल रहा है…', s_listen:'आपकी बारी — बोलिए', s_think:'समझ रहा है…', s_photo:'फ़ोटो के लिए तैयार रहें', s_wait:'WhatsApp पर फ़ोटो का इंतज़ार', s_read:'आपके दस्तावेज़ पढ़ रहा है…', s_save:'आपका वेरिफिकेशन सेव हो रहा है…',
+    p_details:'आपकी जानकारी', p_face:'चेहरा और पलक', p_body:'पूरे शरीर की फ़ोटो', p_documents:'आधार और पैन', p_questions:'कुछ सवाल', p_done:'पूरा',
+    st1:'AI से बात', st1d:'नाम और केस की जानकारी कन्फ़र्म करें', st2:'चेहरे की फ़ोटो और पलक झपकाना', st2d:'फ़ोन चेहरे के सामने रखें',
+    st3:'पूरे शरीर की फ़ोटो', st3d:'एक बार खड़े होकर, एक बार कुर्सी पर बैठकर', st4:'आधार और पैन WhatsApp पर भेजें', st4d:'आधार के आगे-पीछे और पैन की साफ़ फ़ोटो',
+    st5:'कुछ सवाल', st5d:'पॉलिसी, सेहत, काम और नॉमिनी के बारे में', st5c:'कुछ सवाल', st5cd:'हादसा कब, कहाँ और कैसे हुआ',
+    st6:'WhatsApp सर्च के स्क्रीनशॉट (आपकी मर्ज़ी से)', st6d:'accident, theft, police जैसे शब्द सर्च करके स्क्रीनशॉट भेजें',
+    p_chats:'WhatsApp सर्च', chatDone:'✓ मैंने सारे स्क्रीनशॉट भेज दिए', chatSkip:'कुछ नहीं मिला / नहीं भेजना', searchThese:'WhatsApp में ये शब्द सर्च करें:', shotsGot:'स्क्रीनशॉट मिले', openWaChat:'WhatsApp खोलें',
+    r_aadhaar:'आधार कार्ड', r_pan:'पैन कार्ड', r_chair:'एक कुर्सी', r_light:'अच्छी रोशनी', r_quiet:'शांत जगह', r_time:'10–15 मिनट',
+    intro:(type, ref) => `आपके ${type} (केस ${ref}) के लिए। आप जब भी फ़्री हों, तब जुड़ सकते हैं। आप एक ऑटोमेटेड AI असिस्टेंट से बात करेंगे, किसी इंसान से नहीं।`,
+    onBehalf:f => `${f} की ओर से`, a_front:'आधार — आगे', a_back:'आधार — पीछे', pan:'पैन कार्ड', received:'मिल गया', waiting:'इंतज़ार',
+    camErr:'कृपया ब्राउज़र में कैमरा और माइक की अनुमति दें, फिर दोबारा कोशिश करें।', startErr:'कॉल शुरू नहीं हो सकी। दोबारा कोशिश करें।',
+    badLink:'यह लिंक सही नहीं है।', wake:'सर्वर चालू हो रहा है — 30 सेकंड बाद पेज रीफ़्रेश करें।', already:'यह वेरिफिकेशन पहले ही पूरा हो चुका है। धन्यवाद।',
+    endOk:'आपकी वेरिफिकेशन कॉल पूरी हो गई। हमारी टीम इसे देखेगी। अब आप यह पेज बंद कर सकते हैं।', endHuman:'हमारी टीम आपको जल्दी कॉल करेगी। धन्यवाद।',
+    heard:'आपने कहा: '
+  },
+  en: {
+    aiTitle:'This is an AI-assisted call', loading:'Loading…', chooseLang:'Choose your language', whatHappens:'What happens in the call', keepReady:'Keep these ready',
+    consent:'I agree that this video call will be recorded, and that my camera, microphone and location will be used for verification.',
+    startBtn:'Start video call', rec:'Recording', aiBadge:'🤖 AI call', repeat:'🔁 Hear again', doneSpeaking:'✓ I have finished',
+    openWa:'Open WhatsApp and send photos', cantSend:'I can’t send this now — continue', net:'Slow internet — trying again…',
+    human:'I want to talk to a person', thanks:'Thank you', humanQ:'Talk to a person?', humanP:'The AI call will stop now and our team will call you soon.',
+    continueAi:'Continue with AI', yesPerson:'Yes, call me',
+    s_ai:'AI is speaking…', s_listen:'Your turn — please speak', s_think:'Understanding…', s_photo:'Get ready for the photo', s_wait:'Waiting for photos on WhatsApp', s_read:'Reading your documents…', s_save:'Saving your verification…',
+    p_details:'Your details', p_face:'Face and blink', p_body:'Full body photo', p_documents:'Aadhaar and PAN', p_questions:'A few questions', p_done:'Done',
+    st1:'Talk with the AI', st1d:'Confirm your name and case details', st2:'Face photo and eye blink', st2d:'Hold the phone in front of your face',
+    st3:'Full body photo', st3d:'Once standing, once sitting on a chair', st4:'Send Aadhaar and PAN on WhatsApp', st4d:'Clear photos of Aadhaar front and back, and PAN',
+    st5:'A few questions', st5d:'About the policy, health, work and nominee', st5c:'A few questions', st5cd:'When, where and how the incident happened',
+    st6:'WhatsApp search screenshots (optional)', st6d:'Search words like accident, theft, police and send screenshots',
+    p_chats:'WhatsApp search', chatDone:'✓ I have sent all screenshots', chatSkip:'Nothing found / I don’t want to', searchThese:'Search these words in WhatsApp:', shotsGot:'Screenshots received', openWaChat:'Open WhatsApp',
+    r_aadhaar:'Aadhaar card', r_pan:'PAN card', r_chair:'A chair', r_light:'Good light', r_quiet:'A quiet place', r_time:'10–15 minutes',
+    intro:(type, ref) => `For your ${type} (case ${ref}). Join whenever you are free. You will speak with an automated AI assistant, not a person.`,
+    onBehalf:f => `on behalf of ${f}`, a_front:'Aadhaar — front', a_back:'Aadhaar — back', pan:'PAN card', received:'Received', waiting:'Waiting',
+    camErr:'Please allow camera and microphone in your browser, then try again.', startErr:'The call could not start. Please try again.',
+    badLink:'This link is not valid.', wake:'The server is starting — please refresh this page in 30 seconds.', already:'This verification is already complete. Thank you.',
+    endOk:'Your verification call is complete. Our team will review it. You can close this page now.', endHuman:'Our team will call you soon. Thank you.',
+    heard:'You said: '
+  }
+};
+const LANGS = [['Hindi','हिंदी'],['English','English'],['Bengali','বাংলা'],['Marathi','मराठी'],['Telugu','తెలుగు'],['Tamil','தமிழ்'],['Gujarati','ગુજરાતી'],['Kannada','ಕನ್ನಡ'],['Malayalam','മലയാളം'],['Punjabi','ਪੰਜਾਬੀ'],['Odia','ଓଡ଼ିଆ'],['Assamese','অসমীয়া']];
+const LANG_CODES = {English:'en-IN',Hindi:'hi-IN',Tamil:'ta-IN',Telugu:'te-IN',Marathi:'mr-IN',Bengali:'bn-IN',Gujarati:'gu-IN',Kannada:'kn-IN',Punjabi:'pa-IN',Malayalam:'ml-IN',Odia:'or-IN',Assamese:'as-IN'};
+const PHASES = ['details','face','body','documents','questions','chats'];
+
+const token = new URLSearchParams(location.search).get('t');
+const API = '/api/ai-call/' + encodeURIComponent(token || 'x');
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+let info = null, language = 'Hindi', introKey = 'loading';
+let ctx, camStream, micSrc, recDest, proc, recorder, recChunks = [];
+let finished = false, started = false, handedOff = false;
+let docSkip = false, seenUnreadable = 0, docStartedAt = 0;
+let lastAudio = null, lastText = '', endListen = null, lastLoc = null, geoWatch = null, wakeLock = null, t0 = 0;
+
+const ui = () => T[language === 'Hindi' ? 'hi' : (['Marathi'].includes(language) ? 'hi' : 'en')];
+const tr = k => ui()[k] || T.en[k] || '';
+
+function paintText(){
+  document.documentElement.lang = language === 'Hindi' || language === 'Marathi' ? 'hi' : 'en';
+  document.querySelectorAll('[data-t]').forEach(el => { const v = tr(el.dataset.t); if (typeof v === 'string') el.textContent = v; });
+  const isPolicy = !info || info.isPolicy;
+  const steps = [['st1','st1d'],['st2','st2d'], ...(isPolicy ? [['st3','st3d']] : []), ['st4','st4d'], isPolicy ? ['st5','st5d'] : ['st5c','st5cd'], ...(isPolicy ? [] : [['st6','st6d']])];
+  $('steps').innerHTML = steps.map((s, i) => `<li><span class="n">${i + 1}</span><div><b>${tr(s[0])}</b><span>${tr(s[1])}</span></div></li>`).join('');
+  const ready = ['r_aadhaar','r_pan', ...(isPolicy ? ['r_chair'] : []), 'r_light','r_quiet','r_time'];
+  $('ready').innerHTML = ready.map(k => `<span>${tr(k)}</span>`).join('');
+  $('intro').textContent = introKey === 'case' ? ui().intro(info.caseTypeLabel, info.caseRef) : tr(introKey);
+  $('firmLine').textContent = info && info.firm ? ui().onBehalf(info.firm) : '';
+  $('phases').innerHTML = PHASES.filter(p => isPolicy ? p !== 'chats' : p !== 'body').map(p => `<div data-p="${p}"></div>`).join('');
+}
+
+function renderLangs(){
+  $('langs').innerHTML = LANGS.map(([v, l]) => `<button type="button" class="lang" aria-pressed="${v === language}" data-v="${v}">${l}</button>`).join('');
+}
+$('langs').addEventListener('click', e => {
+  const b = e.target.closest('.lang'); if (!b) return;
+  language = b.dataset.v; renderLangs(); paintText();
+});
+$('consent').addEventListener('change', () => { $('startBtn').disabled = !$('consent').checked || !info || !!info.error; });
+$('startBtn').addEventListener('click', startCall);
+
+renderLangs(); paintText();
+
+(async function load(){
+  if (!token) { introKey = 'badLink'; paintText(); return; }
+  try {
+    const r = await fetch(API + '/info'); const d = await r.json();
+    if (d.error) { info = { error: true }; introKey = 'badLink'; paintText(); return; }
+    info = d; introKey = d.status === 'handoff' ? 'endHuman' : d.status === 'completed' ? 'already' : 'case'; paintText();
+    if (d.status === 'completed' || d.status === 'handoff') {
+      $('startBtn').style.display = 'none'; $('consent').parentElement.style.display = 'none'; return;
+    }
+    $('startBtn').disabled = !$('consent').checked;
+    if (d.businessNumber) $('waLink').href = 'https://wa.me/' + d.businessNumber; else $('waLink').removeAttribute('href');
+  } catch (e) { introKey = 'wake'; paintText(); }
+})();
+
+// ---------- network ----------
+async function post(path, body, isForm){
+  let lastErr;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await fetch(API + path, isForm ? { method: 'POST', body } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 429) { await sleep(4000); continue; }
+      if (r.status === 409) { $('netbar').classList.remove('show'); return { inactive: true }; }
+      if (!r.ok) throw new Error(d.error || 'Server error');
+      $('netbar').classList.remove('show');
+      return d;
+    } catch (e) { lastErr = e; $('netbar').classList.add('show'); await sleep(2500); }
+  }
+  throw lastErr;
+}
+
+function setStatus(kind, key){
+  $('who').className = 'who st-' + kind;
+  $('statusText').textContent = tr(key);
+  $('doneBtn').style.display = kind === 'listen' ? 'block' : 'none';
+  $('repeatBtn').disabled = kind !== 'listen' && kind !== 'wait';
+}
+
+// ---------- location: kept fresh during the call, sent with every photo ----------
+function startGeo(){
+  if (!navigator.geolocation) return;
+  try {
+    geoWatch = navigator.geolocation.watchPosition(
+      p => { lastLoc = { latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy }; },
+      () => {}, { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 });
+  } catch {}
+}
+function addLoc(fd){ if (lastLoc) { fd.append('lat', lastLoc.latitude); fd.append('lng', lastLoc.longitude); fd.append('acc', lastLoc.accuracy || ''); } }
+
+// ---------- start ----------
+async function startCall(){
+  $('startErr').textContent = '';
+  $('startBtn').disabled = true;
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+    $('cam').srcObject = camStream;
+  } catch (e) { $('startErr').textContent = tr('camErr'); $('startBtn').disabled = false; try { PramanBrowserHelp.show(document.querySelector('[data-browser-help]'), 'blocked'); } catch {} return; }
+
+  let loc = null;
+  try {
+    loc = await new Promise(res => navigator.geolocation
+      ? navigator.geolocation.getCurrentPosition(p => res({ latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy }), () => res(null), { enableHighAccuracy: true, timeout: 9000, maximumAge: 60000 })
+      : res(null));
+  } catch { loc = null; }
+  lastLoc = loc; startGeo();
+  const deviceInfo = { platform: navigator.userAgentData?.platform || navigator.platform, screen: screen.width + 'x' + screen.height, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+
+  let first;
+  try { first = await post('/start', { language, consent: true, location: loc, deviceInfo }); }
+  catch (e) { $('startErr').textContent = tr('startErr'); $('startBtn').disabled = false; return; }
+  if (first.done) { showEnd(first.message); return; }
+
+  micSrc = ctx.createMediaStreamSource(camStream);
+  recDest = ctx.createMediaStreamDestination();
+  micSrc.connect(recDest);
+  startRecorder();
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+
+  $('start').style.display = 'none';
+  $('call').style.display = 'block';
+  started = true; t0 = Date.now();
+  setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); $('timer').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }, 1000);
+  run(first.turn);
+}
+
+// keep the photo guides inside the visible camera area, above the bottom sheet
+try { new ResizeObserver(() => $('call').style.setProperty('--sheetH', $('sheet').offsetHeight + 'px')).observe($('sheet')); } catch {}
+
+function startRecorder(){
+  try {
+    const stream = new MediaStream([...camStream.getVideoTracks(), ...recDest.stream.getAudioTracks()]);
+    const types = ['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+    const mimeType = types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+    recorder = new MediaRecorder(stream, mimeType ? { mimeType, videoBitsPerSecond: 600000, audioBitsPerSecond: 48000 } : undefined);
+    recorder.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+    recorder.start(5000);
+  } catch (e) { recorder = null; }
+}
+
+// ---------- main loop ----------
+async function run(turn){
+  while (turn && !finished && !handedOff) {
+    showTurn(turn);
+    await play(turn);
+    if (handedOff) return;
+    if (turn.done) { await finish(); return; }
+    try { turn = await act(turn); }
+    catch (e) { await sleep(2000); continue; }
+    if (turn && turn.inactive) return;
+  }
+}
+
+function showTurn(t){
+  lastText = t.displayText || t.say;
+  $('cap').textContent = lastText;
+  $('docs').classList.toggle('show', t.expect === 'docs');
+  showGuide(t.expect === 'photo' || t.expect === 'burst' ? t.shot : null);
+  const ph = t.phase || 'details';
+  const order = [...$('phases').children].map(d => d.dataset.p);
+  const idx = order.indexOf(ph);
+  [...$('phases').children].forEach((d, i) => d.className = ph === 'done' || i < idx ? 'done' : i === idx ? 'now' : '');
+  $('phaseName').textContent = tr('p_' + ph);
+}
+
+function showGuide(shot){
+  ['gFace','gStand','gSit'].forEach(id => $(id).classList.remove('show','blinking'));
+  if (shot === 'face' || shot === 'blink') $('gFace').classList.add('show');
+  if (shot === 'stand') $('gStand').classList.add('show');
+  if (shot === 'sit') $('gSit').classList.add('show');
+  const body = shot === 'stand' || shot === 'sit';
+  $('cam').style.objectFit = body ? 'contain' : 'cover';
+  $('call').classList.toggle('body', body);
+  $('countdown').classList.toggle('corner', body);
+}
+
+async function play(t){
+  setStatus('ai', 's_ai');
+  lastAudio = t.audio || null;
+  await playAudio(t.audio, t.displayText || t.say);
+}
+async function playAudio(b64, text){
+  if (b64) {
+    try {
+      const buf = await ctx.decodeAudioData(b64ToBuf(b64));
+      await new Promise(resolve => {
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        src.connect(ctx.destination); src.connect(recDest);
+        src.onended = resolve; src.start();
+      });
+      return;
+    } catch (e) { /* fall back to the phone's own voice */ }
+  }
+  await new Promise(resolve => {
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = LANG_CODES[language] || 'en-IN'; u.onend = resolve; u.onerror = resolve;
+      speechSynthesis.speak(u); setTimeout(resolve, 25000);
+    } catch { setTimeout(resolve, 2500); }
+  });
+}
+function b64ToBuf(b64){ const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a.buffer; }
+
+$('repeatBtn').addEventListener('click', async () => {
+  if (!lastText) return;
+  const pausedListen = !!endListen;
+  if (pausedListen) endListen('cancel');
+  $('repeatBtn').disabled = true;
+  await playAudio(lastAudio, lastText);
+  $('repeatBtn').disabled = false;
+});
+$('doneBtn').addEventListener('click', () => { if (endListen) endListen('done'); });
+
+async function act(t){
+  if (t.expect === 'voice') return doVoice(t);
+  if (t.expect === 'photo') return doPhoto(t);
+  if (t.expect === 'burst') return doBlink(t);
+  if (t.expect === 'docs') return doDocs(t);
+  return null;
+}
+
+// ---------- voice (stops by itself when you go quiet, or tap "I have finished") ----------
+function listen(){
+  return new Promise(resolve => {
+    setStatus('listen', 's_listen');
+    let chunks = []; let speech = false, lastVoice = 0, noise = 0, cal = 0, done = false;
+    let start = Date.now();
+    proc = ctx.createScriptProcessor(4096, 1, 1);
+    const mute = ctx.createGain(); mute.gain.value = 0;
+    micSrc.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+    const stop = mode => {
+      if (mode === 'cancel') { chunks = []; speech = false; start = Date.now() + 60000; return; } // paused while replaying
+      if (done) return; done = true; endListen = null;
+      proc.onaudioprocess = null; try { micSrc.disconnect(proc); proc.disconnect(); mute.disconnect(); } catch {}
+      $('who').style.removeProperty('--lvl');
+      const silent = mode === 'silent' || (mode === 'done' && !speech && chunks.length < 4);
+      resolve({ blob: silent ? null : toWav(chunks, ctx.sampleRate), silent });
+    };
+    endListen = stop;
+    proc.onaudioprocess = e => {
+      const d = e.inputBuffer.getChannelData(0);
+      if (Date.now() < start) return; // replay in progress
+      chunks.push(new Float32Array(d));
+      let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+      const rms = Math.sqrt(s / d.length);
+      $('who').style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
+      const nowT = Date.now();
+      if (cal < 3) { noise += rms; cal++; if (cal === 3) noise = Math.min(noise / 3, 0.02); return; }
+      const thr = Math.max(0.015, noise * 3);
+      if (rms > thr) { speech = true; lastVoice = nowT; }
+      if (speech && nowT - lastVoice > 1700) stop('speech');
+      else if (!speech && nowT - start > 14000) stop('silent');
+      else if (nowT - start > 40000) stop('speech');
+    };
+    // after a replay, start fresh
+    const resume = setInterval(() => { if (done) return clearInterval(resume); if (start > Date.now() + 1000 && !$('repeatBtn').disabled) { start = Date.now(); } }, 300);
+  });
+}
+
+function toWav(chunks, rate){
+  let len = 0; chunks.forEach(c => len += c.length);
+  const all = new Float32Array(len); let o = 0; chunks.forEach(c => { all.set(c, o); o += c.length; });
+  const target = 16000, ratio = rate / target, n = Math.floor(len / ratio);
+  const pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * ratio), b = Math.min(len, Math.floor((i + 1) * ratio));
+    let s = 0; for (let j = a; j < b; j++) s += all[j];
+    const v = Math.max(-1, Math.min(1, s / Math.max(1, b - a)));
+    pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(buf);
+  const w = (off, str) => { for (let i = 0; i < str.length; i++) v.setUint8(off + i, str.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, target, true); v.setUint32(28, target * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+async function doVoice(t){
+  const r = await listen();
+  setStatus('think', 's_think');
+  const fd = new FormData();
+  fd.append('stage', t.stage);
+  if (r.silent || !r.blob) fd.append('silence', '1'); else fd.append('audio', r.blob, 'answer.wav');
+  const d = await post('/turn', fd, true);
+  if (d.inactive) return d;
+  $('heard').textContent = d.heard ? tr('heard') + d.heard : '';
+  return d.turn;
+}
+
+// ---------- photos ----------
+async function countdown(n){
+  const c = $('countdown'), arc = $('ringArc'), num = $('countNum');
+  c.classList.add('show');
+  for (let i = n; i >= 1; i--) {
+    num.textContent = i;
+    arc.style.transition = 'none'; arc.style.strokeDashoffset = 364.4 * (1 - i / n);
+    await sleep(30);
+    arc.style.transition = 'stroke-dashoffset .97s linear'; arc.style.strokeDashoffset = 364.4 * (1 - (i - 1) / n);
+    await sleep(970);
+  }
+  c.classList.remove('show');
+}
+function snap(maxW){
+  const v = $('cam');
+  const w = v.videoWidth || 640, h = v.videoHeight || 480, k = maxW && w > maxW ? maxW / w : 1;
+  const cv = document.createElement('canvas'); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+  cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+  return new Promise(r => cv.toBlob(r, 'image/jpeg', maxW ? 0.7 : 0.88));
+}
+function flash(){ $('flash').classList.add('on'); setTimeout(() => $('flash').classList.remove('on'), 60); }
+
+async function doPhoto(t){
+  setStatus('wait', 's_photo');
+  await countdown(t.countdown || 3);
+  const blob = await snap(); flash();
+  setStatus('think', 's_think');
+  const fd = new FormData(); fd.append('stage', t.stage); addLoc(fd); fd.append('photo', blob, t.shot + '.jpg');
+  const d = await post('/photo', fd, true);
+  return d.inactive ? d : d.turn;
+}
+
+async function doBlink(t){
+  setStatus('wait', 's_photo');
+  await countdown(t.countdown || 2);
+  $('gFace').classList.add('blinking');
+  const frames = [];
+  for (let i = 0; i < 14; i++) { frames.push(await snap(360)); await sleep(230); }
+  $('gFace').classList.remove('blinking');
+  setStatus('think', 's_think');
+  const fd = new FormData(); fd.append('stage', t.stage); addLoc(fd);
+  frames.forEach((b, i) => fd.append('frames', b, 'f' + i + '.jpg'));
+  const d = await post('/burst', fd, true);
+  return d.inactive ? d : d.turn;
+}
+
+// ---------- documents on WhatsApp ----------
+function renderDocs(s, doc){
+  const row = (label, ok) => `<div class="docrow"><span>${label}</span><span class="tag ${ok ? 'ok' : 'wait'}">${ok ? '✓ ' + tr('received') : tr('waiting')}</span></div>`;
+  if (doc === 'chats') {
+    const n = (s.chats || {}).count || 0;
+    $('docRows').innerHTML = `<div class="docrow"><span>${tr('shotsGot')}</span><span class="tag ${n ? 'ok' : 'wait'}">${n ? '✓ ' + n : tr('waiting')}</span></div>`;
+    $('chatDoneBtn').disabled = n < 1;
+    return;
+  }
+  $('docRows').innerHTML = doc === 'aadhaar' ? row(tr('a_front'), s.aadhaar.front) + row(tr('a_back'), s.aadhaar.back) : row(tr('pan'), s.pan.received);
+}
+$('skipBtn').addEventListener('click', () => { docSkip = true; });
+
+let chatDone = false;
+$('chatDoneBtn').addEventListener('click', () => { chatDone = true; });
+
+async function doDocs(t){
+  setStatus('wait', 's_wait');
+  docSkip = false; chatDone = false; docStartedAt = Date.now(); $('skipBtn').style.display = 'none';
+  const chats = t.doc === 'chats';
+  $('chatKw').style.display = chats ? 'block' : 'none';
+  $('chatDoneBtn').style.display = chats ? 'block' : 'none';
+  $('skipBtn').textContent = tr(chats ? 'chatSkip' : 'cantSend');
+  if (chats) { $('chatKw').innerHTML = esc(tr('searchThese')) + '<br>' + (t.keywords || []).map(k => `<b>${esc(k)}</b>`).join(''); $('skipBtn').style.display = 'block'; }
+  while (!handedOff) {
+    let s;
+    try { const r = await fetch(API + '/status'); s = await r.json(); } catch { await sleep(3000); continue; }
+    renderDocs(s, t.doc);
+    if (Date.now() - docStartedAt > 40000) $('skipBtn').style.display = 'block';
+    if (s.unreadable > seenUnreadable) { seenUnreadable = s.unreadable; setStatus('think', 's_read'); const d = await post('/advance', { stage: t.stage, nudge: true }); return d.inactive ? d : d.turn; }
+    if (chats) {
+      if (chatDone && (s.chats || {}).count >= 1) { setStatus('think', 's_read'); const d = await post('/advance', { stage: t.stage, done: true }); $('chatDoneBtn').style.display = 'none'; $('chatKw').style.display = 'none'; return d.inactive ? d : d.turn; }
+      if (docSkip || Date.now() - docStartedAt > 15 * 60 * 1000) { setStatus('think', 's_think'); const d = await post('/advance', { stage: t.stage, skip: true }); $('chatDoneBtn').style.display = 'none'; $('chatKw').style.display = 'none'; return d.inactive ? d : d.turn; }
+      await sleep(chatDone ? 800 : 3000); continue;
+    }
+    if (s.ready) { setStatus('think', 's_read'); const d = await post('/advance', { stage: t.stage }); return d.inactive ? d : d.turn; }
+    if (docSkip || Date.now() - docStartedAt > 8 * 60 * 1000) { setStatus('think', 's_think'); const d = await post('/advance', { stage: t.stage, skip: true }); return d.inactive ? d : d.turn; }
+    await sleep(3000);
+  }
+  return { inactive: true };
+}
+
+// ---------- talk to a person ----------
+$('humanBtn').addEventListener('click', () => { try { $('humanDlg').showModal(); } catch { if (confirm(tr('humanQ'))) handoff(); } });
+$('humanNo').addEventListener('click', () => $('humanDlg').close());
+$('humanYes').addEventListener('click', () => { $('humanDlg').close(); handoff(); });
+async function handoff(){
+  if (handedOff || finished) return;
+  handedOff = true;
+  if (endListen) endListen('silent');
+  setStatus('think', 's_save');
+  let d = {};
+  try { d = await post('/handoff', { reason: 'Customer tapped the button' }); } catch {}
+  if (d.displayText || d.message) { $('cap').textContent = d.displayText || d.message; setStatus('ai', 's_ai'); await playAudio(d.audio, d.displayText || d.message); }
+  await stopAndUploadRecording();
+  teardown();
+  showEnd(tr('endHuman'));
+}
+
+// ---------- finish ----------
+async function finish(){
+  if (finished) return; finished = true;
+  setStatus('think', 's_save'); showGuide(null);
+  try { await post('/complete', {}); } catch (e) { /* the team can still review the recording */ }
+  await stopAndUploadRecording();
+  teardown();
+  showEnd(tr('endOk'));
+}
+function stopAndUploadRecording(){
+  return new Promise(resolve => {
+    if (!recorder || recorder.state === 'inactive') return resolve();
+    recorder.onstop = async () => {
+      try {
+        const blob = new Blob(recChunks, { type: recorder.mimeType || 'video/webm' });
+        const fd = new FormData(); fd.append('recording', blob, 'call.webm');
+        await post('/recording', fd, true);
+      } catch (e) {}
+      resolve();
+    };
+    try { recorder.stop(); } catch { resolve(); }
+  });
+}
+function teardown(){
+  try { camStream.getTracks().forEach(t => t.stop()); } catch {}
+  try { ctx.close(); } catch {}
+  try { if (geoWatch != null) navigator.geolocation.clearWatch(geoWatch); } catch {}
+  try { wakeLock && wakeLock.release(); } catch {}
+}
+function showEnd(msg){
+  $('call').style.display = 'none'; $('start').style.display = 'none'; $('end').style.display = 'block';
+  paintText(); if (msg) $('endMsg').textContent = msg;
+}
+window.addEventListener('pagehide', () => { if (started && !finished && !handedOff) navigator.sendBeacon(API + '/left', new Blob(['{}'], { type: 'application/json' })); });
+</script>
+</body>
+</html>
