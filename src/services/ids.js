@@ -49,6 +49,7 @@ function backfill(data) {
   for (const c of cases) {
     if (!c.caseRef) { c.caseRef = nextCaseRef(data, c.createdAt ? new Date(c.createdAt) : new Date()); changed++; }
     if (!c.selfToken) { c.selfToken = crypto.randomBytes(16).toString('hex'); changed++; }
+    if (!c.service) { c.service = require('./plans').serviceOfCase(c); changed++; }
   }
   const byId = new Map((data.cases || []).map(c => [c.id, c]));
   for (const e of data.evidence || []) {

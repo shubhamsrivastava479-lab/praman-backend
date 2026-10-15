@@ -23,6 +23,7 @@
   .stage{position:relative;background:#000;border-radius:14px;overflow:hidden;min-height:60vh;}
   #remote{width:100%;height:100%;object-fit:contain;background:#000;}
   #local{position:absolute;right:12px;bottom:84px;width:180px;aspect-ratio:4/3;object-fit:cover;border-radius:10px;border:2px solid rgba(255,255,255,.7);transform:scaleX(-1);background:#222;}
+  .media{display:none;position:absolute;left:12px;right:12px;top:12px;background:#FFF4DC;color:#5A3D00;border-radius:10px;padding:10px 12px;font-size:14px;z-index:5;}
   .wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#9AA3BD;padding:20px;}
   .controls{position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;justify-content:center;padding:12px;background:linear-gradient(to top,rgba(0,0,0,.75),transparent);flex-wrap:wrap;}
   .c{border:none;border-radius:999px;padding:10px 16px;font-weight:600;font-size:14px;background:rgba(255,255,255,.16);color:#fff;}
@@ -52,6 +53,7 @@
   <div class="stage">
     <video id="remote" autoplay playsinline></video>
     <div class="wait" id="wait">Send the link to the customer. The call starts as soon as they join.</div>
+    <div class="media" id="mediaBox"><div id="mediaText"></div><button class="b2" id="mediaRetry" style="display:none;margin-top:8px;">Try camera &amp; mic again</button></div>
     <video id="local" autoplay playsinline muted></video>
     <div class="flash" id="flash"></div>
     <div class="controls">
@@ -115,39 +117,75 @@ async function api(path, opts = {}) {
   try {
     const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     liveToken = d.token; $('link').value = d.joinUrl;
-    $('caseLine').textContent = `${d.claimNo}${d.insuredName ? ' · ' + d.insuredName : ''}`;
+    $('caseLine').textContent = `${d.caseRef ? d.caseRef + ' · ' : ''}${d.claimNo}${d.insuredName ? ' · ' + d.insuredName : ''}`;
+    if (d.language) custState.language = d.language;
     ice = await api(`/api/live/case/${encodeURIComponent(caseId)}/ice`);
     if (!ice.turn) $('linkMsg').textContent = 'Note: no TURN relay is set up (Super Admin → Live Video Call Relay). Calls on some mobile networks may not connect.';
   } catch (e) { $('caseLine').textContent = e.message; return; }
-  try {
-    local = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true } });
-  } catch {
-    try { local = await navigator.mediaDevices.getUserMedia({ audio: true }); $('local').style.display = 'none'; }
-    catch { alert('Allow microphone (and camera) access to start the call.'); return; }
-  }
-  $('local').srcObject = local;
+  // Join the call room straight away, so the customer is never left waiting
+  // while this browser asks for camera/microphone permission.
   connect();
+  getMedia();
 })();
+
+// Camera + microphone for the executive. The call works without them too
+// (you can still see and hear the customer); when they become available the
+// call is re-connected so the customer also sees and hears you.
+let mediaTimer = null;
+async function getMedia() {
+  $('mediaBox').style.display = 'none';
+  clearTimeout(mediaTimer);
+  mediaTimer = setTimeout(() => { if (!local) showMedia('Your browser is asking for camera and microphone permission. Click <b>Allow</b> in the box near the address bar (top left).', false); }, 2500);
+  let s = null;
+  try { s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true } }); }
+  catch {
+    try { s = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch {}
+  }
+  clearTimeout(mediaTimer);
+  if (!s) {
+    showMedia('Camera and microphone are blocked, so the customer cannot see or hear you (you can still see and hear them). To fix: click the 🎥 / 🔒 icon at the left of the address bar → set Camera and Microphone to <b>Allow</b> → press the button below. If another app (WhatsApp, Zoom, Camera) is using the camera, close it first.', true);
+    return;
+  }
+  local = s;
+  $('mediaBox').style.display = 'none';
+  $('local').style.display = local.getVideoTracks().length ? '' : 'none';
+  $('local').srcObject = local;
+  if (recCtx && recDest && local.getAudioTracks().length) { try { recCtx.createMediaStreamSource(new MediaStream(local.getAudioTracks())).connect(recDest); } catch {} }
+  // Already talking to the customer without media? Re-connect so they get our audio/video.
+  if (pc && socket) socket.emit('live-cmd', { type: 'reoffer' });
+}
+function showMedia(html, retry) {
+  $('mediaText').innerHTML = html;
+  $('mediaRetry').style.display = retry ? '' : 'none';
+  $('mediaBox').style.display = 'block';
+}
 
 function connect() {
   socket = io({ transports: ['websocket', 'polling'] });
   socket.on('connect', () => socket.emit('live-join', { token: liveToken, jwt }, res => {
-    if (!res || res.error) { $('wait').textContent = (res && res.error) || 'Could not join'; return; }
-    if ((res.peers || []).includes('customer')) socket.emit('live-cmd', { type: 'reoffer' });
+    if (!res || res.error) { $('wait').style.display = 'flex'; $('wait').textContent = (res && res.error) || 'Could not join the call. Refresh the page.'; return; }
+    if ((res.peers || []).includes('customer')) {
+      setCust('joined');
+      $('wait').style.display = 'flex'; $('wait').textContent = 'Customer is on the call — connecting video…';
+      socket.emit('live-cmd', { type: 'reoffer' });
+    }
   }));
+  socket.on('disconnect', () => { $('wait').style.display = 'flex'; $('wait').textContent = 'Lost connection to the server — reconnecting…'; });
   socket.on('live-peer', ({ role, event }) => {
     if (role !== 'customer') return;
-    if (event === 'joined') { $('wait').style.display = 'flex'; $('wait').textContent = 'Customer joined — connecting video…'; }
-    else { $('wait').style.display = 'flex'; $('wait').textContent = 'Customer left or lost connection. They can rejoin with the same link.'; showCust(); }
+    if (event === 'joined') { setCust('joined'); $('wait').style.display = 'flex'; $('wait').textContent = 'Customer joined — connecting video…'; }
+    else { setCust('left'); $('wait').style.display = 'flex'; $('wait').textContent = 'Customer left or lost connection. They can rejoin with the same link.'; }
   });
   socket.on('live-signal', async ({ data, from }) => {
     if (from !== 'customer') return;
-    if (data.sdp && data.sdp.type === 'offer') await answer(data.sdp);
-    else if (data.candidate && pc) {
-      if (pc.remoteDescription) { try { await pc.addIceCandidate(data.candidate); } catch {} } else pendingCandidates.push(data.candidate);
-    }
+    try {
+      if (data.sdp && data.sdp.type === 'offer') await answer(data.sdp);
+      else if (data.candidate && pc) {
+        if (pc.remoteDescription) { try { await pc.addIceCandidate(data.candidate); } catch {} } else pendingCandidates.push(data.candidate);
+      }
+    } catch (e) { console.warn('signal', e); }
   });
-  socket.on('live-state', s => { custState = { ...custState, ...s }; showCust(); });
+  socket.on('live-state', s => { custState = { ...custState, ...s }; setCust('joined'); });
   socket.on('live-replaced', () => { $('wait').style.display = 'flex'; $('wait').textContent = 'This call was opened in another tab.'; });
 }
 
@@ -155,16 +193,20 @@ async function answer(offer) {
   if (pc) { try { pc.close(); } catch {} }
   pendingCandidates = [];
   pc = new RTCPeerConnection({ iceServers: ice.iceServers || [] });
-  local.getTracks().forEach(t => pc.addTrack(t, local));
+  if (local) local.getTracks().forEach(t => pc.addTrack(t, local));
   pc.ontrack = e => {
     if (e.track.kind === 'video' || !$('remote').srcObject) $('remote').srcObject = e.streams[0];
-    $('wait').style.display = 'none';
     if (e.track.kind === 'audio') attachRemoteAudio(e.streams[0]);
     startRecording();
   };
   pc.onicecandidate = e => { if (e.candidate) socket.emit('live-signal', { candidate: e.candidate }); };
+  const mine = pc;
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'failed') { $('wait').style.display = 'flex'; $('wait').textContent = 'Connection failed — press Reconnect. If it keeps failing, a TURN relay is needed.'; }
+    if (pc !== mine) return;
+    const st = pc.connectionState;
+    if (st === 'connected') { $('wait').style.display = 'none'; setCust('connected'); }
+    if (st === 'disconnected') { $('wait').style.display = 'flex'; $('wait').textContent = 'Customer\'s network is weak — reconnecting…'; }
+    if (st === 'failed') { $('wait').style.display = 'flex'; $('wait').textContent = 'Connection failed — retrying automatically. If it keeps failing, press Reconnect, or check the TURN relay in Super Admin.'; }
   };
   await pc.setRemoteDescription(offer);
   for (const c of pendingCandidates.splice(0)) { try { await pc.addIceCandidate(c); } catch {} }
@@ -173,12 +215,18 @@ async function answer(offer) {
   socket.emit('live-signal', { sdp: pc.localDescription });
 }
 
-function showCust() {
+let custStatus = 'none';
+function setCust(status) {
+  if (status) custStatus = status;
   const l = custState.location;
+  const head = { none: 'Not joined yet', joined: '🟡 On the call — connecting', connected: '🟢 Connected', left: '🔴 Left the call' }[custStatus] || '';
   $('cust').innerHTML = `
+    <div><b>${head}</b></div>
+    ${custState.language ? `<div><span>Language:</span> ${esc(custState.language)}</div>` : ''}
+    ${custStatus === 'none' ? '' : `
     <div><span>Location:</span> ${l ? `<a style="color:#9EC1FF" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${Number(l.latitude)},${Number(l.longitude)}">${Number(l.latitude).toFixed(5)}, ${Number(l.longitude).toFixed(5)}</a> (±${Math.round(l.accuracy || 0)} m)` : 'not shared'}</div>
     <div><span>Camera:</span> ${custState.sharing ? 'sharing screen' : custState.facing === 'environment' ? 'back camera' : 'front camera'}</div>
-    <div><span>Last update:</span> ${custState.at ? new Date(custState.at).toLocaleTimeString('en-IN') : '—'}</div>`;
+    <div><span>Last update:</span> ${custState.at ? new Date(custState.at).toLocaleTimeString('en-IN') : '—'}</div>`}`;
 }
 
 // ---- recording: customer video drawn on a canvas with a time stamp, + both voices ----
@@ -187,7 +235,7 @@ function startRecording() {
   try {
     recCtx = new (window.AudioContext || window.webkitAudioContext)();
     recDest = recCtx.createMediaStreamDestination();
-    if (local.getAudioTracks().length) recCtx.createMediaStreamSource(new MediaStream(local.getAudioTracks())).connect(recDest);
+    if (local && local.getAudioTracks().length) recCtx.createMediaStreamSource(new MediaStream(local.getAudioTracks())).connect(recDest);
     if ($('remote').srcObject) attachRemoteAudio($('remote').srcObject);
     canvas = document.createElement('canvas'); canvas.width = 960; canvas.height = 540; cctx = canvas.getContext('2d');
     drawTimer = setInterval(drawFrame, 66);
@@ -245,10 +293,11 @@ $('photoBtn').addEventListener('click', () => {
 });
 
 // ---- controls ----
-$('micBtn').onclick = () => { const on = !local.getAudioTracks()[0]?.enabled; local.getAudioTracks().forEach(t => t.enabled = on); $('micBtn').classList.toggle('off', !on); $('micBtn').textContent = on ? 'Mute' : 'Unmute'; };
-$('camBtn').onclick = () => { const t = local.getVideoTracks()[0]; if (!t) return; t.enabled = !t.enabled; $('camBtn').classList.toggle('off', !t.enabled); $('camBtn').textContent = t.enabled ? 'Camera off' : 'Camera on'; };
+$('micBtn').onclick = () => { if (!local) return; const on = !local.getAudioTracks()[0]?.enabled; local.getAudioTracks().forEach(t => t.enabled = on); $('micBtn').classList.toggle('off', !on); $('micBtn').textContent = on ? 'Mute' : 'Unmute'; };
+$('camBtn').onclick = () => { const t = local && local.getVideoTracks()[0]; if (!t) return; t.enabled = !t.enabled; $('camBtn').classList.toggle('off', !t.enabled); $('camBtn').textContent = t.enabled ? 'Camera off' : 'Camera on'; };
 $('backBtn').onclick = () => socket.emit('live-cmd', { type: 'ask-back-camera' });
 $('frontBtn').onclick = () => socket.emit('live-cmd', { type: 'ask-front-camera' });
+$('mediaRetry').onclick = () => getMedia();
 $('reconBtn').onclick = () => socket.emit('live-cmd', { type: 'reoffer' });
 $('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('linkMsg').textContent = 'Link copied.'; } catch { $('link').select(); } };
 $('waBtn').onclick = async () => {
@@ -276,7 +325,7 @@ $('endBtn').onclick = async () => {
     try { await api(`/api/cases/${encodeURIComponent(caseId)}/recording`, { method: 'POST', body: fd }); saved = true; $('saveMsg').textContent = '✓ Recording saved to the case. It appears in the report under Call recordings.'; }
     catch (e) { $('saveMsg').textContent = 'Recording NOT saved: ' + e.message + ' — keep this tab open and try again.'; $('endBtn').disabled = false; $('endBtn').textContent = 'Retry save'; return; }
   } else { saved = true; $('saveMsg').textContent = 'Call ended. There was no video to record.'; }
-  local.getTracks().forEach(t => t.stop());
+  if (local) local.getTracks().forEach(t => t.stop());
   $('endBtn').textContent = 'Call ended';
 };
 window.addEventListener('beforeunload', e => { if (rec && !saved) { e.preventDefault(); e.returnValue = ''; } });

@@ -28,18 +28,30 @@ async function load(token) {
 
 // Turns the AI's English line into the customer's language + Gemini voice.
 async function speak(text, language) {
-  let displayText = text;
+  let displayText = text, problem = null;
   try { if (language && language !== 'English') displayText = await gemini.translateText(text, language); }
-  catch (e) { console.warn('AI call translate failed:', e.message); }
+  catch (e) { console.warn('AI call translate failed:', e.message); problem = 'translation: ' + shortErr(e); }
   let audio = null;
   try {
     const { base64Audio, mimeType } = await gemini.generateSpeech(displayText);
     audio = pcmToWav(Buffer.from(base64Audio, 'base64'), mimeType).toString('base64');
-  } catch (e) { console.warn('AI call TTS failed:', e.message); }
-  return { displayText, audio };
+  } catch (e) { console.warn('AI call TTS failed:', e.message); problem = (problem ? problem + '; ' : '') + 'voice: ' + shortErr(e); }
+  return { displayText, audio, problem };
 }
-async function withVoice(turn, language) {
+async function withVoice(turn, language, c) {
   const v = await speak(turn.say, language);
+  // First time the AI voice or translation fails in a call, note it in the case history.
+  if (v.problem && c && c.aiCall && !c.aiCall.voiceProblemLogged) {
+    try {
+      await db.read();
+      const fresh = db.data.cases.find(x => x.id === c.id);
+      if (fresh && fresh.aiCall && !fresh.aiCall.voiceProblemLogged) {
+        fresh.aiCall.voiceProblemLogged = true;
+        custody(fresh, `AI voice/translation problem (${v.problem}) — the phone's own voice was used`);
+        await db.write();
+      }
+    } catch {}
+  }
   return { ...turn, displayText: v.displayText, audio: v.audio };
 }
 function wrongStage(c, stage) {
@@ -48,6 +60,21 @@ function wrongStage(c, stage) {
   return !step || (stage && step.id !== stage);
 }
 const notFound = res => res.status(404).json({ error: 'This verification link is invalid.' });
+const now = () => new Date().toISOString();
+const custody = (c, event) => db.data.custody.push({ id: uid('cust'), caseId: c.id, event, actor: 'ai_agent', timestamp: now() });
+const shortErr = e => String((e && e.message) || e || 'error').replace(/key=[^&\s]+/gi, 'key=…').replace(/\s+/g, ' ').slice(0, 160);
+
+// Only one screen may run the call. Each page load sends its own id in the
+// X-Call-Client header; the latest /start wins, older screens get 409 and stop
+// (otherwise two tabs = two AI voices talking over each other).
+router.use('/:token', async (req, res, next) => {
+  if (req.method !== 'POST' || /^\/(start|left|handoff)$/.test(req.path)) return next();
+  const cid = req.get('X-Call-Client');
+  if (!cid) return next();
+  const c = await load(req.params.token);
+  if (c && c.aiCall && c.aiCall.clientId && c.aiCall.clientId !== cid) return res.status(409).json({ error: 'This call continued on another screen.', replaced: true });
+  next();
+});
 
 router.get('/:token/info', async (req, res) => {
   const c = await load(req.params.token);
@@ -73,10 +100,21 @@ router.post('/:token/start', async (req, res) => {
   if (c.aiCall.status === 'completed') return res.json({ done: true, message: 'This verification is already complete. Thank you.' });
   if (c.aiCall.status === 'handoff') return res.json({ done: true, message: 'You asked to speak to a person. Our team will call you soon. Thank you.' });
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+  const attempt = String((req.body || {}).attempt || '').slice(0, 40);
+  const clientId = String(req.get('X-Call-Client') || '').slice(0, 40);
   try {
+    // Same tap sent again (slow network retry): answer with the same welcome, do not "re-join".
+    if (attempt && c.aiCall.status === 'in_progress' && c.aiCall.startAttempt === attempt) {
+      if (clientId) c.aiCall.clientId = clientId;
+      await db.write();
+      const turn = c.aiCall.i === 0 && !(c.aiCall.answers || []).length ? engine.turnFor(c, engine.welcomeText(c), null, true) : engine.peekTurn(c);
+      return res.json({ turn: await withVoice(turn, c.aiCall.language, c) });
+    }
     const turn = engine.startSession(c, { language: language || 'English', location, deviceInfo, ip });
+    c.aiCall.startAttempt = attempt || null;
+    if (clientId) c.aiCall.clientId = clientId;
     await db.write();
-    res.json({ turn: await withVoice(turn, c.aiCall.language) });
+    res.json({ turn: await withVoice(turn, c.aiCall.language, c) });
   } catch (err) {
     console.error('AI call start error:', err.message);
     res.status(500).json({ error: 'Could not start the call. Please try again.' });
@@ -89,20 +127,52 @@ router.post('/:token/turn', upload.single('audio'), async (req, res) => {
   if (c0.aiCall.status !== 'in_progress') return res.status(409).json({ error: 'The call is not active.' });
   const stage = req.body.stage;
   try {
-    let input = { empty: true };
-    if (req.file && req.file.size > 3000 && req.body.silence !== '1') {
-      const t = await gemini.transcribeAndTranslateAudio(req.file.buffer.toString('base64'), 'audio/wav');
-      const english = String(t.english || '').trim();
-      if (english) input = { english, original: t.original, language: t.language };
+    let input = { empty: true }, sttError = null;
+    const typed = String(req.body.text || '').trim().slice(0, 500);
+    if (typed) {
+      // Customer typed the answer (voice not working / noisy place).
+      let english = typed;
+      if (c0.aiCall.language && c0.aiCall.language !== 'English') {
+        try { english = (await gemini.translateText(typed, 'English')).replace(/^"|"$/g, '').trim() || typed; } catch { english = typed; }
+      }
+      input = { english, original: typed, language: c0.aiCall.language, typed: true };
+    } else if (req.file && req.file.size > 3000 && req.body.silence !== '1') {
+      try {
+        const t = await gemini.transcribeAndTranslateAudio(req.file.buffer.toString('base64'), 'audio/wav');
+        const english = String(t.english || '').trim();
+        if (english) input = { english, original: t.original, language: t.language };
+      } catch (e) {
+        sttError = shortErr(e);
+        console.error('AI call speech-to-text failed:', sttError);
+      }
     }
+
+    if (sttError) {
+      // Do not count this as the customer's answer: ask again, and offer typing.
+      await db.read();
+      const c = db.data.cases.find(x => x.id === c0.id);
+      const a = c.aiCall;
+      a.sttErrors = (a.sttErrors || 0) + 1;
+      a.lastSttError = { at: now(), message: sttError };
+      if (a.sttErrors === 1 || a.sttErrors % 5 === 0) custody(c, `AI could not process the customer's voice (${sttError}) — asked again; typing offered`);
+      await db.write();
+      const step = a.queue[a.i];
+      const turn = engine.turnFor(c, 'Sorry, I could not understand that.', a.sttErrors >= 2 ? `${step.text} You can also type your answer in the box below.` : step.text, true);
+      return res.json({ turn: { ...(await withVoice(turn, a.language, c)), typeHint: a.sttErrors >= 2 }, heard: null });
+    }
+
     const prep = wrongStage(c0, stage) ? {} : await engine.prepare(c0, input);
 
     await db.read();
     const c = db.data.cases.find(x => x.id === c0.id);
     let turn;
     if (wrongStage(c, stage)) turn = engine.peekTurn(c);
-    else { turn = engine.apply(c, input, prep); await db.write(); }
-    res.json({ turn: await withVoice(turn, c.aiCall.language), heard: input.english || null });
+    else {
+      if (prep.aiDown && !c.aiCall.aiDownLogged) { c.aiCall.aiDownLogged = true; custody(c, `AI answer check could not run (${prep.aiDown}) — simple rules used; please review the answers`); }
+      if (input.typed) custody(c, 'Customer typed the answer instead of speaking');
+      turn = engine.apply(c, input, prep); await db.write();
+    }
+    res.json({ turn: await withVoice(turn, c.aiCall.language, c), heard: input.english || null });
   } catch (err) {
     console.error('AI call turn error:', err.message);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -148,7 +218,7 @@ router.post('/:token/photo', upload.single('photo'), async (req, res) => {
       });
       await db.write();
     }
-    res.json({ turn: await withVoice(turn, c.aiCall.language) });
+    res.json({ turn: await withVoice(turn, c.aiCall.language, c) });
   } catch (err) {
     console.error('AI call photo error:', err.message);
     res.status(500).json({ error: 'Could not process the photo. Please try again.' });
@@ -188,7 +258,7 @@ router.post('/:token/burst', upload.array('frames', 16), async (req, res) => {
       }));
       await db.write();
     }
-    res.json({ turn: await withVoice(turn, c.aiCall.language) });
+    res.json({ turn: await withVoice(turn, c.aiCall.language, c) });
   } catch (err) {
     console.error('AI call burst error:', err.message);
     res.status(500).json({ error: 'Could not check the blink. Please try again.' });
@@ -228,7 +298,7 @@ router.post('/:token/advance', async (req, res) => {
       if (step.type === 'docs' && !skip && !nudge && !engine.docsReady(c.aiCall, step.doc, !!done)) turn = engine.peekTurn(c); // not ready yet
       else { turn = engine.apply(c, input, prep); await db.write(); }
     }
-    res.json({ turn: await withVoice(turn, c.aiCall.language) });
+    res.json({ turn: await withVoice(turn, c.aiCall.language, c) });
   } catch (err) {
     console.error('AI call advance error:', err.message);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

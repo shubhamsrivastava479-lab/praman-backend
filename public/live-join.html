@@ -30,6 +30,12 @@
   .btn{width:100%;border:none;border-radius:14px;padding:15px;font-size:18px;font-weight:700;cursor:pointer;min-height:56px;margin-top:16px;background:var(--ink);color:#fff;}
   .btn:disabled{background:#A9AFC8;}
   .err{color:var(--alert);font-size:15px;min-height:20px;margin:8px 0 0;}
+  .langbox{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 14px;}
+  .langbox h2{font-size:16px;margin:0 0 8px;color:var(--ink);}
+  .langs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .lang{border:2px solid var(--line);background:#fff;border-radius:12px;padding:8px 4px;font-size:16px;font-weight:600;color:var(--text);cursor:pointer;min-height:48px;font-family:inherit;}
+  .lang[aria-pressed="true"]{border-color:var(--ink);background:#E6E9F7;color:var(--ink);}
+  .busy{opacity:.55;pointer-events:none;}
 
   #call{display:none;position:fixed;inset:0;background:#05070F;color:#fff;}
   #remote{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#05070F;}
@@ -55,46 +61,77 @@
 <body>
 <main id="start">
   <div class="brand"><div class="seal">प्र</div><div><b>प्रमाण Praman</b><small id="firm"></small></div></div>
-  <section class="note">
-    <h1>जाँच अधिकारी के साथ वीडियो कॉल</h1>
-    <p id="intro">लोड हो रहा है…</p>
+  <section class="langbox">
+    <h2 data-t="chooseLang">अपनी भाषा चुनें / Choose your language</h2>
+    <div class="langs" id="langs" role="group"></div>
   </section>
-  <ul class="k">
-    <li>यह कॉल <b>रिकॉर्ड</b> होगी।</li>
-    <li>आपका <b>कैमरा, माइक और लोकेशन</b> इस्तेमाल होगा।</li>
-    <li>अधिकारी कहें तो <b>पीछे का कैमरा</b> चालू करके गाड़ी, सामान या कागज़ दिखा सकते हैं।</li>
-    <li>This video call is recorded. Your camera, microphone and location will be used for the investigation.</li>
-  </ul>
-  <label class="consent"><input type="checkbox" id="consent"><span>मैं सहमत हूँ कि यह वीडियो कॉल रिकॉर्ड हो और जाँच के लिए मेरा कैमरा, माइक और लोकेशन इस्तेमाल हो। / I agree.</span></label>
-  <div data-browser-help></div>
-  <p class="err" id="err"></p>
-  <button class="btn" id="joinBtn" disabled>वीडियो कॉल से जुड़ें</button>
+  <div id="texty">
+    <section class="note">
+      <h1 data-t="title">जाँच अधिकारी के साथ वीडियो कॉल</h1>
+      <p id="intro" data-t="loading">लोड हो रहा है…</p>
+    </section>
+    <ul class="k">
+      <li data-h="b1"></li>
+      <li data-h="b2"></li>
+      <li data-h="b3"></li>
+    </ul>
+    <label class="consent"><input type="checkbox" id="consent"><span data-t="consent"></span></label>
+    <div data-browser-help></div>
+    <p class="err" id="err"></p>
+    <button class="btn" id="joinBtn" disabled data-t="join">वीडियो कॉल से जुड़ें</button>
+  </div>
 </main>
 
 <div id="call">
   <video id="remote" autoplay playsinline></video>
-  <div class="wait" id="wait"><div class="spin"></div><div id="waitText">जाँच अधिकारी से जोड़ रहे हैं…<br><small>Connecting you to the investigator…</small></div></div>
+  <div class="wait" id="wait"><div class="spin"></div><div id="waitText"></div></div>
   <video id="local" class="mirror" autoplay playsinline muted></video>
-  <div class="top"><span class="pill"><i></i>रिकॉर्डिंग <span id="timer">0:00</span></span><span class="pill" id="netq">●</span></div>
-  <div class="net" id="net">नेटवर्क कमज़ोर है — फिर से जोड़ रहे हैं…</div>
-  <div class="ask" id="ask"><p id="askText"></p><div class="row"><button class="n" id="askNo">अभी नहीं</button><button class="y" id="askYes">हाँ, चालू करें</button></div></div>
+  <div class="top"><span class="pill"><i></i><span data-t="recording">रिकॉर्डिंग</span> <span id="timer">0:00</span></span><span class="pill" id="netq">●</span></div>
+  <div class="net" id="net" data-t="netWeak"></div>
+  <div class="ask" id="ask"><p id="askText"></p><div class="row"><button class="n" id="askNo" data-t="notNow"></button><button class="y" id="askYes" data-t="yesOn"></button></div></div>
   <div class="bar">
-    <button class="cb" id="micBtn" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>माइक</span></button>
-    <button class="cb" id="flipBtn" aria-label="Switch camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9.5 13.5a2.5 2.5 0 0 0 4.6 1.4M14.5 12.5a2.5 2.5 0 0 0-4.6-1.4"/></svg><span>कैमरा बदलें</span></button>
-    <button class="cb" id="shareBtn" aria-label="Share screen" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 13V8M9.5 10.5 12 8l2.5 2.5"/></svg><span>स्क्रीन</span></button>
-    <button class="cb end" id="endBtn" aria-label="End call"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-3.3 0-6.4.9-9 2.6.6 1.4 1.4 2.6 2.4 3.6l2.3-1.4V11c1.4-.4 2.8-.6 4.3-.6s2.9.2 4.3.6v2.8l2.3 1.4c1-1 1.8-2.2 2.4-3.6C18.4 9.9 15.3 9 12 9z"/></svg><span>कॉल ख़त्म</span></button>
+    <button class="cb" id="micBtn" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span data-t="mic"></span></button>
+    <button class="cb" id="flipBtn" aria-label="Switch camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9.5 13.5a2.5 2.5 0 0 0 4.6 1.4M14.5 12.5a2.5 2.5 0 0 0-4.6-1.4"/></svg><span data-t="flip"></span></button>
+    <button class="cb" id="shareBtn" aria-label="Share screen" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 13V8M9.5 10.5 12 8l2.5 2.5"/></svg><span data-t="screen"></span></button>
+    <button class="cb end" id="endBtn" aria-label="End call"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-3.3 0-6.4.9-9 2.6.6 1.4 1.4 2.6 2.4 3.6l2.3-1.4V11c1.4-.4 2.8-.6 4.3-.6s2.9.2 4.3.6v2.8l2.3 1.4c1-1 1.8-2.2 2.4-3.6C18.4 9.9 15.3 9 12 9z"/></svg><span data-t="end"></span></button>
   </div>
 </div>
 
-<main id="end"><h1>धन्यवाद</h1><p id="endMsg">कॉल ख़त्म हो गई। आप यह पेज बंद कर सकते हैं।<br>The call has ended. You can close this page.</p></main>
+<main id="end"><h1 data-t="thanks"></h1><p id="endMsg" data-t="ended"></p></main>
 
 <script>
 const token = new URLSearchParams(location.search).get('t') || '';
 const API = '/api/live/join/' + encodeURIComponent(token);
 const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 let socket, pc, ice, localStream, camTrack, screenTrack = null, facing = 'user', micOn = true;
 let lastLoc = null, geoWatch = null, wakeLock = null, t0 = 0, ended = false, pendingCandidates = [];
+let info = null, language = 'Hindi', T = {}, officerHere = false, watchdog = null, tries = 0, waitKey = 'connecting';
+const saved = (() => { try { return localStorage.getItem('praman_lang'); } catch { return null; } })();
+
+const fill = (str, vars) => String(str || '').replace(/\{(\w+)\}/g, (m, k) => vars && vars[k] != null ? vars[k] : m);
+function paint() {
+  document.querySelectorAll('[data-t]').forEach(el => { if (T[el.dataset.t]) el.textContent = T[el.dataset.t]; });
+  document.querySelectorAll('[data-h]').forEach(el => { if (T[el.dataset.h]) el.innerHTML = T[el.dataset.h]; });
+  document.documentElement.lang = language === 'English' ? 'en' : 'hi';
+  if (info) {
+    $('intro').textContent = fill(T.intro, { caseRef: info.caseRef });
+    $('firm').textContent = info.firm ? fill(T.from, { firm: info.firm }) : '';
+  }
+  if ($('call').style.display === 'block') showWait(waitKey);
+}
+function renderLangs() {
+  const list = (info && info.languages) || [{ value: 'Hindi', label: 'हिंदी' }, { value: 'English', label: 'English' }];
+  $('langs').innerHTML = list.map(l => `<button type="button" class="lang" aria-pressed="${l.value === language}" data-v="${l.value}">${l.label}</button>`).join('');
+}
+async function setLanguage(lang) {
+  language = lang; renderLangs();
+  try { localStorage.setItem('praman_lang', lang); } catch {}
+  $('texty').classList.add('busy');
+  try { const d = await (await fetch(API + '/texts?lang=' + encodeURIComponent(lang))).json(); if (d.texts) T = d.texts; } catch {}
+  $('texty').classList.remove('busy');
+  paint();
+}
+$('langs').addEventListener('click', e => { const b = e.target.closest('.lang'); if (b) setLanguage(b.dataset.v); });
 
 $('consent').addEventListener('change', () => { $('joinBtn').disabled = !$('consent').checked; });
 $('joinBtn').addEventListener('click', join);
@@ -102,30 +139,34 @@ $('joinBtn').addEventListener('click', join);
 (async () => {
   try {
     const r = await fetch(API + '/info'); const d = await r.json();
-    if (d.error) { $('intro').textContent = 'यह लिंक सही नहीं है। / This link is not valid.'; $('joinBtn').style.display = 'none'; return; }
-    $('firm').textContent = d.firm ? d.firm + ' की ओर से' : '';
-    $('intro').textContent = `आपके केस (${d.caseRef}) के लिए जाँच अधिकारी आपसे वीडियो पर बात करेंगे। शांत जगह पर जुड़ें।`;
+    if (d.error) {
+      await setLanguage(saved || 'Hindi');
+      $('intro').textContent = T.badLink || 'This link is not valid.'; $('joinBtn').style.display = 'none'; return;
+    }
+    info = d;
     if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) $('shareBtn').style.display = '';
-  } catch { $('intro').textContent = 'सर्वर से जुड़ नहीं पा रहे — 30 सेकंड बाद पेज रीफ़्रेश करें।'; }
+    await setLanguage(d.language || saved || 'Hindi');
+  } catch { $('intro').textContent = 'सर्वर से जुड़ नहीं पा रहे — 30 सेकंड बाद पेज रीफ़्रेश करें। / Cannot reach the server — refresh after 30 seconds.'; }
 })();
 
 async function join() {
   $('err').textContent = ''; $('joinBtn').disabled = true;
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true } });
-  } catch { $('err').textContent = 'कृपया कैमरा और माइक की अनुमति दें, फिर दोबारा कोशिश करें।'; $('joinBtn').disabled = false; try { PramanBrowserHelp.show(document.querySelector('[data-browser-help]'), 'blocked'); } catch {} return; }
+  } catch { $('err').textContent = T.allowCam; $('joinBtn').disabled = false; try { PramanBrowserHelp.show(document.querySelector('[data-browser-help]'), 'blocked'); } catch {} return; }
   camTrack = localStream.getVideoTracks()[0];
   $('local').srcObject = localStream;
   lastLoc = await new Promise(res => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => res({ latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy }), () => res(null), { enableHighAccuracy: true, timeout: 9000 }) : res(null));
   try { geoWatch = navigator.geolocation.watchPosition(p => { lastLoc = { latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy }; sendState(); }, () => {}, { enableHighAccuracy: true, maximumAge: 15000 }); } catch {}
   const deviceInfo = { platform: navigator.userAgentData?.platform || navigator.platform, screen: screen.width + 'x' + screen.height, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone };
   try {
-    const r = await fetch(API + '/joined', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ consent: true, location: lastLoc, deviceInfo }) });
+    const r = await fetch(API + '/joined', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ consent: true, location: lastLoc, deviceInfo, language }) });
     if (!r.ok) throw new Error();
     ice = await (await fetch(API + '/ice')).json();
-  } catch { $('err').textContent = 'कॉल शुरू नहीं हो सकी। दोबारा कोशिश करें।'; $('joinBtn').disabled = false; return; }
+  } catch { $('err').textContent = T.startFail; $('joinBtn').disabled = false; return; }
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
   $('start').style.display = 'none'; $('call').style.display = 'block';
+  showWait('connecting');
   t0 = Date.now(); setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); $('timer').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }, 1000);
   connectSocket();
 }
@@ -133,57 +174,74 @@ async function join() {
 function connectSocket() {
   socket = io({ transports: ['websocket', 'polling'] });
   socket.on('connect', () => {
+    $('net').style.display = 'none';
     socket.emit('live-join', { token }, res => {
       if (!res || res.error) { $('waitText').textContent = (res && res.error) || 'Error'; return; }
-      if ((res.peers || []).includes('executive')) startOffer();
+      officerHere = (res.peers || []).includes('executive');
+      if (officerHere) startOffer(); else showWait('waitOfficer');
       sendState();
     });
   });
   socket.on('live-peer', ({ role, event }) => {
     if (role !== 'executive') return;
-    if (event === 'joined') startOffer();
-    else { showWait('जाँच अधिकारी का कनेक्शन टूट गया — इंतज़ार करें…<br><small>Waiting for the investigator…</small>'); }
+    if (event === 'joined') { officerHere = true; showWait('connecting'); startOffer(); sendState(); }
+    else { officerHere = false; clearTimeout(watchdog); showWait('officerLeft'); }
   });
   socket.on('live-signal', async ({ data, from }) => {
     if (from !== 'executive' || !pc) return;
-    if (data.sdp) {
-      await pc.setRemoteDescription(data.sdp);
-      for (const c of pendingCandidates.splice(0)) { try { await pc.addIceCandidate(c); } catch {} }
-    } else if (data.candidate) {
-      if (pc.remoteDescription) { try { await pc.addIceCandidate(data.candidate); } catch {} } else pendingCandidates.push(data.candidate);
-    }
+    try {
+      if (data.sdp) {
+        if (pc.signalingState !== 'have-local-offer') return;
+        await pc.setRemoteDescription(data.sdp);
+        for (const c of pendingCandidates.splice(0)) { try { await pc.addIceCandidate(c); } catch {} }
+      } else if (data.candidate) {
+        if (pc.remoteDescription) { try { await pc.addIceCandidate(data.candidate); } catch {} } else pendingCandidates.push(data.candidate);
+      }
+    } catch (e) { console.warn('signal', e); }
   });
   socket.on('live-cmd', cmd => {
-    if (cmd.type === 'reoffer') startOffer();
-    if (cmd.type === 'ask-back-camera' && facing === 'user') askUser('जाँच अधिकारी चाहते हैं कि आप पीछे का कैमरा चालू करें, ताकि गाड़ी/सामान/कागज़ दिखा सकें।', () => flip());
-    if (cmd.type === 'ask-front-camera' && facing !== 'user') askUser('जाँच अधिकारी आपका चेहरा देखना चाहते हैं — सामने का कैमरा चालू करें?', () => flip());
+    if (cmd.type === 'reoffer') { officerHere = true; startOffer(); sendState(); }
+    if (cmd.type === 'ask-back-camera' && facing === 'user') askUser(T.askBack, () => flip());
+    if (cmd.type === 'ask-front-camera' && facing !== 'user') askUser(T.askFront, () => flip());
   });
-  socket.on('live-replaced', () => { ended = true; cleanup(); showEnd('यह कॉल किसी दूसरे फ़ोन/टैब पर खुल गई है। / This call was opened on another device.'); });
+  socket.on('live-replaced', () => { ended = true; cleanup(); showEnd(T.replaced); });
   socket.on('disconnect', () => { if (!ended) $('net').style.display = 'block'; });
-  socket.io.on('reconnect', () => { $('net').style.display = 'none'; });
 }
 
 async function startOffer() {
+  if (ended) return;
   if (pc) { try { pc.close(); } catch {} }
   pendingCandidates = [];
-  pc = new RTCPeerConnection({ iceServers: ice.iceServers || [] });
+  pc = new RTCPeerConnection({ iceServers: (ice && ice.iceServers) || [] });
   const vTrack = screenTrack || camTrack;
   pc.addTrack(vTrack, localStream);
   localStream.getAudioTracks().forEach(t => pc.addTrack(t, localStream));
-  pc.ontrack = e => { $('remote').srcObject = e.streams[0]; $('wait').style.display = 'none'; };
+  pc.ontrack = e => { $('remote').srcObject = e.streams[0]; };
   pc.onicecandidate = e => { if (e.candidate) socket.emit('live-signal', { candidate: e.candidate }); };
+  const mine = pc;
   pc.onconnectionstatechange = () => {
+    if (pc !== mine) return;
     const s = pc.connectionState;
-    $('netq').textContent = s === 'connected' ? '● जुड़े हुए' : s === 'connecting' ? '● जोड़ रहे हैं' : '● ' + s;
-    $('net').style.display = (s === 'failed' || s === 'disconnected') ? 'block' : 'none';
-    if (s === 'failed') setTimeout(() => { if (pc && pc.connectionState === 'failed') startOffer(); }, 1500);
+    $('netq').textContent = s === 'connected' ? '● ' + (T.connected || 'Connected') : s === 'connecting' || s === 'new' ? '● ' + (T.connectingShort || '…') : '● ' + s;
+    if (s === 'connected') { tries = 0; clearTimeout(watchdog); $('wait').style.display = 'none'; $('net').style.display = 'none'; }
+    if (s === 'disconnected') $('net').style.display = 'block';
+    if (s === 'failed') retry();
   };
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   socket.emit('live-signal', { sdp: pc.localDescription });
+  // If nothing connects in 20 s, start over (new offer, fresh network paths).
+  clearTimeout(watchdog);
+  watchdog = setTimeout(() => { if (pc === mine && pc.connectionState !== 'connected' && officerHere) retry(); }, 20000);
+}
+function retry() {
+  if (ended || !officerHere) return;
+  tries++;
+  showWait('retrying');
+  setTimeout(() => { if (!ended && officerHere) startOffer(); }, Math.min(1500 * tries, 6000));
 }
 
-function sendState() { if (socket && socket.connected) socket.emit('live-state', { location: lastLoc, facing, sharing: !!screenTrack, at: new Date().toISOString() }); }
+function sendState() { if (socket && socket.connected) socket.emit('live-state', { location: lastLoc, facing, sharing: !!screenTrack, language, at: new Date().toISOString() }); }
 
 async function replaceVideo(track) {
   const sender = pc && pc.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -203,7 +261,7 @@ async function flip() {
     $('local').classList.toggle('mirror', facing === 'user');
     $('local').srcObject = new MediaStream([camTrack]);
     sendState();
-  } catch { alert('कैमरा बदल नहीं पाए। / Could not switch camera.'); }
+  } catch { alert(T.flipFail); }
 }
 $('flipBtn').addEventListener('click', flip);
 
@@ -233,14 +291,20 @@ function askUser(text, onYes) {
   $('askYes').onclick = () => { $('ask').style.display = 'none'; onYes(); };
   $('askNo').onclick = () => { $('ask').style.display = 'none'; };
 }
-function showWait(html) { $('waitText').innerHTML = html; $('wait').style.display = 'flex'; }
+function showWait(key) {
+  waitKey = key;
+  if (pc && pc.connectionState === 'connected' && key !== 'officerLeft') return;
+  $('waitText').innerHTML = T[key] || '';
+  $('wait').style.display = 'flex';
+}
 
 $('endBtn').addEventListener('click', () => {
-  if (!confirm('कॉल ख़त्म करें? / End the call?')) return;
+  if (!confirm(T.endConfirm || 'End the call?')) return;
   ended = true; try { socket.emit('live-leave'); } catch {}
   cleanup(); showEnd();
 });
 function cleanup() {
+  clearTimeout(watchdog);
   try { pc && pc.close(); } catch {}
   try { localStream.getTracks().forEach(t => t.stop()); screenTrack && screenTrack.stop(); } catch {}
   try { geoWatch != null && navigator.geolocation.clearWatch(geoWatch); } catch {}

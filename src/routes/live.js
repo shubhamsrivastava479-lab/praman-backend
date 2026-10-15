@@ -18,6 +18,7 @@ const wa = require('../services/whatsapp');
 const { getIceServers } = require('../services/ice');
 const { caseFileKey } = require('../services/ids');
 const { rateLimit } = require('../services/security');
+const { LANGUAGES, textsFor } = require('../services/live-texts');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
@@ -67,7 +68,7 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
     }
   }
   await db.write();
-  res.json({ token: c.liveCall.token, joinUrl, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo });
+  res.json({ token: c.liveCall.token, joinUrl, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo, caseRef: c.caseRef || '', language: c.liveCall.language || null });
 });
 
 router.get('/case/:caseId/ice', requireAuth, async (req, res) => {
@@ -183,7 +184,14 @@ pub.get('/:token/info', async (req, res) => {
   const c = caseByToken(req.params.token);
   if (!c) return res.status(404).json({ error: 'This video call link is not valid.' });
   const vendor = db.data.users.find(u => u.id === c.vendorId);
-  res.json({ caseRef: '••••' + String(c.claimNo).slice(-4), firm: vendor ? vendor.vendorName || '' : '' });
+  res.json({ caseRef: '••••' + String(c.claimNo).slice(-4), firm: vendor ? vendor.vendorName || '' : '', languages: LANGUAGES.map(([value, label]) => ({ value, label })), language: c.liveCall.language || null });
+});
+
+// Screen text in the chosen language (Hindi/English built in, others translated once).
+pub.get('/:token/texts', async (req, res) => {
+  await db.read();
+  if (!caseByToken(req.params.token)) return res.status(404).json({ error: 'Not found' });
+  res.json(await textsFor(String(req.query.lang || 'Hindi')));
 });
 
 pub.get('/:token/ice', async (req, res) => {
@@ -196,8 +204,10 @@ pub.post('/:token/joined', async (req, res) => {
   await db.read();
   const c = caseByToken(req.params.token);
   if (!c) return res.status(404).json({ error: 'This video call link is not valid.' });
-  const { consent, location, deviceInfo } = req.body || {};
+  const { consent, location, deviceInfo, language } = req.body || {};
   if (!consent) return res.status(400).json({ error: 'Consent is required.' });
+  const lang = LANGUAGES.find(([v]) => v === language);
+  if (lang) { c.liveCall.language = lang[0]; custody(c.id, `Customer chose ${lang[0]} for the live video call`, 'participant'); }
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
   custody(c.id, 'Customer agreed to the recorded live video call (camera, microphone, location)', 'participant');
   if (validLoc(location)) {

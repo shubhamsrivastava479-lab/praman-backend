@@ -259,6 +259,9 @@ router.post('/vendor-register', async (req, res) => {
   if (gst && gst.slice(2, 12) !== pan) return res.status(400).json({ error: 'GST number does not match the PAN entered.' });
   if (address.length < 10) return res.status(400).json({ error: 'Enter the full address.' });
   if (!/^\d{6}$/.test(pincode)) return res.status(400).json({ error: 'Enter a valid 6-digit pincode.' });
+  const { SERVICES } = require('../services/plans');
+  const requestedServices = [...new Set((Array.isArray(b.services) ? b.services : []).filter(x => SERVICES[x]))];
+  if (!requestedServices.length) return res.status(400).json({ error: 'Choose at least one service.' });
 
   await db.read();
   if (db.data.users.find(u => u.email.toLowerCase() === ob.email)) {
@@ -278,12 +281,33 @@ router.post('/vendor-register', async (req, res) => {
     status: 'pending',
     signupMethod: 'google',
     profile: { firmName, contactName: contactName || ob.name || '', contactEmail, mobile, gst: gst || null, pan, address, city, state, pincode, submittedAt: new Date().toISOString() },
+    requestedServices,
     passwordHash: await hashPassword(require('crypto').randomBytes(24).toString('hex')),
     createdAt: new Date().toISOString()
   };
   db.data.users.push(user);
   await db.write();
   res.status(201).json({ status: 'pending', message: 'Request submitted. You can sign in once the platform admin approves it.' });
+});
+
+// Public list of services, for the vendor sign-up form (no prices).
+router.get('/services-catalog', (req, res) => {
+  const { SERVICES, ALL } = require('../services/plans');
+  res.json(ALL.map(k => ({ key: k, label: SERVICES[k].label, short: SERVICES[k].short, icon: SERVICES[k].icon, about: SERVICES[k].about })));
+});
+
+// ---------- Who am I + which services my firm has bought ----------
+router.get('/me', requireAuth, async (req, res) => {
+  const plans = require('../services/plans');
+  await db.read();
+  const me = db.data.users.find(u => u.id === req.user.id);
+  if (!me) return res.status(401).json({ error: 'Session expired, please log in again' });
+  const firm = plans.firmOf(db.data, req.user);
+  const keys = plans.allowedServices(db.data, req.user);
+  res.json({
+    user: { id: me.id, email: me.email, role: me.role || 'vendor_admin', name: me.agentName || me.profile?.contactName || '', vendorName: firm ? firm.vendorName : me.vendorName },
+    services: plans.publicList(keys, req.user.role === 'agent' ? null : (firm && firm.servicePrices))
+  });
 });
 
 // ---------- Agent accounts (created by a vendor_admin, for concurrent calls) ----------

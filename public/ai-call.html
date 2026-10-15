@@ -80,12 +80,34 @@
   .ring{position:relative;width:132px;height:132px;}
   .ring svg{position:absolute;inset:0;transform:rotate(-90deg);}
   .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:64px;font-weight:700;text-shadow:0 2px 14px rgba(0,0,0,.6);}
-  .countdown.corner{align-items:flex-start;justify-content:flex-end;padding:0 14px;}
+  .countdown.corner{align-items:flex-start;justify-content:flex-start;padding:0 14px;}
   .countdown.corner .ring{width:92px;height:92px;} .countdown.corner .ring b{font-size:44px;}
   #call.body #cam{height:calc(100% - var(--sheetH,40vh));}
   .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:5;transition:opacity .35s;}
   .flash.on{opacity:.85;transition:none;}
 
+  /* AI assistant tile: shows the call is connected; mouth moves with the voice */
+  .avatar{position:absolute;right:12px;top:calc(96px + env(safe-area-inset-top));z-index:3;width:110px;text-align:center;}
+  .av-face{position:relative;width:110px;height:110px;border-radius:24px;overflow:hidden;border:2px solid rgba(255,255,255,.9);box-shadow:0 6px 20px rgba(0,0,0,.45);transition:box-shadow .1s;}
+  .av-face svg{display:block;width:100%;height:100%;}
+  .av-eyes{transform-origin:60px 62px;animation:avblink 4.2s infinite;}
+  @keyframes avblink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+  .av-mouth{transform-origin:60px 79px;transform:scaleY(calc(.08 + var(--m,0) * .95));}
+  .av-smile{opacity:calc(1 - var(--m,0) * 3);}
+  .avatar.tts .av-mouth{animation:avtalk .32s infinite alternate ease-in-out;} .avatar.tts .av-smile{opacity:0;}
+  @keyframes avtalk{from{transform:scaleY(.15)}to{transform:scaleY(.85)}}
+  .av-ai .av-face{box-shadow:0 0 0 calc(3px + var(--m,0) * 10px) rgba(224,154,18,.6),0 6px 20px rgba(0,0,0,.45);}
+  .av-listen .av-face{box-shadow:0 0 0 calc(3px + var(--lvl,0) * 12px) rgba(24,190,110,.65),0 6px 20px rgba(0,0,0,.45);}
+  .av-dots{position:absolute;left:0;right:0;bottom:6px;display:none;justify-content:center;gap:4px;}
+  .av-think .av-dots{display:flex;}
+  .av-dots i{width:7px;height:7px;border-radius:50%;background:#fff;animation:dots 1.2s infinite;} .av-dots i:nth-child(2){animation-delay:.2s} .av-dots i:nth-child(3){animation-delay:.4s}
+  .av-name{margin-top:5px;font-size:11.5px;font-weight:600;line-height:1.25;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.8);}
+  .av-name i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#31D07F;margin-right:3px;vertical-align:1px;}
+  .toast{position:absolute;left:14px;right:136px;top:calc(98px + env(safe-area-inset-top));z-index:7;background:rgba(24,134,90,.95);color:#fff;border-radius:12px;padding:10px 12px;font-size:14.5px;font-weight:600;opacity:0;transform:translateY(-6px);transition:all .3s;pointer-events:none;}
+  .toast.show{opacity:1;transform:none;}
+  .typebox{display:none;gap:8px;margin-top:8px;} .typebox.show{display:flex;}
+  .typebox input{flex:1;min-width:0;border:2px solid var(--line);border-radius:12px;padding:12px;font-size:16px;font-family:inherit;}
+  .typebox .btn{width:auto;min-height:48px;padding:10px 18px;font-size:16px;}
   .sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;background:var(--sheet);color:var(--text);border-radius:22px 22px 0 0;padding:14px 18px calc(14px + env(safe-area-inset-bottom));max-height:62vh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.35);}
   .who{display:flex;align-items:center;gap:10px;font-size:14.5px;color:var(--muted);font-weight:600;}
   .orb{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--mist);}
@@ -183,6 +205,32 @@
     <div class="phase-name" id="phaseName"></div>
   </div>
 
+  <div class="avatar av-wait" id="avatar" aria-hidden="true">
+    <div class="av-face">
+      <svg viewBox="0 0 120 120">
+        <defs><linearGradient id="avbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A4AA6"/><stop offset="1" stop-color="#1A2463"/></linearGradient></defs>
+        <rect width="120" height="120" fill="url(#avbg)"/>
+        <path d="M22 120c4-22 20-32 38-32s34 10 38 32z" fill="#E09A12"/>
+        <path d="M48 92l12 12 12-12" fill="#F7E3B8"/>
+        <rect x="53" y="80" width="14" height="14" rx="5" fill="#E7B48C"/>
+        <path d="M27 58c0-24 15-38 33-38s33 14 33 38c0 6-1 10-3 14-2-14-8-24-12-28-6 6-22 10-36 10-3 6-5 12-6 18-6-2-9-8-9-14z" fill="#2A1F2D"/>
+        <ellipse cx="60" cy="62" rx="26" ry="29" fill="#F0C8A4"/>
+        <path d="M34 54c4-14 14-20 26-20s22 6 26 20c-8-6-17-9-26-9s-18 3-26 9z" fill="#2A1F2D"/>
+        <path d="M45 54q5-3 10 0M65 54q5-3 10 0" stroke="#3B2A2A" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <g class="av-eyes"><ellipse cx="50" cy="62" rx="3.4" ry="4.2" fill="#2B2236"/><ellipse cx="70" cy="62" rx="3.4" ry="4.2" fill="#2B2236"/></g>
+        <circle cx="44" cy="72" r="4" fill="#F2A9A0" opacity=".45"/><circle cx="76" cy="72" r="4" fill="#F2A9A0" opacity=".45"/>
+        <g class="av-mouth"><ellipse cx="60" cy="79" rx="7" ry="5" fill="#7A2E3A"/></g>
+        <path class="av-smile" d="M53 78q7 6 14 0" stroke="#7A2E3A" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+        <path d="M29 62c0-20 14-34 31-34s31 14 31 34" stroke="#E9ECF8" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <rect x="24" y="56" width="9" height="15" rx="4" fill="#E9ECF8"/><rect x="87" y="56" width="9" height="15" rx="4" fill="#E9ECF8"/>
+        <path d="M30 70q4 14 18 12" stroke="#E9ECF8" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="49" cy="82" r="2.6" fill="#E9ECF8"/>
+      </svg>
+      <span class="av-dots"><i></i><i></i><i></i></span>
+    </div>
+    <div class="av-name"><i></i><span data-t="aiName"></span> · <span data-t="live"></span></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
   <div class="guide" id="gFace"><div class="oval"></div></div>
   <div class="guide" id="gStand">
     <svg class="figure" viewBox="0 0 100 200" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="4" stroke-linecap="round" stroke-dasharray="7 6" aria-hidden="true">
@@ -225,6 +273,8 @@
       <button class="btn ghost" id="repeatBtn" data-t="repeat"></button>
       <button class="btn done" id="doneBtn" style="display:none;" data-t="doneSpeaking"></button>
     </div>
+    <button class="btn plain" id="typeBtn" style="display:none;" data-t="typeBtn"></button>
+    <form class="typebox" id="typeBox" autocomplete="off"><input id="typeIn" maxlength="500" data-ph="typePh"><button class="btn primary" type="submit" data-t="send"></button></form>
     <div class="netbar" id="netbar" data-t="net"></div>
     <button class="btn plain human" id="humanBtn" data-t="human"></button>
   </section>
@@ -269,7 +319,10 @@ const T = {
     camErr:'कृपया ब्राउज़र में कैमरा और माइक की अनुमति दें, फिर दोबारा कोशिश करें।', startErr:'कॉल शुरू नहीं हो सकी। दोबारा कोशिश करें।',
     badLink:'यह लिंक सही नहीं है।', wake:'सर्वर चालू हो रहा है — 30 सेकंड बाद पेज रीफ़्रेश करें।', already:'यह वेरिफिकेशन पहले ही पूरा हो चुका है। धन्यवाद।',
     endOk:'आपकी वेरिफिकेशन कॉल पूरी हो गई। हमारी टीम इसे देखेगी। अब आप यह पेज बंद कर सकते हैं।', endHuman:'हमारी टीम आपको जल्दी कॉल करेगी। धन्यवाद।',
-    heard:'आपने कहा: '
+    heard:'आपने कहा: ',
+    typeBtn:'⌨️ लिखकर जवाब दें', typePh:'अपना जवाब यहाँ लिखें', send:'भेजें', sayAgain:'इंटरनेट धीमा था — कृपया अपना जवाब फिर से बोलें।',
+    replaced:'यह कॉल किसी दूसरी स्क्रीन पर चल रही है। आप यह पेज बंद कर सकते हैं।', aiName:'AI सहायक', live:'जुड़ा हुआ',
+    connectedToast:'✓ कॉल जुड़ गई — AI सहायक आपसे बात कर रहा है'
   },
   en: {
     aiTitle:'This is an AI-assisted call', loading:'Loading…', chooseLang:'Choose your language', whatHappens:'What happens in the call', keepReady:'Keep these ready',
@@ -291,7 +344,10 @@ const T = {
     camErr:'Please allow camera and microphone in your browser, then try again.', startErr:'The call could not start. Please try again.',
     badLink:'This link is not valid.', wake:'The server is starting — please refresh this page in 30 seconds.', already:'This verification is already complete. Thank you.',
     endOk:'Your verification call is complete. Our team will review it. You can close this page now.', endHuman:'Our team will call you soon. Thank you.',
-    heard:'You said: '
+    heard:'You said: ',
+    typeBtn:'⌨️ Type my answer', typePh:'Type your answer here', send:'Send', sayAgain:'The internet was slow — please say your answer again.',
+    replaced:'This call is continuing on another screen. You can close this page.', aiName:'AI assistant', live:'Connected',
+    connectedToast:'✓ Connected — the AI assistant is speaking with you'
   }
 };
 const LANGS = [['Hindi','हिंदी'],['English','English'],['Bengali','বাংলা'],['Marathi','मराठी'],['Telugu','తెలుగు'],['Tamil','தமிழ்'],['Gujarati','ગુજરાતી'],['Kannada','ಕನ್ನಡ'],['Malayalam','മലയാളം'],['Punjabi','ਪੰਜਾਬੀ'],['Odia','ଓଡ଼ିଆ'],['Assamese','অসমীয়া']];
@@ -309,6 +365,9 @@ let ctx, camStream, micSrc, recDest, proc, recorder, recChunks = [];
 let finished = false, started = false, handedOff = false;
 let docSkip = false, seenUnreadable = 0, docStartedAt = 0;
 let lastAudio = null, lastText = '', endListen = null, lastLoc = null, geoWatch = null, wakeLock = null, t0 = 0;
+// One screen per call: the server ignores older screens (no double voices).
+const clientId = (() => { try { return crypto.randomUUID(); } catch { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2); } })();
+let openTypeNext = false;
 
 const ui = () => T[language === 'Hindi' ? 'hi' : (['Marathi'].includes(language) ? 'hi' : 'en')];
 const tr = k => ui()[k] || T.en[k] || '';
@@ -316,6 +375,7 @@ const tr = k => ui()[k] || T.en[k] || '';
 function paintText(){
   document.documentElement.lang = language === 'Hindi' || language === 'Marathi' ? 'hi' : 'en';
   document.querySelectorAll('[data-t]').forEach(el => { const v = tr(el.dataset.t); if (typeof v === 'string') el.textContent = v; });
+  document.querySelectorAll('[data-ph]').forEach(el => { const v = tr(el.dataset.ph); if (typeof v === 'string') el.placeholder = v; });
   const isPolicy = !info || info.isPolicy;
   const steps = [['st1','st1d'],['st2','st2d'], ...(isPolicy ? [['st3','st3d']] : []), ['st4','st4d'], isPolicy ? ['st5','st5d'] : ['st5c','st5cd'], ...(isPolicy ? [] : [['st6','st6d']])];
   $('steps').innerHTML = steps.map((s, i) => `<li><span class="n">${i + 1}</span><div><b>${tr(s[0])}</b><span>${tr(s[1])}</span></div></li>`).join('');
@@ -357,10 +417,10 @@ async function post(path, body, isForm){
   let lastErr;
   for (let i = 0; i < 4; i++) {
     try {
-      const r = await fetch(API + path, isForm ? { method: 'POST', body } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+      const r = await fetch(API + path, isForm ? { method: 'POST', headers: { 'X-Call-Client': clientId }, body } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Call-Client': clientId }, body: JSON.stringify(body || {}) });
       const d = await r.json().catch(() => ({}));
       if (r.status === 429) { await sleep(4000); continue; }
-      if (r.status === 409) { $('netbar').classList.remove('show'); return { inactive: true }; }
+      if (r.status === 409) { $('netbar').classList.remove('show'); return { inactive: true, replaced: !!d.replaced }; }
       if (!r.ok) throw new Error(d.error || 'Server error');
       $('netbar').classList.remove('show');
       return d;
@@ -371,6 +431,9 @@ async function post(path, body, isForm){
 
 function setStatus(kind, key){
   $('who').className = 'who st-' + kind;
+  $('avatar').className = 'avatar av-' + kind;
+  $('typeBtn').style.display = kind === 'listen' ? 'block' : 'none';
+  if (kind !== 'listen') $('typeBox').classList.remove('show');
   $('statusText').textContent = tr(key);
   $('doneBtn').style.display = kind === 'listen' ? 'block' : 'none';
   $('repeatBtn').disabled = kind !== 'listen' && kind !== 'wait';
@@ -411,9 +474,11 @@ async function startCall(){
   const deviceInfo = { platform: navigator.userAgentData?.platform || navigator.platform, screen: screen.width + 'x' + screen.height, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone };
 
   let first;
-  try { first = await post('/start', { language, consent: true, location: loc, deviceInfo }); }
+  const attempt = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  try { first = await post('/start', { language, consent: true, location: loc, deviceInfo, attempt }); }
   catch (e) { $('startErr').textContent = tr('startErr'); $('startBtn').disabled = false; return; }
   if (first.done) { showEnd(first.message); return; }
+  if (first.inactive) { showEnd(tr('replaced')); return; }
 
   micSrc = ctx.createMediaStreamSource(camStream);
   recDest = ctx.createMediaStreamDestination();
@@ -444,19 +509,31 @@ function startRecorder(){
 
 // ---------- main loop ----------
 async function run(turn){
+  toast(tr('connectedToast'));
+  let replay = true;
   while (turn && !finished && !handedOff) {
     showTurn(turn);
-    await play(turn);
+    if (replay) await play(turn);
+    replay = true;
     if (handedOff) return;
     if (turn.done) { await finish(); return; }
-    try { turn = await act(turn); }
-    catch (e) { await sleep(2000); continue; }
-    if (turn && turn.inactive) return;
+    let next;
+    try { next = await act(turn); }
+    catch (e) {
+      // Network trouble: ask for the answer again without repeating the question.
+      $('heard').textContent = tr('sayAgain');
+      await sleep(1200); replay = false; continue;
+    }
+    if (next && next.inactive) { if (next.replaced) { stopAll(); showEnd(tr('replaced')); } return; }
+    turn = next;
   }
 }
+function toast(text){ const t = $('toast'); t.textContent = text; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3500); }
+function stopAll(){ finished = true; try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch {} try { camStream.getTracks().forEach(t => t.stop()); } catch {} }
 
 function showTurn(t){
   lastText = t.displayText || t.say;
+  if (t.typeHint) openTypeNext = true;
   $('cap').textContent = lastText;
   $('docs').classList.toggle('show', t.expect === 'docs');
   showGuide(t.expect === 'photo' || t.expect === 'burst' ? t.shot : null);
@@ -490,7 +567,18 @@ async function playAudio(b64, text){
       await new Promise(resolve => {
         const src = ctx.createBufferSource(); src.buffer = buf;
         src.connect(ctx.destination); src.connect(recDest);
-        src.onended = resolve; src.start();
+        const an = ctx.createAnalyser(); an.fftSize = 512; src.connect(an);
+        const data = new Float32Array(an.fftSize); let live = true;
+        const tick = () => {
+          if (!live) return;
+          an.getFloatTimeDomainData(data);
+          let s = 0; for (let i = 0; i < data.length; i++) s += data[i] * data[i];
+          $('avatar').style.setProperty('--m', Math.min(1, Math.sqrt(s / data.length) * 7).toFixed(2));
+          requestAnimationFrame(tick);
+        };
+        tick();
+        src.onended = () => { live = false; $('avatar').style.setProperty('--m', 0); resolve(); };
+        src.start();
       });
       return;
     } catch (e) { /* fall back to the phone's own voice */ }
@@ -498,8 +586,11 @@ async function playAudio(b64, text){
   await new Promise(resolve => {
     try {
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = LANG_CODES[language] || 'en-IN'; u.onend = resolve; u.onerror = resolve;
-      speechSynthesis.speak(u); setTimeout(resolve, 25000);
+      u.lang = LANG_CODES[language] || 'en-IN';
+      $('avatar').classList.add('tts');
+      const doneT = () => { $('avatar').classList.remove('tts'); resolve(); };
+      u.onend = doneT; u.onerror = doneT;
+      speechSynthesis.speak(u); setTimeout(doneT, 25000);
     } catch { setTimeout(resolve, 2500); }
   });
 }
@@ -514,6 +605,18 @@ $('repeatBtn').addEventListener('click', async () => {
   $('repeatBtn').disabled = false;
 });
 $('doneBtn').addEventListener('click', () => { if (endListen) endListen('done'); });
+let nowTyping = 0;
+function openType(){ $('typeBox').classList.add('show'); $('typeIn').value = ''; $('typeIn').focus(); }
+$('typeBtn').addEventListener('click', openType);
+setInterval(() => { if ($('typeBox').classList.contains('show')) nowTyping = Date.now(); }, 500);
+$('typeBox').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('typeIn').value.trim();
+  if (!v || !endListen) return;
+  $('typeBox').classList.remove('show');
+  $('heard').textContent = tr('heard') + v;
+  endListen('typed', v);
+});
 
 async function act(t){
   if (t.expect === 'voice') return doVoice(t);
@@ -529,14 +632,16 @@ function listen(){
     setStatus('listen', 's_listen');
     let chunks = []; let speech = false, lastVoice = 0, noise = 0, cal = 0, done = false;
     let start = Date.now();
+    if (openTypeNext) { openTypeNext = false; setTimeout(openType, 50); }
     proc = ctx.createScriptProcessor(4096, 1, 1);
     const mute = ctx.createGain(); mute.gain.value = 0;
     micSrc.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
-    const stop = mode => {
+    const stop = (mode, text) => {
       if (mode === 'cancel') { chunks = []; speech = false; start = Date.now() + 60000; return; } // paused while replaying
       if (done) return; done = true; endListen = null;
       proc.onaudioprocess = null; try { micSrc.disconnect(proc); proc.disconnect(); mute.disconnect(); } catch {}
-      $('who').style.removeProperty('--lvl');
+      $('who').style.removeProperty('--lvl'); $('avatar').style.removeProperty('--lvl');
+      if (mode === 'typed') { resolve({ text, silent: false }); return; }
       const silent = mode === 'silent' || (mode === 'done' && !speech && chunks.length < 4);
       resolve({ blob: silent ? null : toWav(chunks, ctx.sampleRate), silent });
     };
@@ -548,6 +653,8 @@ function listen(){
       let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
       const rms = Math.sqrt(s / d.length);
       $('who').style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
+      $('avatar').style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
+      if ($('typeBox').classList.contains('show')) { start = Math.max(start, nowTyping); return; } // typing: do not time out
       const nowT = Date.now();
       if (cal < 3) { noise += rms; cal++; if (cal === 3) noise = Math.min(noise / 3, 0.02); return; }
       const thr = Math.max(0.015, noise * 3);
@@ -587,7 +694,8 @@ async function doVoice(t){
   setStatus('think', 's_think');
   const fd = new FormData();
   fd.append('stage', t.stage);
-  if (r.silent || !r.blob) fd.append('silence', '1'); else fd.append('audio', r.blob, 'answer.wav');
+  if (r.text) fd.append('text', r.text);
+  else if (r.silent || !r.blob) fd.append('silence', '1'); else fd.append('audio', r.blob, 'answer.wav');
   const d = await post('/turn', fd, true);
   if (d.inactive) return d;
   $('heard').textContent = d.heard ? tr('heard') + d.heard : '';

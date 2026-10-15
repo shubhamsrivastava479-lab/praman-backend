@@ -1,6 +1,8 @@
 const express = require('express');
 const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const plans = require('../services/plans');
+const monthKey = (d = new Date(), back = 0) => { const x = new Date(d.getTime() + 5.5 * 3600e3); x.setUTCDate(1); x.setUTCMonth(x.getUTCMonth() - back); return x.toISOString().slice(0, 7); };
 
 const router = express.Router();
 router.use(requireAuth);
@@ -26,9 +28,38 @@ router.get('/vendors', async (req, res) => {
     createdAt: v.createdAt,
     caseCount: db.data.cases.filter(c => c.vendorId === v.id).length,
     agentCount: db.data.users.filter(u => u.role === 'agent' && u.parentVendorId === v.id).length,
-    whatsappConnected: db.data.whatsappAccounts.some(a => a.vendorId === v.id)
+    whatsappConnected: db.data.whatsappAccounts.some(a => a.vendorId === v.id),
+    services: Array.isArray(v.services) ? v.services : null, // null = all (older account, not set yet)
+    servicePrices: v.servicePrices || {},
+    requestedServices: v.requestedServices || null,
+    usage: { thisMonth: { month: monthKey(), cases: plans.usage(db.data, v.id, monthKey()) }, lastMonth: { month: monthKey(new Date(), 1), cases: plans.usage(db.data, v.id, monthKey(new Date(), 1)) } }
   }));
   res.json(result);
+});
+
+// Service catalog (what can be sold).
+router.get('/services', (req, res) => {
+  res.json(plans.ALL.map(k => ({ key: k, ...plans.SERVICES[k] })));
+});
+
+// Which services a vendor has bought, and the price per case for each.
+router.post('/vendors/:id/plan', async (req, res) => {
+  await db.read();
+  const v = db.data.users.find(u => u.id === req.params.id && u.role === 'vendor_admin');
+  if (!v) return res.status(404).json({ error: 'Vendor not found' });
+  const services = [...new Set((req.body.services || []).filter(s => plans.SERVICES[s]))];
+  const prices = {};
+  for (const [k, val] of Object.entries(req.body.prices || {})) {
+    if (!plans.SERVICES[k] || val === '' || val == null) continue;
+    const n = Number(val);
+    if (!isFinite(n) || n < 0 || n > 1e6) return res.status(400).json({ error: `Price for ${plans.SERVICES[k].short} is not valid.` });
+    prices[k] = Math.round(n * 100) / 100;
+  }
+  v.services = services;
+  v.servicePrices = prices;
+  v.planUpdatedAt = new Date().toISOString();
+  await db.write();
+  res.json({ ok: true, services, servicePrices: prices });
 });
 
 router.post('/vendors/:id/approve', async (req, res) => {
@@ -37,6 +68,8 @@ router.post('/vendors/:id/approve', async (req, res) => {
   if (!v) return res.status(404).json({ error: 'Vendor not found' });
   v.approved = true;
   v.status = 'approved';
+  // First approval: start with the services the firm asked for.
+  if (!Array.isArray(v.services) && Array.isArray(v.requestedServices) && v.requestedServices.length) v.services = v.requestedServices.filter(s => plans.SERVICES[s]);
   v.approvedAt = new Date().toISOString();
   await db.write();
   res.json({ ok: true });

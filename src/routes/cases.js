@@ -10,6 +10,7 @@ const wa = require('../services/whatsapp');
 const storage = require('../services/storage');
 const { requireAuth } = require('../middleware/auth');
 const { nextCaseRef, normRef, caseFileKey } = require('../services/ids');
+const plans = require('../services/plans');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB, for Excel bulk upload
 const os = require('os');
@@ -41,7 +42,10 @@ const normMode = m => /^(full|auto|ai)/i.test(String(m || '').replace(/[^a-z]/gi
 
 const normPolicyType = t => /term/i.test(String(t || '')) ? 'term' : 'life';
 
-function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType }) {
+function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service }) {
+  const svc = plans.serviceFor({ service, caseType, policyType });
+  caseType = plans.SERVICES[svc].caseType;
+  policyType = plans.SERVICES[svc].policyType || policyType;
   const HIGH_VALUE_THRESHOLD = 1000000; // ₹10,00,000 — above this, self-verification is disabled
   const parsedValue = policyValue ? Number(policyValue) : null;
   const newCase = {
@@ -49,8 +53,9 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
     caseRef: nextCaseRef(db.data),
     selfToken: crypto.randomBytes(16).toString('hex'),
     vendorId,
+    service: svc,
     whatsappAccountId: accountId || null,
-    caseType: /pivc|policy|life|term|issuance/i.test(String(caseType || '')) ? 'policy_verification' : 'claim_investigation',
+    caseType,
     claimNo,
     insuredName: insuredName || '',
     vehicleNo: vehicleNo || '',
@@ -76,15 +81,22 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
       policyDetails: { status: 'pending', notes: '' }
     };
     newCase.pivcResult = 'pending_verification';
-    newCase.policyType = normPolicyType(policyType || caseType);
+    newCase.policyType = normPolicyType(policyType);
   }
   return newCase;
 }
 
 router.get('/', async (req, res) => {
   await db.read();
-  res.json(db.data.cases.filter(c => c.vendorId === req.user.vendorRootId));
+  res.json(db.data.cases.filter(c => c.vendorId === req.user.vendorRootId).map(c => ({ ...c, service: plans.serviceOfCase(c) })));
 });
+
+// Refuses a service the firm has not bought. Returns an error message or null.
+function serviceBlocked(req, svc) {
+  const allowed = plans.allowedServices(db.data, req.user);
+  if (allowed.includes(svc)) return null;
+  return `Your Praman plan does not include ${plans.SERVICES[svc].label}. Contact Praman to add it.`;
+}
 
 // One firm cannot have two cases with the same claim / policy number.
 function findDuplicate(vendorId, claimNo) {
@@ -176,8 +188,11 @@ router.get('/lookup/:q', async (req, res) => {
 router.post('/bulk-upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded (field name must be "file")' });
 
-  const { whatsappAccountId, templateName, publicBaseUrl, verificationMode: defaultMode, policyType: defaultPolicyType } = req.body;
+  const { whatsappAccountId, templateName, publicBaseUrl, verificationMode: defaultMode, policyType: defaultPolicyType, service: defaultService } = req.body;
   await db.read();
+  const allowed = plans.allowedServices(db.data, req.user);
+  if (!allowed.length) return res.status(403).json({ error: 'Your Praman plan has no services yet. Contact Praman.' });
+  if (defaultService && !allowed.includes(defaultService)) return res.status(403).json({ error: serviceBlocked(req, defaultService) || 'Service not allowed' });
 
   const vendorAccounts = db.data.whatsappAccounts.filter(a => a.vendorId === req.user.vendorRootId);
   let accountId = whatsappAccountId;
@@ -214,6 +229,15 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
       results.push({ row: rawRow, status: 'skipped', reason: `A case with claim/policy no. ${claimNo} already exists (${dup.caseRef})`, caseId: dup.id, caseRef: dup.caseRef });
       continue;
     }
+    // Service of this row: a "service" / "caseType" column, else the workspace's service.
+    const rowType = row.service || row.casetype || '';
+    const svc = rowType
+      ? plans.serviceFor({ service: String(rowType).trim().toLowerCase(), caseType: rowType, policyType: row.policytype || row.plantype || row.producttype || defaultPolicyType })
+      : (defaultService && plans.SERVICES[defaultService] ? defaultService : allowed[0]);
+    if (!allowed.includes(svc)) {
+      results.push({ row: rawRow, status: 'skipped', reason: `${plans.SERVICES[svc].label} is not in your plan` });
+      continue;
+    }
 
     const newCase = buildCase({
       vendorId: req.user.vendorRootId,
@@ -224,8 +248,7 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
       policyNo: row.policyno || '',
       whatsappNumber: String(whatsappNumber),
       accountId,
-      caseType: row.casetype,
-      policyType: row.policytype || row.plantype || row.producttype || (/term/i.test(String(row.casetype || '')) ? 'term' : defaultPolicyType),
+      service: svc,
       policyValue: row.policyvalue || null,
       verificationMode: row.verificationmode || row.mode || defaultMode
     });
@@ -268,11 +291,14 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, whatsappAccountId, caseType, policyValue, verificationMode, policyType } = req.body;
+  const { claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, whatsappAccountId, caseType, policyValue, verificationMode, policyType, service } = req.body;
   if (!claimNo || !whatsappNumber) {
     return res.status(400).json({ error: 'claimNo and whatsappNumber are required' });
   }
   await db.read();
+  const svc = plans.serviceFor({ service, caseType, policyType });
+  const blocked = serviceBlocked(req, svc);
+  if (blocked) return res.status(403).json({ error: blocked });
   const dup = findDuplicate(req.user.vendorRootId, claimNo);
   if (dup && !req.body.allowDuplicate) {
     return res.status(409).json({ error: `A case with claim/policy no. ${claimNo} already exists: ${dup.caseRef}${dup.insuredName ? ' (' + dup.insuredName + ')' : ''}. Open that case instead.`, caseId: dup.id, caseRef: dup.caseRef });
@@ -286,14 +312,14 @@ router.post('/', async (req, res) => {
   if (!accountId && vendorAccounts.length === 1) accountId = vendorAccounts[0].id;
 
   const newCase = buildCase({
-    vendorId: req.user.vendorRootId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType
+    vendorId: req.user.vendorRootId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service: svc
   });
 
   db.data.cases.push(newCase);
   db.data.custody.push({
     id: uid('cust'),
     caseId: newCase.id,
-    event: `Case opened — case no. ${newCase.caseRef}, claim/policy no. ${newCase.claimNo}`,
+    event: `Case opened — case no. ${newCase.caseRef}, ${plans.SERVICES[newCase.service].label}, claim/policy no. ${newCase.claimNo}`,
     actor: req.body.actor || 'agent',
     timestamp: new Date().toISOString()
   });
@@ -372,7 +398,7 @@ router.patch('/:id', async (req, res) => {
   const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
   if (!c) return res.status(404).json({ error: 'Case not found' });
   // Never let a client overwrite identity / security fields.
-  const BLOCKED = ['id', 'caseRef', 'selfToken', 'liveCall', 'vendorId', 'aiCall', 'aiReview', 'createdAt', 'shareToken', 'verificationMode', 'whatsappNumber', 'whatsappAccountId'];
+  const BLOCKED = ['id', 'service', 'caseType', 'policyType', 'caseRef', 'selfToken', 'liveCall', 'vendorId', 'aiCall', 'aiReview', 'createdAt', 'shareToken', 'verificationMode', 'whatsappNumber', 'whatsappAccountId'];
   const patch = { ...req.body };
   for (const k of BLOCKED) delete patch[k];
   if (patch.claimNo !== undefined) {

@@ -140,8 +140,51 @@ function authHeaders(extra){ return Object.assign({ Authorization: 'Bearer ' + t
 function logout(){ localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let vendorCache = [];
+let vendorCache = [], catalog = [];
+const rupee = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+function planSummary(v){
+  const keys = v.services || catalog.map(x => x.key);
+  return keys.map(k => (catalog.find(x => x.key === k) || {}).short || k).join(', ') + (v.services ? '' : ' (all — not set yet)');
+}
+function billLine(v, period){
+  const u = (v.usage && v.usage[period]) || { cases: {} };
+  let total = 0;
+  const parts = Object.entries(u.cases).map(([k, n]) => {
+    const p = v.servicePrices[k]; const amt = p != null ? p * n : null; if (amt) total += amt;
+    return `${esc((catalog.find(x => x.key === k) || {}).short || k)}: ${n} case${n === 1 ? '' : 's'}${p != null ? ' × ' + rupee(p) + ' = <b>' + rupee(amt) + '</b>' : ' (no price set)'}`;
+  });
+  return `<b>${period === 'thisMonth' ? 'This month' : 'Last month'} (${esc(u.month)}):</b> ${parts.join(' · ') || 'no cases'}${total ? ' — <b>Total ' + rupee(total) + '</b>' : ''}`;
+}
+function planEditor(v){
+  const on = v.services || catalog.map(x => x.key);
+  return `<div style="font-size:12.5px;line-height:1.6;">
+    <b>Services this firm has bought</b> <span class="hint">— their dashboard shows only these; cases for other services are refused.</span>
+    ${v.requestedServices ? `<div class="hint">Asked for at sign-up: ${esc(v.requestedServices.map(k => (catalog.find(x => x.key === k) || {}).short || k).join(', '))}</div>` : ''}
+    <div style="display:grid;gap:6px;margin:8px 0;">
+    ${catalog.map(x => `<label style="display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #e3e6ea;border-radius:8px;padding:8px 10px;">
+      <input type="checkbox" class="pl-svc" value="${esc(x.key)}" ${on.includes(x.key) ? 'checked' : ''} style="flex:none;min-width:0;width:18px;height:18px;">
+      <span style="flex:1;"><b>${esc(x.icon)} ${esc(x.label)}</b></span>
+      <span style="white-space:nowrap;">₹ <input class="pl-price" data-k="${esc(x.key)}" type="number" min="0" step="1" placeholder="per case" value="${v.servicePrices[x.key] != null ? esc(v.servicePrices[x.key]) : ''}" style="width:110px;min-width:0;flex:none;padding:6px 8px;"> / case</span>
+    </label>`).join('')}
+    </div>
+    <button class="save" onclick="savePlan('${esc(v.id)}')">Save plan</button> <span id="planMsg-${esc(v.id)}" style="margin-left:8px;"></span>
+    <div style="margin-top:10px;">${billLine(v, 'thisMonth')}<br>${billLine(v, 'lastMonth')}</div>
+  </div>`;
+}
+async function savePlan(id){
+  const box = document.getElementById('plan-' + id);
+  const services = [...box.querySelectorAll('.pl-svc:checked')].map(x => x.value);
+  const prices = {}; box.querySelectorAll('.pl-price').forEach(x => { if (x.value !== '') prices[x.dataset.k] = x.value; });
+  const msg = document.getElementById('planMsg-' + id);
+  if (!services.length && !confirm('No service selected — this firm will not be able to create any case. Continue?')) return;
+  const r = await fetch(`/api/super-admin/vendors/${id}/plan`, { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ services, prices }) });
+  const d = await r.json();
+  msg.textContent = d.ok ? '✓ Saved' : (d.error || 'Not saved'); msg.style.color = d.ok ? '#1f7a6c' : '#b23a2c';
+  if (d.ok) { const v = vendorCache.find(x => x.id === id); v.services = d.services; v.servicePrices = d.servicePrices; document.getElementById('plansum-' + id).textContent = planSummary(v); }
+}
+function togglePlan(id){ const r = document.getElementById('planrow-' + id); if (r) r.style.display = r.style.display === 'none' ? 'table-row' : 'none'; }
 async function loadVendors(){
+  if (!catalog.length) { try { catalog = await (await fetch('/api/super-admin/services', { headers: authHeaders() })).json(); } catch {} }
   const res = await fetch('/api/super-admin/vendors', { headers: authHeaders() });
   if (res.status === 403) { logout(); return; }
   vendorCache = await res.json();
@@ -152,19 +195,21 @@ async function loadVendors(){
     const cls = v.approved ? 'approved' : 'pending';
     return `
     <tr>
-      <td><b>${esc(v.vendorName)}</b></td>
+      <td><b>${esc(v.vendorName)}</b><br><span class="hint" id="plansum-${esc(v.id)}">${esc(planSummary(v))}</span></td>
       <td>${esc(v.email)}</td>
       <td>${v.caseCount}</td>
       <td>${v.agentCount}</td>
       <td>${v.whatsappConnected ? '✅' : '—'}</td>
       <td><span class="tag ${cls}">${label}</span></td>
       <td style="white-space:nowrap;">
+        <button class="action" style="background:#22307A;color:#fff;" onclick="togglePlan('${esc(v.id)}')">Plan &amp; billing</button>
         ${v.profile ? `<button class="action" style="background:#eef0f3;color:#333;" onclick="toggleDetails('${esc(v.id)}')">Details</button>` : ''}
         ${v.approved
           ? `<button class="action suspend" onclick="suspendVendor('${esc(v.id)}')">Suspend</button>`
           : `<button class="action approve" onclick="approveVendor('${esc(v.id)}')">Approve</button>`}
       </td>
     </tr>
+    <tr id="planrow-${esc(v.id)}" style="display:none;"><td colspan="7" style="background:#f8f9fb;" id="plan-${esc(v.id)}">${planEditor(v)}</td></tr>
     <tr id="det-${esc(v.id)}" style="display:none;"><td colspan="7" style="background:#f8f9fb;font-size:12.5px;line-height:1.7;">${v.profile ? `
       <b>Firm:</b> ${esc(v.profile.firmName)} &nbsp;|&nbsp; <b>Contact:</b> ${esc(v.profile.contactName)}<br>
       <b>Mobile:</b> ${esc(v.profile.mobile)} &nbsp;|&nbsp; <b>Contact email:</b> ${esc(v.profile.contactEmail)} &nbsp;|&nbsp; <b>Google login:</b> ${esc(v.email)}<br>

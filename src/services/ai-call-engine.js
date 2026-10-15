@@ -279,13 +279,16 @@ function startSession(c, { language, location, deviceInfo, ip, resume }) {
   if (deviceInfo) {
     record(c, `Device recorded: ${deviceInfo.platform || 'unknown OS'}, ${deviceInfo.screen || ''}, ${deviceInfo.timezone || ''}, IP ${ip || 'unknown'}`, 'participant');
   }
+  record(c, 'Customer was informed that this is an AI-assisted call with an automated assistant, and that it is recorded');
+  return turnFor(c, welcomeText(c));
+}
+
+function welcomeText(c) {
   const vendor = (db.data.users || []).find(u => u.id === c.vendorId);
   const firm = vendor && vendor.vendorName ? vendor.vendorName : '';
-  const welcome = `Hello, and welcome. Please note, this is an AI-assisted verification call. You are speaking with an automated AI assistant${firm ? ' on behalf of ' + firm : ''}, not a human. ` +
+  return `Hello, and welcome. Please note, this is an AI-assisted verification call. You are speaking with an automated AI assistant${firm ? ' on behalf of ' + firm : ''}, not a human. ` +
     `Thank you for connecting this call to process your ${typeLabel(c)} for case number ${spell(c.claimNo)}. ` +
     `This video call is being recorded for verification. If you would like to speak to a person at any time, tap the button that says talk to a person. Let us begin.`;
-  record(c, 'Customer was informed that this is an AI-assisted call with an automated assistant, and that it is recorded');
-  return turnFor(c, welcome);
 }
 
 // ---------- async preparation (no db mutation) ----------
@@ -304,7 +307,42 @@ function docsReady(a, doc, done) {
 }
 
 // input: { english, original, language, empty } for voice, { photoB64 } for photo, {} for docs
+// If an AI check cannot run (Gemini down, quota, network), the call must not
+// get stuck: answers are judged with simple rules and photos are kept for a
+// person to review.
 async function prepare(c, input) {
+  try { return await prepareInner(c, input); }
+  catch (e) {
+    console.warn('AI check could not run:', e.message);
+    return fallbackPrep(c, input, e);
+  }
+}
+
+const YES_RE = /\b(yes|yeah|yep|yup|correct|right|sure|ok|okay|haa?n?|haanji|ha ji|ji|ji haan|sahi|theek|thik|bilkul)\b/i;
+const NO_RE = /\b(no|nope|not|nahi|nahin|nai|galat|wrong|incorrect)\b/i;
+function roughJudge(step, text) {
+  const t = String(text || '').trim();
+  if (!t) return { intent: 'unclear', value: '', clear: false, followUp: '', concern: '' };
+  if (step.type === 'confirm' || step.type === 'consent') {
+    const no = NO_RE.test(t), yes = YES_RE.test(t);
+    return { intent: no && !yes ? 'no' : yes && !no ? 'yes' : 'unclear', value: '', clear: true, followUp: '', concern: '' };
+  }
+  if (step.kind === 'name') {
+    const name = t.replace(/^(my name is|my full name is|i am|i'm|this is|mera naam|mera pura naam|main)\s+/i, '').replace(/\s+(hai|hoon|hu|here)\.?$/i, '').replace(/[.。!]+$/, '').trim();
+    return { intent: 'answered', value: name.split(/\s+/).length <= 6 ? name : '', clear: true, followUp: '', concern: '' };
+  }
+  return { intent: 'answered', value: t, clear: true, followUp: '', concern: '' };
+}
+function fallbackPrep(c, input, e) {
+  const a = c.aiCall, step = a.queue[a.i];
+  const prep = { aiDown: String(e && e.message || 'AI unavailable').replace(/key=[^&\s]+/gi, 'key=…').slice(0, 160) };
+  if (!step) return prep;
+  if (['ask', 'confirm', 'consent', 'otp'].includes(step.type)) prep.judge = roughJudge(step, input.english);
+  if (step.type === 'otp') prep.otpDigits = String(input.english || '').replace(/\D/g, '');
+  return prep;
+}
+
+async function prepareInner(c, input) {
   const a = c.aiCall;
   const step = a.queue[a.i];
   const prep = {};
@@ -490,6 +528,20 @@ function apply(c, input, prep) {
     }
     advanceStep(a);
     return turnFor(c, 'Thank you.');
+  }
+
+  // ---- AI photo check could not run: keep the photo for a person to review ----
+  if (prep.aiDown && (step.type === 'photo' || step.type === 'burst')) {
+    const what = step.type === 'burst' ? 'Eye blink liveness check' : step.shot === 'stand' ? 'Full body photo — standing' : step.shot === 'sit' ? 'Full body photo — sitting' : 'Live face photo';
+    const key = step.type === 'burst' ? 'blink' : step.shot === 'stand' || step.shot === 'sit' ? 'body_' + step.shot : 'face_photo';
+    setCheck(a, key, what, 'unknown', 'Photo saved, but the AI check could not run — please review the photo manually');
+    const note = 'Some AI photo checks could not run — review the photos manually';
+    if (!a.flags.includes(note)) a.flags.push(note);
+    record(c, `${what}: photo saved; AI check could not run (${prep.aiDown})`);
+    if (step.type === 'photo' && step.shot !== 'stand' && step.shot !== 'sit') a.facePhotoCaptured = true;
+    a.photos[step.shot || 'blink'] = null;
+    advanceStep(a);
+    return turnFor(c, 'Thank you, I have the photo.');
   }
 
   // ---- face photo ----
@@ -889,5 +941,5 @@ function publicStatus(c) {
 module.exports = {
   startSession, prepare, apply, prepareIdMedia, applyIdMedia, prepareFinish, applyFinish,
   markAbandoned, publicStatus, turnFor, peekTurn, nameMatch, dobMatch, typeLabel, buildQueue, docsReady,
-  notePhotoLocation, requestHuman, distanceKm
+  notePhotoLocation, requestHuman, distanceKm, welcomeText, roughJudge
 };

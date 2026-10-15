@@ -41,6 +41,17 @@ async function translateText(text, targetLang = 'English') {
   return (await callGemini([{ text: prompt }])).trim();
 }
 
+// Translates a flat { key: "English text" } object in one call. Keeps the
+// keys, placeholders like {caseRef} and simple HTML tags (<b>, <br>) as-is.
+async function translateStrings(obj, targetLang) {
+  const prompt = `Translate every value of this JSON object from English to ${targetLang}, for a customer of an Indian insurance company on a mobile phone. Use simple, polite, everyday ${targetLang} in its native script. Keep the keys unchanged. Keep placeholders in curly braces (like {caseRef}) and HTML tags (<b>, </b>, <br>, <small>) exactly as they are. Return only the JSON object.\n\n${JSON.stringify(obj)}`;
+  const out = parseJson(await callGemini([{ text: prompt }], { jsonOutput: true }), null);
+  if (!out || typeof out !== 'object') throw new Error('Translation failed');
+  const clean = {};
+  for (const k of Object.keys(obj)) clean[k] = typeof out[k] === 'string' && out[k].trim() ? out[k] : obj[k];
+  return clean;
+}
+
 // Generates spoken audio for a piece of text using Gemini's native audio
 // model. The model auto-detects the language of the input text, so to
 // speak in a specific language, feed it text already in that language
@@ -355,4 +366,4 @@ Use null for "consistent" when there is too little to judge (e.g. no relevant me
   return parseJson(raw, { assessment: '', firstMention: { date: '', chat: '' }, peopleTold: [], consistent: null, concerns: [] });
 }
 
-module.exports = {  readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness };
+module.exports = {  translateStrings, readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness };
