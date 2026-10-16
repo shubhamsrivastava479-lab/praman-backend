@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Billing</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body{font-family:system-ui,sans-serif;background:#f1f3f5;margin:0;color:#10151f;}
+  .topbar{background:#10151f;color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .topbar h1{font-size:16px;margin:0;} .topbar a,.topbar button{background:#3a4356;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;text-decoration:none}
+  .main{padding:20px;max-width:1000px;margin:0 auto;}
+  .card{background:#fff;border:1px solid #dde1e6;border-radius:10px;padding:18px;margin-bottom:18px;}
+  .card h2{font-size:15px;margin:0 0 12px;} h3{font-size:13px;margin:14px 0 6px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;} th{text-align:left;padding:8px;border-bottom:2px solid #eee;font-size:11px;text-transform:uppercase;color:#888;} td{padding:8px;border-bottom:1px solid #f0f1f3;vertical-align:top}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .cell{background:#f8f9fa;border-radius:8px;padding:12px;} .cell .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px;} .cell .v{font-size:18px;font-weight:700;}
+  label{display:block;font-size:11.5px;color:#556;margin:8px 0 3px;font-weight:600}
+  input,select,textarea{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #dde1e6;border-radius:6px;font-size:13px;font-family:inherit}
+  .f2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 14px}
+  button.b{padding:7px 13px;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;background:#c8781f;color:#fff;margin:2px 4px 2px 0} button.b.sec{background:#e8ebef;color:#222} button.b.red{background:#b23a2c} button.b.grn{background:#1f7a6c}
+  .hint{font-size:11.5px;color:#888;margin:4px 0} .msg{font-size:12.5px;min-height:16px;margin-top:6px} .ok{color:#1f7a6c} .bad{color:#b23a2c}
+  .tag{font-size:10px;padding:2px 8px;border-radius:99px;font-weight:700;background:#eef0f3;color:#445} .tag.paid{background:#dcefec;color:#1f7a6c} .tag.overdue,.tag.void{background:#f6dcd8;color:#b23a2c} .tag.draft{background:#f4e3cc;color:#8a5416} .tag.partial,.tag.issued{background:#dfe8f8;color:#25477a}
+  .r{text-align:right} .tools{display:flex;gap:8px;flex-wrap:wrap;align-items:end} .tools>div{flex:1;min-width:130px}
+  .warn{background:#fff8e6;border:1px solid #f0d58a;color:#4a3a00;border-radius:8px;padding:8px 10px;font-size:12px;margin:8px 0}
+  details summary{cursor:pointer;font-weight:600;font-size:13px}
+</style>
+</head>
+<body>
+<div class="topbar"><h1 style="display:flex;align-items:center;gap:10px;"><span style="background:#fff;border-radius:8px;padding:3px 8px;display:inline-flex;align-items:center;vertical-align:middle;"><img src="/logo-compact.png" alt="Praman" style="height:28px;width:auto;"></span> Billing</h1><div><a href="/super-admin.html">← Super Admin</a> <button onclick="logout()">Log out</button></div></div>
+<div class="main">
+
+  <div class="card"><h2>Overview</h2><div class="grid" id="sum"></div></div>
+
+  <div class="card">
+    <h2>Firms &amp; their plans</h2>
+    <div class="hint">Choose per firm: <b>Pay per case</b>, <b>Subscription</b> (fixed monthly fee, optional included cases) or <b>Subscription + per case</b>. Prices are not fixed anywhere in the software; change them any time. A change applies to the next invoice onwards; issued invoices never change.</div>
+    <table><thead><tr><th>Firm</th><th>Plan</th><th>This month</th><th class="r">Outstanding</th><th></th></tr></thead><tbody id="firms"></tbody></table>
+    <div id="planPanel"></div>
+  </div>
+
+  <div class="card">
+    <h2>Wallets</h2>
+    <div class="hint">Prepaid balance of firms that have the wallet on. Reports and ID checks are deducted automatically. <span id="wHeld"></span></div>
+    <div id="wReq"></div>
+    <table><thead><tr><th>Firm</th><th class="r">Balance</th><th>This month</th><th></th></tr></thead><tbody id="wRows"></tbody></table>
+    <div id="wPanel"></div>
+  </div>
+
+  <div class="card">
+    <h2>Invoices</h2>
+    <div class="tools">
+      <div><label>Month</label><input type="month" id="genMonth"></div>
+      <div style="flex:2"><button class="b" id="genBtn">Make drafts for this month</button> <span class="hint">All firms with a plan. Safe to repeat; issued invoices are never touched. Drafts are also made automatically after each month ends.</span></div>
+    </div>
+    <div class="tools" style="margin-top:8px">
+      <div><label>Show</label><select id="fStatus"><option value="">All</option><option value="draft">Drafts</option><option value="issued">Issued</option><option value="partial">Part-paid</option><option value="overdue">Overdue</option><option value="paid">Paid</option><option value="void">Cancelled</option></select></div>
+      <div style="flex:2"><a class="b sec" id="csv" style="text-decoration:none;display:inline-block;padding:7px 13px;border-radius:6px;font-size:12px;font-weight:600;background:#e8ebef;color:#222" href="#">Download all as CSV (for accounts)</a></div>
+    </div>
+    <div class="msg" id="genMsg"></div>
+    <table><thead><tr><th>Invoice</th><th>Firm</th><th>Month</th><th class="r">Total</th><th class="r">Due</th><th>Status</th><th></th></tr></thead><tbody id="inv"></tbody></table>
+    <div id="invPanel"></div>
+  </div>
+
+  <div class="card">
+    <h2>Your invoice details</h2>
+    <div class="hint">Printed on every invoice. Fill this in before issuing the first one. State is used to decide CGST+SGST (same state as the firm) or IGST.</div>
+    <div class="f2">
+      <div><label>Company legal name</label><input id="s_legalName"></div><div><label>GSTIN</label><input id="s_gstin"></div>
+      <div><label>PAN</label><input id="s_pan"></div><div><label>State</label><input id="s_state" placeholder="e.g. Uttar Pradesh"></div>
+      <div><label>E-mail</label><input id="s_email"></div><div><label>Phone</label><input id="s_phone"></div>
+      <div><label>Invoice prefix</label><input id="s_invoicePrefix" placeholder="PRM"></div><div><label>Default payment terms (days)</label><input type="number" id="s_defaultPaymentTermsDays"></div>
+      <div><label>Bank name</label><input id="s_bankName"></div><div><label>Account no.</label><input id="s_bankAccount"></div>
+      <div><label>IFSC</label><input id="s_bankIfsc"></div><div><label>Branch</label><input id="s_bankBranch"></div>
+      <div><label>UPI id</label><input id="s_upi"></div>
+    </div>
+    <h3>Default price of each ID check (₹, before GST)</h3><div class="hint">What a firm with a wallet pays each time we call the ID provider. Keep it above your own cost per call. A firm can have its own price in its plan.</div>
+    <div class="f2"><div><label>Driving licence</label><input type="number" min="0" id="s_k_dl"></div><div><label>Aadhaar - send OTP</label><input type="number" min="0" id="s_k_aadhaar_generate"></div><div><label>Aadhaar - verify OTP</label><input type="number" min="0" id="s_k_aadhaar_verify"></div><div><label>PAN</label><input type="number" min="0" id="s_k_pan"></div></div>
+    <label>Address</label><textarea id="s_address" rows="2"></textarea>
+    <label>Terms printed on the invoice</label><textarea id="s_terms" rows="2"></textarea>
+    <label><input type="checkbox" id="s_autoIssue" style="width:auto"> Issue invoices automatically after the month ends (otherwise they wait as drafts for your check)</label>
+    <button class="b" id="saveSettings">Save</button><div class="msg" id="setMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Which model pays more? (calculator)</h2>
+    <div class="hint">Type the numbers you are considering. It shows the number of cases per month at which the subscription becomes cheaper for the firm, so you can place the prices sensibly.</div>
+    <div class="f2">
+      <div><label>Price per case (₹)</label><input type="number" id="k_pc" value="0"></div>
+      <div><label>Subscription fee per month (₹)</label><input type="number" id="k_fee" value="0"></div>
+      <div><label>Cases included in the fee</label><input type="number" id="k_inc" value="0"></div>
+      <div><label>Price per extra case (₹)</label><input type="number" id="k_ex" value="0"></div>
+    </div>
+    <div class="hint" id="k_out"></div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem('praman_token');
+const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
+if (!token || !user || user.role !== 'super_admin') location.href = '/login.html';
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rupee = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+function logout(){ localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
+async function api(method, path, body) {
+  const r = await fetch('/api/super-admin/billing' + path, { method, headers: Object.assign({ Authorization: 'Bearer ' + token }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401 || r.status === 403) { location.href = '/login.html'; return {}; }
+  const d = await r.json().catch(() => ({})); d._ok = r.ok; return d;
+}
+function say(id, t, ok) { const m = $(id); m.textContent = t || ''; m.className = 'msg ' + (ok ? 'ok' : 'bad'); }
+const tag = s => `<span class="tag ${esc(s)}">${esc({ draft: 'Draft', issued: 'Issued', partial: 'Part-paid', paid: 'Paid', overdue: 'Overdue', void: 'Cancelled' }[s] || s)}</span>`;
+const thisMonth = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 7);
+const lastMonth = (() => { const d = new Date(Date.now() + 5.5 * 3600e3); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); })();
+$('genMonth').value = lastMonth;
+
+async function loadSummary() {
+  const s = await api('GET', '/summary');
+  $('sum').innerHTML = [['Billed', rupee(s.billed)], ['Collected', rupee(s.collected)], ['Outstanding', rupee(s.outstanding)], ['Overdue', s.overdueCount + ' · ' + rupee(s.overdueAmount)], ['Drafts to check', s.drafts]]
+    .map(([k, v]) => `<div class="cell"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+// ---------- firms ----------
+let firmsList = [];
+async function loadFirms() {
+  firmsList = await api('GET', '/firms');
+  $('firms').innerHTML = (Array.isArray(firmsList) ? firmsList : []).map(f => `<tr>
+    <td><b>${esc(f.vendorName)}</b>${f.approved ? '' : ' <span class="tag">not approved</span>'}</td>
+    <td>${esc(f.modelLabel)}</td>
+    <td>${f.thisMonth ? `${f.thisMonth.cases} cases · ${rupee(f.thisMonth.total)}${f.thisMonth.warnings.length ? '<div class="bad" style="font-size:11px">' + esc(f.thisMonth.warnings[0]) + '</div>' : ''}` : '<span class="hint">—</span>'}</td>
+    <td class="r">${f.outstanding ? rupee(f.outstanding) : '—'}</td>
+    <td><button class="b sec" onclick="editPlan('${f.id}')">Set plan</button></td></tr>`).join('') || '<tr><td colspan="5" class="hint">No firms yet.</td></tr>';
+}
+let cur = null;
+async function editPlan(id) {
+  const d = await api('GET', '/firms/' + id); cur = d; const c = d.config, s = c.subscription, b = c.buyer;
+  const prices = d.serviceCatalog.filter(x => d.services.includes(x.key)).map(x => `<div><label>${esc(x.short)} — price per case (₹)</label><input type="number" min="0" data-price="${x.key}" value="${d.servicePrices[x.key] ?? ''}"></div>`).join('');
+  $('planPanel').innerHTML = `<div class="card" style="margin-top:14px;background:#fafbfc"><h2>${esc(d.vendorName)} — billing plan</h2>
+    <label>Model</label><select id="p_model"><option value="">Not billed yet</option><option value="per_case">Pay per case</option><option value="subscription">Subscription (fixed monthly fee)</option><option value="hybrid">Subscription + per case</option><option value="wallet">Prepaid wallet (each report deducted from balance)</option></select>
+    <h3>Per-case prices <span class="hint">(used by “Pay per case”, and for extra cases in the subscription when no extra-case price is typed)</span></h3><div class="f2">${prices || '<div class="hint">This firm has no services yet.</div>'}</div>
+    <div id="p_sub"><h3>Subscription</h3><div class="f2">
+      <div><label>Plan name (shown on invoice)</label><input id="p_name" value="${esc(s.name)}"></div>
+      <div><label>Monthly fee (₹)</label><input type="number" min="0" id="p_fee" value="${s.monthlyFee || ''}"></div>
+      <div><label>Cases included per month <span class="hint">(empty = unlimited)</span></label><input type="number" min="0" id="p_inc" value="${s.includedCases ?? ''}"></div>
+      <div><label>Price per extra case (₹) <span class="hint">(empty = use the per-case price)</span></label><input type="number" min="0" id="p_ex" value="${s.overagePerCase ?? ''}"></div></div></div>
+    <h3>Wallet</h3><div class="hint">With the <b>Prepaid wallet</b> model every report is deducted from the balance at the per-case price above. For any other model you can still switch the wallet on just for paid ID checks (DL / Aadhaar / PAN). GST % below is added on every deduction.</div>
+    <label><input type="checkbox" id="w_on" style="width:auto"> Wallet is on for this firm</label>
+    <div class="f2"><div><label>Allowed to go below zero by (₹)</label><input type="number" min="0" id="w_limit" value="${c.wallet.creditLimit || ''}"></div>
+      <div><label>Low-balance alert at (₹)</label><input type="number" min="0" id="w_low" value="${c.wallet.lowAlert ?? ''}"></div>
+      ${[['dl','Driving licence check'],['aadhaar_generate','Aadhaar - send OTP'],['aadhaar_verify','Aadhaar - verify OTP'],['pan','PAN check']].map(([k,l]) => `<div><label>${l} — price for this firm (₹)</label><input type="number" min="0" data-kyc="${k}" value="${c.wallet.kycRates[k] ?? ''}" placeholder="platform default"></div>`).join('')}</div>
+    <h3>Other terms</h3><div class="f2">
+      <div><label>Minimum monthly charge (₹, per-case only)</label><input type="number" min="0" id="p_min" value="${c.minimumMonthly || ''}"></div>
+      <div><label>Discount %</label><input type="number" min="0" max="100" id="p_disc" value="${c.discountPercent || ''}"></div>
+      <div><label>GST %</label><input type="number" min="0" max="40" id="p_gst" value="${c.gstPercent}"></div>
+      <div><label>Payment terms (days)</label><input type="number" min="0" id="p_terms" value="${c.paymentTermsDays ?? ''}" placeholder="default"></div>
+      <div><label>Billing starts on</label><input type="date" id="p_start" value="${c.startDate || ''}"></div>
+      <div><label>Free trial until</label><input type="date" id="p_trial" value="${c.trialUntil || ''}"></div>
+      <div><label>A case is counted when it is…</label><select id="p_event"><option value="created">created</option><option value="completed">completed</option></select></div>
+      <div><label>Pause new cases after N days overdue</label><input type="number" min="0" id="p_block" value="${c.blockAfterDays ?? ''}" placeholder="never"></div></div>
+    <h3>Bill-to details</h3><div class="f2">
+      <div><label>Legal name</label><input id="b_name" value="${esc(b.legalName)}"></div><div><label>GSTIN</label><input id="b_gstin" value="${esc(b.gstin)}"></div>
+      <div><label>State</label><input id="b_state" value="${esc(b.state)}"></div><div><label>E-mail for invoices</label><input id="b_email" value="${esc(b.email)}"></div></div>
+    <label>Address</label><textarea id="b_addr" rows="2">${esc(b.address)}</textarea>
+    <label>Internal note (not on invoice)</label><input id="p_notes" value="${esc(c.notes)}">
+    <div style="margin-top:10px"><button class="b" onclick="savePlan()">Save plan</button> <button class="b sec" onclick="simulate()">Try on last month's cases</button> <button class="b sec" onclick="$('planPanel').innerHTML=''">Close</button></div>
+    <div class="msg" id="planMsg"></div><div id="simOut"></div></div>`;
+  $('p_model').value = c.model || ''; $('w_on').checked = c.wallet.enabled; $('p_event').value = c.billableEvent; toggleSub(); $('p_model').onchange = toggleSub;
+  $('planPanel').scrollIntoView({ behavior: 'smooth' });
+}
+function toggleSub() { $('p_sub').style.display = ['subscription', 'hybrid'].includes($('p_model').value) ? '' : 'none'; }
+function readPlan() {
+  const v = id => $(id).value;
+  return { model: v('p_model'), subscription: { name: v('p_name'), monthlyFee: v('p_fee'), includedCases: v('p_inc'), overagePerCase: v('p_ex') }, minimumMonthly: v('p_min'), discountPercent: v('p_disc'), gstPercent: v('p_gst'), paymentTermsDays: v('p_terms'), startDate: v('p_start'), trialUntil: v('p_trial'), billableEvent: v('p_event'), blockAfterDays: v('p_block'), buyer: { legalName: v('b_name'), gstin: v('b_gstin'), state: v('b_state'), email: v('b_email'), address: v('b_addr') }, notes: v('p_notes'), wallet: { enabled: $('w_on').checked || v('p_model') === 'wallet', creditLimit: v('w_limit'), lowAlert: v('w_low'), kycRates: Object.fromEntries([...document.querySelectorAll('[data-kyc]')].filter(i => i.value !== '').map(i => [i.dataset.kyc, i.value])) } };
+}
+const readPrices = () => { const o = {}; document.querySelectorAll('[data-price]').forEach(i => { if (i.value !== '') o[i.dataset.price] = i.value; }); return o; };
+async function savePlan() {
+  const prices = readPrices();
+  const r = await api('PUT', '/firms/' + cur.id, readPlan());
+  if (r.error) return say('planMsg', r.error, false);
+  const pr = await fetch('/api/super-admin/vendors/' + cur.id + '/plan', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ services: cur.services, prices }) }).then(x => x.json());
+  if (pr.error) return say('planMsg', pr.error, false);
+  say('planMsg', 'Saved. It applies from the next invoice.', true); loadFirms();
+}
+async function simulate() {
+  const r = await api('POST', '/simulate', { vendorId: cur.id, period: lastMonth, config: readPlan(), prices: readPrices() });
+  if (r.error) return say('planMsg', r.error, false);
+  $('simOut').innerHTML = `<div class="warn" style="background:#f1f7ff;border-color:#bcd">For ${esc(lastMonth)} (${r.usage.total} cases) this plan would have been <b>${rupee(r.total)}</b> including GST (${rupee(r.subtotal)} before tax). Nothing was saved.${r.warnings.length ? '<br>⚠ ' + r.warnings.map(esc).join('; ') : ''}</div>`;
+}
+
+// ---------- invoices ----------
+async function loadInv() {
+  const q = $('fStatus').value ? '?status=' + $('fStatus').value : '';
+  const list = await api('GET', '/invoices' + q);
+  $('inv').innerHTML = (Array.isArray(list) ? list : []).map(i => `<tr>
+    <td>${esc(i.number || '(draft)')}</td><td>${esc(i.vendorName)}</td><td>${esc(i.period)}</td><td class="r">${rupee(i.total)}</td>
+    <td class="r">${i.outstanding ? rupee(i.outstanding) : '—'}</td><td>${tag(i.displayStatus)}${i.warnings.length ? ' <span title="' + esc(i.warnings.join('; ')) + '">⚠</span>' : ''}</td>
+    <td><button class="b sec" onclick="openInv('${i.id}')">Open</button></td></tr>`).join('') || '<tr><td colspan="7" class="hint">No invoices yet. Set a plan for a firm, then “Make drafts”.</td></tr>';
+}
+async function openInv(id) {
+  const i = await api('GET', '/invoices/' + id);
+  const g = i.gst || {};
+  const lines = (i.lines || []).map(l => `<tr><td>${esc(l.desc)}</td><td class="r">${l.qty}</td><td class="r">${l.rate ? rupee(l.rate) : '—'}</td><td class="r">${rupee(l.amount)}</td></tr>`).join('');
+  const taxRows = g.type === 'CGST_SGST' ? `<tr><td colspan="3" class="r">CGST ${g.percent / 2}%</td><td class="r">${rupee(g.cgst)}</td></tr><tr><td colspan="3" class="r">SGST ${g.percent / 2}%</td><td class="r">${rupee(g.sgst)}</td></tr>` : g.type === 'IGST' ? `<tr><td colspan="3" class="r">IGST ${g.percent}%</td><td class="r">${rupee(g.igst)}</td></tr>` : '';
+  const pays = (i.payments || []).map(p => `<tr><td>${new Date(p.date).toLocaleDateString('en-IN')}</td><td>${esc(p.mode)} ${esc(p.reference)}</td><td class="r">${rupee(p.amount)}</td><td><button class="b sec" onclick="delPay('${i.id}','${p.id}')">Remove</button></td></tr>`).join('');
+  const draft = i.status === 'draft', live = ['issued', 'partial'].includes(i.status);
+  $('invPanel').innerHTML = `<div class="card" style="margin-top:14px;background:#fafbfc"><h2>${esc(i.number || 'Draft')} — ${esc(i.vendorName)} · ${esc(i.period)} ${tag(i.displayStatus)}</h2>
+    ${(i.warnings || []).length ? '<div class="warn">⚠ ' + i.warnings.map(esc).join('<br>⚠ ') + '</div>' : ''}
+    <table><thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>${lines}
+      <tr><td colspan="3" class="r">Subtotal</td><td class="r">${rupee(i.subtotal)}</td></tr>
+      ${i.discount ? `<tr><td colspan="3" class="r">Discount ${i.discountPercent}%</td><td class="r">- ${rupee(i.discount)}</td></tr>` : ''}${taxRows}
+      <tr><td colspan="3" class="r"><b>Total</b></td><td class="r"><b>${rupee(i.total)}</b></td></tr>
+      ${i.paid ? `<tr><td colspan="3" class="r">Received</td><td class="r">${rupee(i.paid)}</td></tr><tr><td colspan="3" class="r"><b>Balance</b></td><td class="r"><b>${rupee(i.outstanding)}</b></td></tr>` : ''}</tbody></table>
+    ${draft ? `<h3>Adjustments</h3><div class="hint">Extra charge or credit on this invoice. Use a minus sign for a credit (e.g. -500).</div>
+      <div class="tools"><div style="flex:3"><input id="adjDesc" placeholder="Description"></div><div><input id="adjAmt" type="number" placeholder="Amount ₹"></div><div><button class="b sec" onclick="addAdj('${i.id}')">Add</button></div></div>
+      ${(i.adjustments || []).map((a, n) => `<div class="hint">• ${esc(a.desc)}: ${rupee(a.amount)} <a href="#" onclick="rmAdj('${i.id}',${n});return false">remove</a></div>`).join('')}` : ''}
+    ${pays ? `<h3>Payments</h3><table><tbody>${pays}</tbody></table>` : ''}
+    ${live ? `<h3>Record a payment</h3><div class="tools"><div><label>Amount ₹</label><input id="payAmt" type="number" value="${i.outstanding}"></div><div><label>Mode</label><select id="payMode"><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="cash">Cash</option><option value="other">Other</option></select></div><div><label>Reference / UTR</label><input id="payRef"></div><div><label>Date</label><input id="payDate" type="date" value="${new Date().toISOString().slice(0, 10)}"></div></div><button class="b grn" onclick="addPay('${i.id}')">Save payment</button>` : ''}
+    <div style="margin-top:10px">
+      ${draft ? `<button class="b" onclick="issueInv('${i.id}')">Issue invoice</button><button class="b sec" onclick="recalc('${i.id}')">Recalculate</button><button class="b red" onclick="voidInv('${i.id}',true)">Delete draft</button>` : ''}
+      ${live ? `<button class="b red" onclick="voidInv('${i.id}',false)">Cancel invoice</button>` : ''}
+      <a class="b sec" style="text-decoration:none;display:inline-block;padding:7px 13px;border-radius:6px;font-size:12px;font-weight:600;background:#e8ebef;color:#222" href="#" onclick="pdf('${i.id}');return false">Download PDF</a>
+      <button class="b sec" onclick="$('invPanel').innerHTML=''">Close</button></div>
+    <div class="msg" id="invMsg"></div></div>`;
+  $('invPanel').scrollIntoView({ behavior: 'smooth' });
+}
+async function refresh(id) { await Promise.all([loadSummary(), loadFirms(), loadInv(), loadWallets()]); if (id) openInv(id); }
+async function pdf(id) {
+  const r = await fetch('/api/super-admin/billing/invoices/' + id + '/pdf', { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) return say('invMsg', 'PDF could not be made', false);
+  const b = await r.blob(), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'invoice.pdf'; a.click();
+}
+$('csv').onclick = async e => { e.preventDefault(); const r = await fetch('/api/super-admin/billing/invoices.csv', { headers: { Authorization: 'Bearer ' + token } }); const b = await r.blob(), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'praman-invoices.csv'; a.click(); };
+async function issueInv(id) { if (!confirm('Issue this invoice? It gets its number and can no longer be edited.')) return; const r = await api('POST', `/invoices/${id}/issue`); if (r.error) return say('invMsg', r.error, false); refresh(id); }
+async function recalc(id) { await api('POST', `/invoices/${id}/recalculate`); refresh(id); }
+async function voidInv(id, draft) {
+  const reason = draft ? '' : prompt('Why is this invoice being cancelled?'); if (!draft && reason === null) return;
+  if (draft && !confirm('Delete this draft?')) return;
+  const r = await api('POST', `/invoices/${id}/void`, { reason }); if (r.error) return say('invMsg', r.error, false);
+  $('invPanel').innerHTML = ''; refresh();
+}
+async function addPay(id) { const r = await api('POST', `/invoices/${id}/payments`, { amount: $('payAmt').value, mode: $('payMode').value, reference: $('payRef').value, date: $('payDate').value }); if (r.error) return say('invMsg', r.error, false); refresh(id); }
+async function delPay(id, pid) { if (!confirm('Remove this payment entry?')) return; await api('DELETE', `/invoices/${id}/payments/${pid}`); refresh(id); }
+async function setAdj(id, list) { const r = await api('PUT', '/invoices/' + id, { adjustments: list }); if (r.error) return say('invMsg', r.error, false); refresh(id); }
+async function addAdj(id) { const i = await api('GET', '/invoices/' + id); setAdj(id, [...(i.adjustments || []), { desc: $('adjDesc').value, amount: $('adjAmt').value }]); }
+async function rmAdj(id, n) { const i = await api('GET', '/invoices/' + id); setAdj(id, (i.adjustments || []).filter((_, k) => k !== n)); }
+$('genBtn').onclick = async () => { const r = await api('POST', '/generate', { period: $('genMonth').value }); if (r.error) return say('genMsg', r.error, false); say('genMsg', `${r.created} new draft(s), ${r.refreshed} refreshed${r.skipped.length ? ', skipped: ' + r.skipped.map(s => s.firm + ' (' + s.reason + ')').join('; ') : ''}`, true); refresh(); };
+$('fStatus').onchange = loadInv;
+
+// ---------- your details ----------
+const sIds = ['legalName', 'gstin', 'pan', 'state', 'email', 'phone', 'invoicePrefix', 'defaultPaymentTermsDays', 'upi', 'address', 'terms'];
+async function loadSettings() {
+  const s = await api('GET', '/settings');
+  sIds.forEach(k => $('s_' + k).value = s[k] ?? '');
+  $('s_bankName').value = s.bank.name; $('s_bankAccount').value = s.bank.account; $('s_bankIfsc').value = s.bank.ifsc; $('s_bankBranch').value = s.bank.branch; $('s_autoIssue').checked = !!s.autoIssue;
+  ['dl','aadhaar_generate','aadhaar_verify','pan'].forEach(k => $('s_k_' + k).value = s.kycRates[k] || '');
+}
+$('saveSettings').onclick = async () => {
+  const b = {}; sIds.forEach(k => b[k] = $('s_' + k).value);
+  b.bank = { name: $('s_bankName').value, account: $('s_bankAccount').value, ifsc: $('s_bankIfsc').value, branch: $('s_bankBranch').value }; b.autoIssue = $('s_autoIssue').checked; b.kycRates = Object.fromEntries(['dl','aadhaar_generate','aadhaar_verify','pan'].map(k => [k, $('s_k_' + k).value]));
+  const r = await api('PUT', '/settings', b); say('setMsg', r.error || 'Saved', !r.error);
+};
+
+// ---------- calculator ----------
+function calc() {
+  const pc = +$('k_pc').value, fee = +$('k_fee').value, inc = +$('k_inc').value, ex = +$('k_ex').value || pc;
+  if (!pc || !fee) { $('k_out').textContent = ''; return; }
+  // subscription cost for n cases = fee + max(0, n - inc) * ex ; per-case = n * pc
+  let n = null;
+  for (let i = 1; i <= 100000; i++) { if (fee + Math.max(0, i - inc) * ex <= i * pc) { n = i; break; } }
+  $('k_out').innerHTML = n ? `The subscription is cheaper for a firm that does <b>${n}</b> or more cases a month (per-case would cost ${rupee(n * pc)}, subscription ${rupee(fee + Math.max(0, n - inc) * ex)}). Below that, pay-per-case is cheaper for them.` : 'With these numbers the subscription is never cheaper than paying per case.';
+}
+['k_pc', 'k_fee', 'k_inc', 'k_ex'].forEach(id => $(id).addEventListener('input', calc));
+
+
+// ---------- wallets ----------
+async function loadWallets() {
+  const d = await api('GET', '/wallets');
+  $('wHeld').textContent = d.totalHeld ? `Total held for firms: ${rupee(d.totalHeld)}.` : '';
+  $('wReq').innerHTML = (d.requests || []).length ? '<div class="warn"><b>Top-up requests waiting</b>' + d.requests.map(r => `<div style="margin-top:6px">${esc(r.vendorName)} says it paid <b>${rupee(r.amount)}</b> (${esc(r.mode)}, ref ${esc(r.reference)}) ${esc(r.note || '')}
+      <button class="b grn" onclick="decideReq('${r.id}','approve')">Money received - add</button><button class="b red" onclick="decideReq('${r.id}','reject')">Reject</button></div>`).join('') + '</div>' : '';
+  $('wRows').innerHTML = (d.firms || []).map(f => `<tr><td><b>${esc(f.vendorName)}</b>${f.pending ? ` <span class="tag draft">${f.pending} waiting for balance</span>` : ''}</td>
+    <td class="r" style="${f.balance < 0 ? 'color:#b23a2c;' : ''}font-weight:700">${rupee(f.balance)}</td><td class="hint">${f.month.reports} reports · ${f.month.kyc} ID checks · ${rupee(f.month.spent)}</td>
+    <td><button class="b sec" onclick="openWallet('${f.id}')">Open</button></td></tr>`).join('') || '<tr><td colspan="4" class="hint">No firm has the wallet switched on yet (Set plan → Wallet).</td></tr>';
+}
+async function decideReq(id, what) { const note = what === 'reject' ? prompt('Reason (shown to the firm)?') : ''; if (what === 'reject' && note === null) return; const r = await api('POST', `/wallet-requests/${id}/${what}`, { note }); if (r.error) alert(r.error); loadWallets(); }
+async function openWallet(id) {
+  const d = await api('GET', '/wallets/' + id);
+  const rows = (d.ledger || []).map(t => `<tr><td>${new Date(t.at).toLocaleString('en-IN')}</td><td>${esc(t.desc)}${t.reference ? ' · ' + esc(t.reference) : ''}${t.note ? ' <span class="hint">' + esc(t.note) + '</span>' : ''}</td>
+    <td class="r" style="color:${t.amount < 0 ? '#b23a2c' : '#1f7a6c'}">${t.type === 'topup_request' ? '(pending)' : rupee(t.amount)}</td><td class="r">${t.balanceAfter != null ? rupee(t.balanceAfter) : ''}</td>
+    <td>${t.type === 'charge' && !t.refundedBy ? `<a href="#" onclick="refundTx('${t.id}','${id}');return false">refund</a>` : (t.refundedBy ? '<span class="hint">refunded</span>' : '')}</td></tr>`).join('');
+  $('wPanel').innerHTML = `<div class="card" style="margin-top:14px;background:#fafbfc"><h2>Wallet — balance ${rupee(d.balance)}</h2>
+    <div class="tools"><div><label>Add money ₹</label><input id="wAmt" type="number" min="1"></div><div><label>Mode</label><select id="wMode"><option value="bank_transfer">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="cash">Cash</option></select></div><div><label>Reference / UTR</label><input id="wRef"></div><div><button class="b grn" onclick="wTopup('${id}')">Add money</button></div></div>
+    <div class="tools"><div><label>Adjust ₹ (minus to take out)</label><input id="wAdj" type="number"></div><div style="flex:2"><label>Reason (required)</label><input id="wNote"></div><div><button class="b sec" onclick="wAdjust('${id}')">Adjust</button></div></div>
+    <div class="msg" id="wMsg"></div>
+    <table><thead><tr><th>When</th><th>What</th><th class="r">Amount</th><th class="r">Balance</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="hint">No entries yet.</td></tr>'}</tbody></table>
+    <button class="b sec" onclick="$('wPanel').innerHTML=''">Close</button></div>`;
+  $('wPanel').scrollIntoView({ behavior: 'smooth' });
+}
+async function wTopup(id) { const r = await api('POST', `/wallets/${id}/topup`, { amount: $('wAmt').value, mode: $('wMode').value, reference: $('wRef').value }); if (r.error) return say('wMsg', r.error, false); loadWallets(); openWallet(id); }
+async function wAdjust(id) { const r = await api('POST', `/wallets/${id}/adjust`, { amount: $('wAdj').value, note: $('wNote').value }); if (r.error) return say('wMsg', r.error, false); loadWallets(); openWallet(id); }
+async function refundTx(tid, id) { if (!confirm('Give this charge back to the wallet?')) return; const r = await api('POST', `/wallet-charges/${tid}/refund`); if (r.error) alert(r.error); loadWallets(); openWallet(id); }
+
+loadSummary(); loadFirms(); loadWallets(); loadInv(); loadSettings();
+</script>
+</body>
+</html>

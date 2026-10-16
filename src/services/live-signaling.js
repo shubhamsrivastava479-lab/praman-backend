@@ -47,6 +47,23 @@ function attach(io) {
     // executive -> customer: polite requests (switch to back camera, re-connect)
     socket.on('live-cmd', cmd => { if (inRoom() && socket.data.liveRole === 'executive') socket.to(inRoom()).emit('live-cmd', cmd); });
 
+    // Live captions (executive only): the executive's browser sends short audio clips of the customer's voice;
+    // they are turned into text + English translation and sent back to the executive only. Nothing is stored.
+    let lastCaptionAt = 0;
+    socket.on('live-caption-audio', async (buf, mime, ack) => {
+      const reply = typeof ack === 'function' ? ack : () => {};
+      if (!inRoom() || socket.data.liveRole !== 'executive') return reply({ error: 'Not allowed' });
+      if (!buf || !(buf.length || buf.byteLength) || (buf.length || buf.byteLength) > 700 * 1024) return reply({ error: 'Clip too large' });
+      if (Date.now() - lastCaptionAt < 2500) return reply({ skipped: true });
+      lastCaptionAt = Date.now();
+      try {
+        const m = ['audio/webm', 'audio/ogg', 'audio/mp4'].find(x => String(mime || '').startsWith(x)) || 'audio/webm';
+        const r = await require('./gemini').transcribeAndTranslateAudio(Buffer.from(buf).toString('base64'), m);
+        if (r && r.clear !== false && (r.english || r.original)) socket.emit('live-caption', { original: String(r.original || '').slice(0, 500), english: String(r.english || '').slice(0, 500), language: String(r.language || '').slice(0, 40), at: Date.now() });
+        reply({ ok: true });
+      } catch (e) { reply({ error: 'Captions are not available right now.' }); }
+    });
+
     const leave = async reason => {
       const room = inRoom();
       if (!room) return;

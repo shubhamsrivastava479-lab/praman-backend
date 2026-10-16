@@ -82,6 +82,45 @@ router.get('/company', async (req, res) => {
 });
 
 // ---------- Personal (Agent's own view, or a vendor_admin checking their own activity) ----------
+// Quality and speed of the AI calls for this firm (last 30 days by default).
+router.get('/insights', async (req, res) => {
+  await db.read();
+  const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 30));
+  const since = Date.now() - days * 864e5;
+  const cases = db.data.cases.filter(c => c.vendorId === req.user.vendorRootId && c.aiCall && new Date(c.createdAt).getTime() >= since);
+  const ai = cases.filter(c => c.verificationMode === 'full_automation');
+  const st = c => c.aiCall.status || 'not_started';
+  const finished = ai.filter(c => st(c) === 'completed');
+  const med = a => { const x = a.filter(Number.isFinite).sort((p, q) => p - q); return x.length ? x[Math.floor(x.length / 2)] : null; };
+  const mins = (a, b) => (new Date(b) - new Date(a)) / 60000;
+  const dur = finished.map(c => c.aiCall.startedAt && c.aiCall.completedAt ? mins(c.aiCall.startedAt, c.aiCall.completedAt) : NaN);
+  const wait = finished.map(c => c.aiCall.completedAt && c.aiReview && c.aiReview.reviewedAt ? mins(c.aiCall.completedAt, c.aiReview.reviewedAt) / 60 : NaN);
+  const decisions = {}, flagCount = {}, reviewers = {};
+  for (const c of finished) {
+    const d = (c.aiReview && c.aiReview.finalVerdict && c.aiReview.finalVerdict !== 'pending_verification') ? c.aiReview.finalVerdict : (c.aiCall.decision || 'unknown');
+    decisions[d] = (decisions[d] || 0) + 1;
+    for (const f of c.aiCall.flags || []) { const k = String(f).replace(/[0-9]+/g, '#').slice(0, 90); flagCount[k] = (flagCount[k] || 0) + 1; }
+    const who = c.aiReview && (c.aiReview.reviewedByLogin || c.aiReview.reviewerName);
+    if (who) reviewers[who] = (reviewers[who] || 0) + 1;
+  }
+  const aiOverridden = finished.filter(c => c.aiReview && c.aiCall.decision && c.aiReview.finalVerdict !== 'pending_verification' && c.aiReview.finalVerdict !== c.aiCall.decision).length;
+  const perDay = {};
+  for (const c of ai) { const k = String(c.createdAt).slice(0, 10); perDay[k] = (perDay[k] || 0) + 1; }
+  res.json({
+    days,
+    totals: { aiCases: ai.length, linkSentNotStarted: ai.filter(c => st(c) === 'not_started').length, inProgress: ai.filter(c => st(c) === 'in_progress').length, completed: finished.length, handoff: ai.filter(c => st(c) === 'handoff').length, awaitingReview: ai.filter(c => ['awaiting_review', 'awaiting_second_review'].includes(c.reviewState)).length },
+    completionRate: ai.length ? Math.round(finished.length / ai.length * 100) : null,
+    handoffRate: ai.length ? Math.round(ai.filter(c => st(c) === 'handoff').length / ai.length * 100) : null,
+    medianCallMinutes: med(dur) == null ? null : +med(dur).toFixed(1),
+    medianReviewWaitHours: med(wait) == null ? null : +med(wait).toFixed(1),
+    aiChangedByReviewer: aiOverridden,
+    decisions,
+    topFlags: Object.entries(flagCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([flag, count]) => ({ flag, count })),
+    reviewers: Object.entries(reviewers).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+    perDay: Object.entries(perDay).sort().slice(-30).map(([date, count]) => ({ date, count }))
+  });
+});
+
 router.get('/mine', async (req, res) => {
   await db.read();
   const vendorId = req.user.vendorRootId;

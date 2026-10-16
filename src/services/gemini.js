@@ -1,5 +1,7 @@
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
-const GEMINI_TTS_MODEL = 'gemini-3.1-flash-tts-preview'; // dedicated speech-generation model
+// Used when the main model is busy (503), over its quota (429) or not found (404).
+const GEMINI_FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.5-flash-lite,gemini-3.8-flash').split(',').map(s => s.trim()).filter(Boolean);
+const GEMINI_TTS_MODELS = (process.env.GEMINI_TTS_MODELS || 'gemini-3.8-flash-tts,gemini-3.8-flash-lite-tts,gemini-3.1-flash-tts-preview').split(',').map(s => s.trim()).filter(Boolean);
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const { getSetting } = require('./platform-settings');
 
@@ -9,36 +11,56 @@ async function getApiKey() {
   return key;
 }
 
-async function callGemini(parts, { jsonOutput = false } = {}) {
+// A model that just said "quota exceeded" is skipped for a minute, so a live
+// call does not wait on it again and again.
+const cooldown = new Map();
+const RETRYABLE = new Set([404, 429, 500, 503, 504]);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Calls one generateContent endpoint, trying each model in order.
+async function generate(models, body, label) {
   const apiKey = await getApiKey();
-  const url = `${BASE_URL}/${GEMINI_MODEL}:generateContent`;
-  const body = {
+  const list = models.filter(m => !(cooldown.get(m) > Date.now()));
+  if (!list.length) list.push(...models); // all cooling down: try anyway
+  let lastErr;
+  for (const model of list) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let res;
+      try {
+        res = await fetch(`${BASE_URL}/${model}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(45000)
+        });
+      } catch (e) { lastErr = new Error(`${label} network error (${model}): ${e.message}`); break; }
+      if (res.ok) { cooldown.delete(model); require('./usage').bump(label, model, true); return res.json(); }
+      const errText = await res.text();
+      lastErr = new Error(`${label} error ${res.status} (${model}): ${errText}`);
+      if (!RETRYABLE.has(res.status)) throw lastErr; // bad key / bad request: no point trying others
+      if (res.status === 429) { cooldown.set(model, Date.now() + 60_000); break; }
+      if (res.status === 404) break;
+      if (attempt === 0) await sleep(800); // busy: one quick retry, then the next model
+    }
+  }
+  require('./usage').bump(label, (models[0] || ''), false);
+  throw lastErr;
+}
+
+// light: simple jobs (translating a fixed line) go to the cheaper model first.
+const GEMINI_LIGHT_MODEL = process.env.GEMINI_LIGHT_MODEL || 'gemini-3.5-flash-lite';
+async function callGemini(parts, { jsonOutput = false, light = false } = {}) {
+  const first = light ? GEMINI_LIGHT_MODEL : GEMINI_MODEL;
+  const data = await generate([first, ...[GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS].filter(m => m !== first)], {
     contents: [{ parts }],
     ...(jsonOutput ? { generationConfig: { responseMimeType: 'application/json' } } : {})
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gemini API error ${res.status}: ${errText}`);
-  }
-
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
-  return text;
+  }, 'Gemini API');
+  return data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
 }
 
 async function translateText(text, targetLang = 'English') {
   const prompt = `Translate the following text to ${targetLang}. Return only the translation, no preamble:\n\n"${text}"`;
-  return (await callGemini([{ text: prompt }])).trim();
+  return (await callGemini([{ text: prompt }], { light: true })).trim();
 }
 
 // Translates a flat { key: "English text" } object in one call. Keeps the
@@ -58,22 +80,13 @@ async function translateStrings(obj, targetLang) {
 // (translateText() first, if needed) — see routes/participant.js "speak".
 // Returns raw PCM audio (base64) + its mime type (e.g. "audio/L16;rate=24000").
 async function generateSpeech(text, voiceName = 'Kore') {
-  const apiKey = await getApiKey();
-  const url = `${BASE_URL}/${GEMINI_TTS_MODEL}:generateContent`;
-  const body = {
+  const data = await generate(GEMINI_TTS_MODELS, {
     contents: [{ parts: [{ text }] }],
     generationConfig: {
       responseModalities: ['AUDIO'],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } }
     }
-  };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) throw new Error(`Gemini TTS error ${res.status}: ${await res.text()}`);
-  const data = await res.json();
+  }, 'Gemini TTS');
   const part = data?.candidates?.[0]?.content?.parts?.[0];
   if (!part?.inlineData?.data) throw new Error('Gemini TTS returned no audio');
   return { base64Audio: part.inlineData.data, mimeType: part.inlineData.mimeType || 'audio/L16;rate=24000' };
@@ -81,7 +94,8 @@ async function generateSpeech(text, voiceName = 'Kore') {
 
 async function transcribeAndTranslateAudio(base64Audio, mimeType = 'audio/ogg') {
   const prompt = `Listen to this audio clip. Respond ONLY with JSON in this exact shape:
-{"language": "<detected language name>", "original": "<transcription in the original language>", "english": "<English translation>"}`;
+{"language": "<detected language name>", "original": "<transcription in the original language>", "english": "<English translation>", "clear": true}
+Set "clear" to false, and leave "original" and "english" as empty strings, if the clip has no clear human speech (only silence, background noise, music, TV, or a voice too faint to understand). Never guess words that you cannot hear.`;
   const raw = await callGemini(
     [
       { text: prompt },

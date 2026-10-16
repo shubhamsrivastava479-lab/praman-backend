@@ -18,11 +18,11 @@ const { caseFileKey } = require('../services/ids');
 const router = express.Router();
 router.use(rateLimit({ windowMs: 60_000, max: 15 })); // protects against case-ID brute-forcing and API-cost abuse
 
-async function getPlatformCreds() {
+async function getPlatformCreds(c) {
   const apiKey = await getSetting('gridlinesApiKey', 'GRIDLINES_API_KEY');
   if (!apiKey) throw new Error('Verification is not available right now. Please contact support.');
   const authType = await getSetting('gridlinesAuthType', 'GRIDLINES_AUTH_TYPE') || 'API-Key';
-  return { apiKey, authType };
+  return { apiKey, authType, billTo: c ? { vendorId: c.vendorId, caseId: c.id } : null };
 }
 function safeFail(res, err) {
   console.error('Participant KYC error:', err.message);
@@ -255,7 +255,7 @@ router.post('/:caseId/aadhaar-otp/generate', async (req, res) => {
   const { aadhaarNumber } = req.body;
   if (!aadhaarNumber) return res.status(400).json({ error: 'Aadhaar number is required' });
   try {
-    const result = await kyc.generateAadhaarOtp(aadhaarNumber, await getPlatformCreds());
+    const result = await kyc.generateAadhaarOtp(aadhaarNumber, await getPlatformCreds(c));
     res.json({ referenceId: result.data?.reference_id || result.reference_id });
   } catch (err) { safeFail(res, err); }
 });
@@ -266,7 +266,7 @@ router.post('/:caseId/aadhaar-otp/verify', async (req, res) => {
   const { referenceId, otp } = req.body;
   if (!referenceId || !otp) return res.status(400).json({ error: 'referenceId and otp are required' });
   try {
-    const result = await kyc.verifyAadhaarOtp(referenceId, otp, await getPlatformCreds());
+    const result = await kyc.verifyAadhaarOtp(referenceId, otp, await getPlatformCreds(c));
     await db.read();
     db.data.custody.push({
       id: uid('cust'), caseId: c.id, event: 'Aadhaar self-verified by participant (OTP)',
@@ -289,7 +289,7 @@ router.post('/:caseId/pan-verify', async (req, res) => {
   const { panNumber, nameOnPan, dateOfBirth } = req.body;
   if (!panNumber || !nameOnPan || !dateOfBirth) return res.status(400).json({ error: 'All fields are required' });
   try {
-    const result = await kyc.verifyPan(panNumber, nameOnPan, dateOfBirth, await getPlatformCreds());
+    const result = await kyc.verifyPan(panNumber, nameOnPan, dateOfBirth, await getPlatformCreds(c));
     await db.read();
     db.data.custody.push({
       id: uid('cust'), caseId: c.id, event: 'PAN self-verified by participant',

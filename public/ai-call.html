@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Praman Verification Call</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#22307A">
@@ -72,7 +76,7 @@
   /* guides: the one bold element */
   .guide{position:absolute;top:150px;left:0;right:0;bottom:var(--sheetH,40vh);display:none;align-items:center;justify-content:center;pointer-events:none;z-index:2;}
   .guide.show{display:flex;}
-  .oval{height:92%;max-height:380px;aspect-ratio:3/4;border-radius:50%;border:4px dashed rgba(255,255,255,.9);box-shadow:0 0 0 200vmax rgba(5,7,15,.45);}
+  .oval{height:90%;max-height:480px;aspect-ratio:3/4;border-radius:50%;border:4px dashed rgba(255,255,255,.9);box-shadow:0 0 0 200vmax rgba(5,7,15,.45);}
   .guide.blinking .oval{border-color:var(--turmeric);border-style:solid;}
   .figure{height:94%;max-height:560px;opacity:.9;}
   .countdown{position:absolute;top:150px;left:0;right:0;bottom:var(--sheetH,40vh);display:none;align-items:center;justify-content:center;z-index:4;pointer-events:none;}
@@ -86,6 +90,12 @@
   .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:5;transition:opacity .35s;}
   .flash.on{opacity:.85;transition:none;}
 
+  /* photo steps: small sheet, big camera area, big face oval */
+  #call.shoot .guide, #call.shoot .countdown{top:calc(104px + env(safe-area-inset-top));}
+  #call.shoot .sheet{max-height:24vh;}
+  #call.shoot .caption{font-size:16px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin:6px 0 0;}
+  #call.shoot #actions, #call.shoot #typeBtn, #call.shoot .heard{display:none !important;}
+  #call.shoot .avatar{transform:scale(.68);transform-origin:top right;}
   /* AI assistant tile: shows the call is connected; mouth moves with the voice */
   .avatar{position:absolute;right:12px;top:calc(96px + env(safe-area-inset-top));z-index:3;width:110px;text-align:center;}
   .av-face{position:relative;width:110px;height:110px;border-radius:24px;overflow:hidden;border:2px solid rgba(255,255,255,.9);box-shadow:0 6px 20px rgba(0,0,0,.45);transition:box-shadow .1s;}
@@ -135,6 +145,20 @@
   .tag{font-size:14px;font-weight:600;border-radius:999px;padding:2px 12px;}
   .tag.wait{background:#FBEFD6;color:#8A5A00;} .tag.ok{background:#DDF1E7;color:var(--leaf);}
   .human{display:block;margin:10px auto 0;}
+  .human.pulse{background:#fff3cd;color:#5c4400;border-radius:12px;animation:hpulse 1.4s infinite;}
+  @keyframes hpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,193,7,.7)}50%{box-shadow:0 0 0 10px rgba(255,193,7,0)}}
+  body.big .caption{font-size:23px !important;line-height:1.4 !important;}
+  body.big .btn{font-size:19px;min-height:56px;}
+  body.big #heard,body.big .heard{font-size:18px;}
+  .prefs{display:flex;flex-direction:column;gap:6px;margin:6px 0 12px;font-size:15px;}
+  .prefs label{display:flex;gap:9px;align-items:center;min-height:30px;}
+  .pausebtn{border:0;cursor:pointer;color:#fff;font:inherit;}
+  #pauseOv{position:fixed;inset:0;background:rgba(10,14,28,.88);z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;text-align:center;padding:24px;}
+  #pauseOv.show{display:flex;}
+  #testDlg{border:0;border-radius:16px;padding:18px;max-width:440px;width:92vw;}
+  #testDlg video{width:100%;border-radius:12px;background:#000;transform:scaleX(-1);}
+  .lvlbar{height:10px;background:#e3e6ef;border-radius:6px;overflow:hidden;margin:10px 0;}
+  .lvlbar i{display:block;height:100%;width:0;background:#3A4AA6;transition:width .08s;}
   .kw{margin-top:10px;font-size:15px;color:var(--muted);}
   .kw b{display:inline-block;background:var(--mist);color:var(--ink);border-radius:999px;padding:2px 12px;margin:4px 4px 0 0;font-size:16px;}
   .netbar{display:none;background:var(--alert);color:#fff;font-size:14px;text-align:center;padding:6px;border-radius:10px;margin-top:10px;}
@@ -159,8 +183,8 @@
 <!-- ================= START ================= -->
 <main id="start">
   <div class="brand">
-    <div class="seal">प्र</div>
-    <div><b>प्रमाण Praman</b><small id="firmLine"></small></div>
+    <img src="/logo-mark.png" alt="Praman" style="height:40px;width:auto;flex:none;">
+    <div><b>Praman</b><small id="firmLine"></small></div>
   </div>
 
   <section class="ai-note" aria-live="polite">
@@ -180,10 +204,19 @@
   <h2 data-t="keepReady"></h2>
   <div class="ready" id="ready"></div>
 
+  <h2 data-t="prefTitle"></h2>
+  <div class="prefs">
+    <label><input type="checkbox" id="pfSlow"><span data-t="prefSlow"></span></label>
+    <label><input type="checkbox" id="pfBig"><span data-t="prefBig"></span></label>
+    <label><input type="checkbox" id="pfType"><span data-t="prefType"></span></label>
+  </div>
+  <button type="button" class="btn ghost" id="testBtn" data-t="testBtn" style="margin-bottom:14px;"></button>
+
   <label class="consent">
     <input type="checkbox" id="consent">
     <span data-t="consent"></span>
   </label>
+  <p style="text-align:center;margin:8px 0;"><a id="privLink" href="/privacy.html" target="_blank" rel="noopener" style="color:#1f2a6b;font-size:14px;" data-t="privacy"></a></p>
   <div data-browser-help></div>
   <p class="err" id="startErr"></p>
 
@@ -200,6 +233,7 @@
     <div class="toprow">
       <span class="pill"><i></i><span data-t="rec"></span> <span id="timer">0:00</span></span>
       <span class="pill" data-t="aiBadge"></span>
+      <button type="button" class="pill pausebtn" id="pauseBtn" data-t="pause"></button>
     </div>
     <div class="phases" id="phases"></div>
     <div class="phase-name" id="phaseName"></div>
@@ -287,6 +321,16 @@
   <p id="endMsg"></p>
 </main>
 
+<div id="pauseOv"><h2 data-t="pausedMsg" style="margin:0"></h2><p data-t="pausedSub" style="margin:0"></p><button class="btn primary" id="resumeBtn" data-t="resume" style="max-width:280px"></button></div>
+
+<dialog id="testDlg">
+  <h3 data-t="testTitle" style="margin-top:0"></h3>
+  <video id="testVid" autoplay playsinline muted></video>
+  <div class="lvlbar"><i id="testLvl"></i></div>
+  <p id="testMsg" style="font-size:14px;color:#556"></p>
+  <button class="btn primary" id="testClose" data-t="testClose"></button>
+</dialog>
+
 <dialog id="humanDlg">
   <h3 data-t="humanQ"></h3>
   <p data-t="humanP"></p>
@@ -320,7 +364,11 @@ const T = {
     badLink:'यह लिंक सही नहीं है।', wake:'सर्वर चालू हो रहा है — 30 सेकंड बाद पेज रीफ़्रेश करें।', already:'यह वेरिफिकेशन पहले ही पूरा हो चुका है। धन्यवाद।',
     endOk:'आपकी वेरिफिकेशन कॉल पूरी हो गई। हमारी टीम इसे देखेगी। अब आप यह पेज बंद कर सकते हैं।', endHuman:'हमारी टीम आपको जल्दी कॉल करेगी। धन्यवाद।',
     heard:'आपने कहा: ',
-    typeBtn:'⌨️ लिखकर जवाब दें', typePh:'अपना जवाब यहाँ लिखें', send:'भेजें', sayAgain:'इंटरनेट धीमा था — कृपया अपना जवाब फिर से बोलें।',
+    privacy:'गोपनीयता सूचना और डेटा हटाने का अनुरोध',
+    pause:'⏸ रोकें', resume:'▶ जारी रखें', pausedMsg:'कॉल रुकी है', pausedSub:'जब तैयार हों तो जारी रखें दबाएँ।', stepOf:(a,b)=>`चरण ${a}/${b}`,
+    testBtn:'🎥 पहले कैमरा और माइक जाँचें', testTitle:'कैमरा और माइक की जाँच', testHint:'अपना चेहरा दिखना चाहिए, और बोलने पर नीली पट्टी हिलनी चाहिए।', testClose:'ठीक है', testBad:'कैमरा या माइक नहीं चला। ब्राउज़र में अनुमति दें।',
+    prefTitle:'आसानी के विकल्प', prefSlow:'धीमी आवाज़', prefBig:'बड़े अक्षर', prefType:'लिखने का बॉक्स हमेशा दिखाएँ',
+    typeBtn:'⌨️ लिखकर जवाब दें', typePh:'अपना जवाब यहाँ लिखें', send:'भेजें', sayAgain:'इंटरनेट धीमा था — कृपया अपना जवाब फिर से बोलें।', noisy:'आवाज़ साफ़ सुनाई नहीं दी। थोड़ा पास और ज़ोर से बोलें, या शांत जगह जाएँ।',
     replaced:'यह कॉल किसी दूसरी स्क्रीन पर चल रही है। आप यह पेज बंद कर सकते हैं।', aiName:'AI सहायक', live:'जुड़ा हुआ',
     connectedToast:'✓ कॉल जुड़ गई — AI सहायक आपसे बात कर रहा है'
   },
@@ -345,7 +393,11 @@ const T = {
     badLink:'This link is not valid.', wake:'The server is starting — please refresh this page in 30 seconds.', already:'This verification is already complete. Thank you.',
     endOk:'Your verification call is complete. Our team will review it. You can close this page now.', endHuman:'Our team will call you soon. Thank you.',
     heard:'You said: ',
-    typeBtn:'⌨️ Type my answer', typePh:'Type your answer here', send:'Send', sayAgain:'The internet was slow — please say your answer again.',
+    privacy:'Privacy notice and data deletion',
+    pause:'⏸ Pause', resume:'▶ Resume', pausedMsg:'Call paused', pausedSub:'Press Resume when you are ready.', stepOf:(a,b)=>`Step ${a} of ${b}`,
+    testBtn:'🎥 Test my camera and microphone first', testTitle:'Camera and microphone check', testHint:'You should see your face, and the blue bar should move when you speak.', testClose:'Done', testBad:'Camera or microphone did not start. Please allow them in your browser.',
+    prefTitle:'Easier to use', prefSlow:'Slower voice', prefBig:'Larger text', prefType:'Always show the typing box',
+    typeBtn:'⌨️ Type my answer', typePh:'Type your answer here', send:'Send', sayAgain:'The internet was slow — please say your answer again.', noisy:'I could not hear you clearly. Please speak a little closer and louder, or move to a quieter place.',
     replaced:'This call is continuing on another screen. You can close this page.', aiName:'AI assistant', live:'Connected',
     connectedToast:'✓ Connected — the AI assistant is speaking with you'
   }
@@ -367,7 +419,12 @@ let docSkip = false, seenUnreadable = 0, docStartedAt = 0;
 let lastAudio = null, lastText = '', endListen = null, lastLoc = null, geoWatch = null, wakeLock = null, t0 = 0;
 // One screen per call: the server ignores older screens (no double voices).
 const clientId = (() => { try { return crypto.randomUUID(); } catch { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2); } })();
-let openTypeNext = false;
+let openTypeNext = false, noisyCount = 0, bargedIn = false;
+const allowBarge = { off: false }; // switched off for this call if an "interruption" turns out to be only echo
+// Customer starts talking while the AI is still speaking: the AI stops and listens.
+// Needs a clearly loud voice for a moment (the phone's echo cancelling removes most of the AI's own voice).
+// Turn off with ?bi=0 on the link if a phone's speaker keeps cutting the AI short.
+const BARGE_IN = !/[?&]bi=0/.test(location.search);
 
 const ui = () => T[language === 'Hindi' ? 'hi' : (['Marathi'].includes(language) ? 'hi' : 'en')];
 const tr = k => ui()[k] || T.en[k] || '';
@@ -397,6 +454,7 @@ $('consent').addEventListener('change', () => { $('startBtn').disabled = !$('con
 $('startBtn').addEventListener('click', startCall);
 
 renderLangs(); paintText();
+$('privLink').href = '/privacy.html?t=' + encodeURIComponent(token || '');
 
 (async function load(){
   if (!token) { introKey = 'badLink'; paintText(); return; }
@@ -433,7 +491,7 @@ function setStatus(kind, key){
   $('who').className = 'who st-' + kind;
   $('avatar').className = 'avatar av-' + kind;
   $('typeBtn').style.display = kind === 'listen' ? 'block' : 'none';
-  if (kind !== 'listen') $('typeBox').classList.remove('show');
+  if (kind !== 'listen') $('typeBox').classList.remove('show'); else if (prefs.type) $('typeBox').classList.add('show');
   $('statusText').textContent = tr(key);
   $('doneBtn').style.display = kind === 'listen' ? 'block' : 'none';
   $('repeatBtn').disabled = kind !== 'listen' && kind !== 'wait';
@@ -449,6 +507,41 @@ function startGeo(){
   } catch {}
 }
 function addLoc(fd){ if (lastLoc) { fd.append('lat', lastLoc.latitude); fd.append('lng', lastLoc.longitude); fd.append('acc', lastLoc.accuracy || ''); } }
+
+
+// ---------- comfort options, pause, camera/mic practice ----------
+const prefs = { slow: false, big: false, type: false };
+try { Object.assign(prefs, JSON.parse(localStorage.getItem('praman_call_prefs') || '{}')); } catch {}
+function applyPrefs(){
+  document.body.classList.toggle('big', !!prefs.big);
+  $('pfSlow').checked = !!prefs.slow; $('pfBig').checked = !!prefs.big; $('pfType').checked = !!prefs.type;
+  try { localStorage.setItem('praman_call_prefs', JSON.stringify(prefs)); } catch {}
+}
+['Slow','Big','Type'].forEach(k => $('pf' + k).addEventListener('change', e => { prefs[k.toLowerCase()] = e.target.checked; applyPrefs(); }));
+applyPrefs();
+
+let paused = false;
+function setPaused(v){ paused = v; $('pauseOv').classList.toggle('show', v); }
+$('pauseBtn').addEventListener('click', () => setPaused(true));
+$('resumeBtn').addEventListener('click', () => setPaused(false));
+async function gate(){ while (paused && !finished && !handedOff) await sleep(300); }
+
+let testStream = null, testTimer = 0;
+function stopTest(){ clearInterval(testTimer); if (testStream) testStream.getTracks().forEach(t => t.stop()); testStream = null; }
+$('testBtn').addEventListener('click', async () => {
+  $('testMsg').textContent = tr('testHint'); $('testDlg').showModal();
+  try {
+    testStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+    $('testVid').srcObject = testStream;
+    const c = new (window.AudioContext || window.webkitAudioContext)(); const an = c.createAnalyser(); an.fftSize = 512;
+    c.createMediaStreamSource(testStream).connect(an); const d = new Float32Array(an.fftSize);
+    testTimer = setInterval(() => { an.getFloatTimeDomainData(d); let m = 0; for (const x of d) m += x * x; $('testLvl').style.width = Math.min(100, Math.sqrt(m / d.length) * 700) + '%'; }, 90);
+    $('testDlg').addEventListener('close', () => { try { c.close(); } catch {} }, { once: true });
+  } catch { $('testMsg').textContent = tr('testBad'); }
+});
+$('testClose').addEventListener('click', () => { stopTest(); $('testDlg').close(); });
+$('testDlg').addEventListener('close', stopTest);
+const typingNow = () => $('typeBox').classList.contains('show') && (!prefs.type || document.activeElement === $('typeIn') || !!$('typeIn').value);
 
 // ---------- start ----------
 async function startCall(){
@@ -517,6 +610,7 @@ async function run(turn){
     replay = true;
     if (handedOff) return;
     if (turn.done) { await finish(); return; }
+    await gate();
     let next;
     try { next = await act(turn); }
     catch (e) {
@@ -536,12 +630,15 @@ function showTurn(t){
   if (t.typeHint) openTypeNext = true;
   $('cap').textContent = lastText;
   $('docs').classList.toggle('show', t.expect === 'docs');
+  $('call').classList.toggle('shoot', t.expect === 'photo' || t.expect === 'burst');
   showGuide(t.expect === 'photo' || t.expect === 'burst' ? t.shot : null);
   const ph = t.phase || 'details';
   const order = [...$('phases').children].map(d => d.dataset.p);
   const idx = order.indexOf(ph);
   [...$('phases').children].forEach((d, i) => d.className = ph === 'done' || i < idx ? 'done' : i === idx ? 'now' : '');
-  $('phaseName').textContent = tr('p_' + ph);
+  $('phaseName').textContent = tr('p_' + ph) + (ph !== 'done' && idx >= 0 ? ' · ' + tr('stepOf')(idx + 1, order.length) : '');
+  $('humanBtn').classList.toggle('pulse', !!t.offerHuman);
+  if (t.offerHuman) openTypeNext = true;
 }
 
 function showGuide(shot){
@@ -565,19 +662,30 @@ async function playAudio(b64, text){
     try {
       const buf = await ctx.decodeAudioData(b64ToBuf(b64));
       await new Promise(resolve => {
-        const src = ctx.createBufferSource(); src.buffer = buf;
+        const src = ctx.createBufferSource(); src.buffer = buf; if (prefs.slow) src.playbackRate.value = 0.85;
         src.connect(ctx.destination); src.connect(recDest);
         const an = ctx.createAnalyser(); an.fftSize = 512; src.connect(an);
         const data = new Float32Array(an.fftSize); let live = true;
+        // microphone level while the AI speaks (for barge-in)
+        let mic = null, micData = null, loudSince = 0;
+        if (BARGE_IN && micSrc && !allowBarge.off) { try { mic = ctx.createAnalyser(); mic.fftSize = 1024; micSrc.connect(mic); micData = new Float32Array(mic.fftSize); } catch { mic = null; } }
+        const began = Date.now();
         const tick = () => {
           if (!live) return;
           an.getFloatTimeDomainData(data);
           let s = 0; for (let i = 0; i < data.length; i++) s += data[i] * data[i];
           $('avatar').style.setProperty('--m', Math.min(1, Math.sqrt(s / data.length) * 7).toFixed(2));
+          if (mic && Date.now() - began > 1500) {
+            mic.getFloatTimeDomainData(micData);
+            let m = 0; for (let i = 0; i < micData.length; i++) m += micData[i] * micData[i];
+            const lvl = Math.sqrt(m / micData.length);
+            if (lvl > 0.12) { if (!loudSince) loudSince = Date.now(); else if (Date.now() - loudSince > 450) { bargedIn = true; try { src.stop(); } catch {} } }
+            else loudSince = 0;
+          }
           requestAnimationFrame(tick);
         };
         tick();
-        src.onended = () => { live = false; $('avatar').style.setProperty('--m', 0); resolve(); };
+        src.onended = () => { live = false; try { mic && micSrc.disconnect(mic); } catch {} $('avatar').style.setProperty('--m', 0); resolve(); };
         src.start();
       });
       return;
@@ -585,7 +693,7 @@ async function playAudio(b64, text){
   }
   await new Promise(resolve => {
     try {
-      const u = new SpeechSynthesisUtterance(text);
+      const u = new SpeechSynthesisUtterance(text); if (prefs.slow) u.rate = 0.85;
       u.lang = LANG_CODES[language] || 'en-IN';
       $('avatar').classList.add('tts');
       const doneT = () => { $('avatar').classList.remove('tts'); resolve(); };
@@ -608,7 +716,7 @@ $('doneBtn').addEventListener('click', () => { if (endListen) endListen('done');
 let nowTyping = 0;
 function openType(){ $('typeBox').classList.add('show'); $('typeIn').value = ''; $('typeIn').focus(); }
 $('typeBtn').addEventListener('click', openType);
-setInterval(() => { if ($('typeBox').classList.contains('show')) nowTyping = Date.now(); }, 500);
+setInterval(() => { if (typingNow()) nowTyping = Date.now(); }, 500);
 $('typeBox').addEventListener('submit', e => {
   e.preventDefault();
   const v = $('typeIn').value.trim();
@@ -630,7 +738,7 @@ async function act(t){
 function listen(){
   return new Promise(resolve => {
     setStatus('listen', 's_listen');
-    let chunks = []; let speech = false, lastVoice = 0, noise = 0, cal = 0, done = false;
+    let chunks = []; let speech = false, lastVoice = 0, noise = 0, cal = 0, done = false, firstIdx = -1, lastIdx = -1, firstVoiceAt = 0;
     let start = Date.now();
     if (openTypeNext) { openTypeNext = false; setTimeout(openType, 50); }
     proc = ctx.createScriptProcessor(4096, 1, 1);
@@ -643,7 +751,10 @@ function listen(){
       $('who').style.removeProperty('--lvl'); $('avatar').style.removeProperty('--lvl');
       if (mode === 'typed') { resolve({ text, silent: false }); return; }
       const silent = mode === 'silent' || (mode === 'done' && !speech && chunks.length < 4);
-      resolve({ blob: silent ? null : toWav(chunks, ctx.sampleRate), silent });
+      // send only the spoken part (a little before and after), so it uploads and is understood faster
+      let use = chunks;
+      if (firstIdx >= 0) use = chunks.slice(Math.max(0, firstIdx - 6), Math.min(chunks.length, lastIdx + 6));
+      resolve({ blob: silent ? null : toWav(use, ctx.sampleRate), silent });
     };
     endListen = stop;
     proc.onaudioprocess = e => {
@@ -654,12 +765,18 @@ function listen(){
       const rms = Math.sqrt(s / d.length);
       $('who').style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
       $('avatar').style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
-      if ($('typeBox').classList.contains('show')) { start = Math.max(start, nowTyping); return; } // typing: do not time out
+      if (paused) { start = Date.now(); chunks = []; speech = false; return; } // paused: never time out
+      if (typingNow()) { start = Math.max(start, nowTyping); return; } // typing: do not time out
       const nowT = Date.now();
       if (cal < 3) { noise += rms; cal++; if (cal === 3) noise = Math.min(noise / 3, 0.02); return; }
       const thr = Math.max(0.015, noise * 3);
-      if (rms > thr) { speech = true; lastVoice = nowT; }
-      if (speech && nowT - lastVoice > 1700) stop('speech');
+      if (rms > thr) {
+        if (!speech) { firstVoiceAt = nowT; firstIdx = chunks.length - 1; }
+        speech = true; lastVoice = nowT; lastIdx = chunks.length - 1;
+      }
+      // short answers (yes / no / a word) end sooner; long ones wait a little more for a pause in speech
+      const gap = lastVoice - firstVoiceAt < 2000 ? 1150 : 1600;
+      if (speech && nowT - lastVoice > gap) stop('speech');
       else if (!speech && nowT - start > 14000) stop('silent');
       else if (nowT - start > 40000) stop('speech');
     };
@@ -690,7 +807,9 @@ function toWav(chunks, rate){
 }
 
 async function doVoice(t){
+  const wasBarge = bargedIn; bargedIn = false;
   const r = await listen();
+  if (wasBarge && (r.silent || !r.blob) && !r.text) allowBarge.off = true; // it was echo, not the customer
   setStatus('think', 's_think');
   const fd = new FormData();
   fd.append('stage', t.stage);
@@ -698,7 +817,10 @@ async function doVoice(t){
   else if (r.silent || !r.blob) fd.append('silence', '1'); else fd.append('audio', r.blob, 'answer.wav');
   const d = await post('/turn', fd, true);
   if (d.inactive) return d;
-  $('heard').textContent = d.heard ? tr('heard') + d.heard : '';
+  $('heard').textContent = d.heard ? tr('heard') + d.heard : (d.noisy ? tr('noisy') : '');
+  if (d.noisy && wasBarge) allowBarge.off = true;
+  if (d.noisy && ++noisyCount >= 2) openTypeNext = true; // noisy place: offer typing
+  if (d.heard) noisyCount = 0;
   return d.turn;
 }
 

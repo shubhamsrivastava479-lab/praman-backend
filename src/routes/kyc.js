@@ -13,16 +13,17 @@ router.use(requireAuth);
 // manage them. Super Admin can set/rotate them from the dashboard (stored
 // in the DB); falls back to .env if not set there. Never exposed in any
 // response to a vendor/agent.
-async function getPlatformCreds() {
+async function getPlatformCreds(c) {
   const apiKey = await getSetting('gridlinesApiKey', 'GRIDLINES_API_KEY');
   if (!apiKey) throw new Error('KYC verification is not available right now. Please contact support.');
   const authType = await getSetting('gridlinesAuthType', 'GRIDLINES_AUTH_TYPE') || 'API-Key';
-  return { apiKey, authType };
+  return { apiKey, authType, billTo: c ? { vendorId: c.vendorId, caseId: c.id } : null };
 }
 
 // Generic, vendor-safe error message — never leak the underlying provider's
 // name or raw error text to the dashboard.
 function safeFail(res, err) {
+  if (err && err.code === 'WALLET_LOW') return res.status(402).json({ error: err.message });
   console.error('KYC verification error:', err.message); // full detail stays in server logs only
   res.status(400).json({ error: 'Verification could not be completed. Please check the details and try again.' });
 }
@@ -37,7 +38,7 @@ router.post('/dl-verify/:caseId', async (req, res) => {
   if (!dlNumber || !dateOfBirth) return res.status(400).json({ error: 'dlNumber and dateOfBirth are required' });
 
   try {
-    const creds = await getPlatformCreds();
+    const creds = await getPlatformCreds(c);
     const result = await kyc.verifyDrivingLicence(dlNumber, dateOfBirth, creds);
     db.data.custody.push({
       id: uid('cust'), caseId: c.id, event: `Driving licence ${maskId(dlNumber)} verified`,
@@ -66,7 +67,7 @@ router.post('/aadhaar-otp/generate/:caseId', async (req, res) => {
   if (!aadhaarNumber) return res.status(400).json({ error: 'aadhaarNumber is required' });
 
   try {
-    const creds = await getPlatformCreds();
+    const creds = await getPlatformCreds(c);
     const result = await kyc.generateAadhaarOtp(aadhaarNumber, creds);
     res.json({ referenceId: result.data?.reference_id || result.reference_id });
   } catch (err) {
@@ -82,7 +83,7 @@ router.post('/aadhaar-otp/verify/:caseId', async (req, res) => {
   if (!referenceId || !otp) return res.status(400).json({ error: 'referenceId and otp are required' });
 
   try {
-    const creds = await getPlatformCreds();
+    const creds = await getPlatformCreds(c);
     const result = await kyc.verifyAadhaarOtp(referenceId, otp, creds);
     db.data.custody.push({
       id: uid('cust'), caseId: c.id, event: 'Aadhaar verified', actor: 'kyc_check', timestamp: new Date().toISOString()
@@ -112,7 +113,7 @@ router.post('/pan-verify/:caseId', async (req, res) => {
   }
 
   try {
-    const creds = await getPlatformCreds();
+    const creds = await getPlatformCreds(c);
     const result = await kyc.verifyPan(panNumber, nameOnPan, dateOfBirth, creds);
     db.data.custody.push({
       id: uid('cust'), caseId: c.id, event: `PAN ${maskId(panNumber)} verified`,

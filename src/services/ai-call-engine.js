@@ -17,6 +17,7 @@ const { getSetting } = require('./platform-settings');
 const { maskId, redactIdsInText } = require('./security');
 
 const SECRET_TTL = 60 * 60 * 1000;
+const signals = require('./call-signals');
 const secrets = new Map(); // caseId -> { aadhaarNumber, panNumber, aadhaarRef, selfieB64, aadhaarFrontB64, exp }
 
 function sec(caseId, create = true) {
@@ -154,7 +155,7 @@ function chatKeywords(c) {
   return k;
 }
 
-function buildQueue(c) {
+function buildQueue(c, cfg = {}) {
   const q = [];
   q.push({ id: 'name', type: 'ask', kind: 'name', key: 'spokenName', section: 'identity', text: 'Please tell me your full name.' });
 
@@ -218,6 +219,17 @@ function buildQueue(c) {
     });
   }
 
+  // The firm's own choices (see checklist-config.js): leave out some standard steps, add its own questions.
+  const skip = new Set(cfg.skip || []);
+  for (let i = q.length - 1; i >= 0; i--) {
+    const s = q[i];
+    if (skip.has(s.id) && s.type !== 'close' && s.id !== 'name' && !s.id.startsWith('confirm_') && !['face', 'blink', 'aadhaar', 'pan'].includes(s.id)) q.splice(i, 1);
+  }
+  if (!q.some(s => s.id === 'chats_consent')) { const k = q.findIndex(s => s.id === 'chats'); if (k >= 0) q.splice(k, 1); } // history step without its consent step makes no sense
+  if ((cfg.extra || []).length) {
+    const at = q.findIndex(s => s.id === 'chats_consent');
+    q.splice(at >= 0 ? at : q.length, 0, ...cfg.extra.map(e => ({ id: 'q_' + e.key, type: 'ask', kind: 'free', key: e.key, section: 'custom', text: e.text })));
+  }
   q.push({
     id: 'closing', type: 'close',
     text: 'Thank you for your time. Your verification call is now complete. Our team will review it and contact you if anything more is needed. You may now disconnect the call.'
@@ -254,7 +266,7 @@ const peekTurn = c => turnFor(c, '', null, true);
 function advanceStep(a) { a.i = Math.min(a.i + 1, a.queue.length - 1); }
 
 // ---------- session start ----------
-function startSession(c, { language, location, deviceInfo, ip, resume }) {
+function startSession(c, { language, location, deviceInfo, ip, resume, config }) {
   if (!c.aiCall) c.aiCall = {};
   const a = c.aiCall;
   if (a.status === 'in_progress' && a.queue && resume !== false) {
@@ -264,9 +276,11 @@ function startSession(c, { language, location, deviceInfo, ip, resume }) {
   }
   Object.assign(a, {
     status: 'in_progress', language: language || 'English', startedAt: now(), completedAt: null,
-    queue: buildQueue(c), i: 0, answers: [], checks: [], flags: [], tries: {},
+    queue: buildQueue(c, config || {}), mandatory: (config && config.mandatory) || [], i: 0, answers: [], checks: [], flags: [], tries: {},
     docs: { aadhaar: {}, pan: {}, chats: { count: 0, entries: [], evidenceIds: [] }, other: [], unreadable: 0 }, captured: {}, photos: {}, locations: []
   });
+  a.deviceSig = signals.deviceSig(deviceInfo, ip);
+  a.noisy = 0; a.sttErrors = 0;
   record(c, `AI verification call started (${typeLabel(c)}), language: ${a.language}`);
   if (location && location.latitude != null) {
     record(c, `Participant location captured: ${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)} (±${Math.round(location.accuracy || 0)}m) from IP ${ip || 'unknown'}`, 'participant');
@@ -292,10 +306,10 @@ function welcomeText(c) {
 }
 
 // ---------- async preparation (no db mutation) ----------
-async function gridlinesCreds() {
+async function gridlinesCreds(c) {
   const apiKey = await getSetting('gridlinesApiKey', 'GRIDLINES_API_KEY');
   if (!apiKey) return null;
-  return { apiKey, authType: (await getSetting('gridlinesAuthType', 'GRIDLINES_AUTH_TYPE')) || 'API-Key' };
+  return { apiKey, authType: (await getSetting('gridlinesAuthType', 'GRIDLINES_AUTH_TYPE')) || 'API-Key', billTo: c ? { vendorId: c.vendorId, caseId: c.id } : null };
 }
 
 const looksFailed = res => /invalid|not\s*valid|mismatch|not\s*match|failed|not\s*found/i.test(JSON.stringify(res || {}));
@@ -380,7 +394,7 @@ async function prepareInner(c, input) {
     const digits = String(j.value || input.english || '').replace(/\D/g, '');
     prep.otpDigits = digits;
     const s = sec(c.id, false);
-    const creds = await gridlinesCreds();
+    const creds = await gridlinesCreds(c);
     if (digits.length >= 4 && s && s.aadhaarRef && creds) {
       try { prep.otpResult = await kyc.verifyAadhaarOtp(s.aadhaarRef, digits, creds); }
       catch (e) { prep.otpError = true; }
@@ -409,7 +423,7 @@ async function prepareInner(c, input) {
 
   if (step.type === 'docs' && !input.skip && docsReady(a, step.doc)) {
     const s = sec(c.id, false) || {};
-    const creds = await gridlinesCreds();
+    const creds = await gridlinesCreds(c);
     if (step.doc === 'aadhaar') {
       if (s.selfieB64 && s.aadhaarFrontB64) {
         try { prep.faceMatch = await gemini.checkFacePhoto(s.selfieB64, s.aadhaarFrontB64); } catch { /* optional */ }
@@ -825,6 +839,7 @@ async function prepareFinish(c) {
 
 function runDerivedChecks(c) {
   const a = c.aiCall;
+  signals.answerChecks(c, (id, label, result, detail) => setCheck(a, id, label, result, detail), f => { if (!a.flags.includes(f)) a.flags.push(f); });
   const dobAnswer = a.answers.find(x => x.key === 'dob');
   const aadDob = a.docs.aadhaar.dob;
   if (dobAnswer && (dobAnswer.value || dobAnswer.english) && aadDob) {
@@ -837,7 +852,8 @@ function runDerivedChecks(c) {
   }
 }
 
-function applyFinish(c, summary) {
+function applyFinish(c, summary, opts = {}) {
+  const requireReview = opts.requireReview !== false; // safe default: a person signs off
   const a = c.aiCall;
   runDerivedChecks(c);
   const bad = a.checks.filter(x => x.result === 'mismatch' || x.result === 'fail');
@@ -849,6 +865,20 @@ function applyFinish(c, summary) {
   }
   for (const p of partial) a.flags.push(`${p.label}: partial match${p.detail ? ' (' + p.detail + ')' : ''}`);
 
+  if (!summary || !summary.summary) { const n = 'AI summary could not be written — please read the answers and photos yourself'; if (!a.flags.includes(n)) a.flags.push(n); }
+  // Other cases of this firm with the same identity details / device, and the audio quality.
+  a.idKeysSaved = signals.idKeys(a);
+  a.crossCase = signals.crossCase(c, opts.otherCases || []);
+  for (const x of a.crossCase) if (!a.flags.includes(x.text)) a.flags.push(x.text);
+  const q = signals.audioQuality(a);
+  a.liveCallReasons = [];
+  if (q.poor) { a.liveCallReasons.push(...q.reasons); const f = 'Poor audio quality during the call — the answers may be unreliable'; if (!a.flags.includes(f)) a.flags.push(f); c.needsExecutive = true; }
+  // Items the firm marked mandatory: if one is not done the call cannot end as plain "verified".
+  const mand = (a.mandatory || []).length ? require('./checklist').buildChecklist(c) : [];
+  const missingMand = (a.mandatory || []).map(id => mand.find(i => i.id === id)).filter(i => i && i.status !== 'done');
+  for (const m of missingMand) { const f = `Mandatory item not completed: ${m.label}`; if (!a.flags.includes(f)) a.flags.push(f); }
+  if (missingMand.length) { a.liveCallReasons.push(...missingMand.map(m => 'Mandatory item not done: ' + m.label)); c.needsExecutive = true; if (!a.flags.some(x => /live call/i.test(x))) a.flags.push('A live call with an executive is recommended to finish the mandatory items'); }
+  if (a.crossCase.length) a.liveCallReasons.push('The same identity details or device appear on another case');
   const photos = a.photos || {};
   const bodyMissing = isPolicy(c) && (!photos.stand || !photos.sit);
   const incomplete = !a.docs.aadhaar.received || !a.docs.pan.received || !a.facePhotoCaptured || !photos.blink || bodyMissing || a.answers.length < 3;
@@ -872,8 +902,10 @@ function applyFinish(c, summary) {
   const spot = Math.random() < (1 / 15);
   c.spotCheckRequired = spot;
   c.verificationFlags = [...a.flags, ...(spot ? ['Randomly selected for executive spot-check'] : [])];
-  c.status = (decision === 'verified' && !spot) ? 'completed' : c.status;
-  record(c, `AI verification call completed — result: ${decision}${a.flags.length ? '; flags: ' + a.flags.join('; ') : ''}`, 'system_check');
+  const clean = decision === 'verified' && !spot;
+  c.status = (clean && !requireReview) ? 'completed' : c.status;
+  c.reviewState = (clean && !requireReview) ? 'not_required' : 'awaiting_review';
+  record(c, `AI verification call completed — result: ${decision}${c.reviewState === 'awaiting_review' ? ' (waiting for investigator sign-off)' : ''}${a.flags.length ? '; flags: ' + a.flags.join('; ') : ''}`, 'system_check');
   secrets.delete(c.id); // drop full ID numbers and photos from memory
 }
 
@@ -939,7 +971,7 @@ function publicStatus(c) {
 }
 
 module.exports = {
-  startSession, prepare, apply, prepareIdMedia, applyIdMedia, prepareFinish, applyFinish,
+  buildQueue, startSession, prepare, apply, prepareIdMedia, applyIdMedia, prepareFinish, applyFinish,
   markAbandoned, publicStatus, turnFor, peekTurn, nameMatch, dobMatch, typeLabel, buildQueue, docsReady,
   notePhotoLocation, requestHuman, distanceKm, welcomeText, roughJudge
 };

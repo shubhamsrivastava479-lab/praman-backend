@@ -26,9 +26,9 @@ function redactIdsInText(text) {
 // brute-forcing a case ID or share token, or spamming the Gemini/Gridlines
 // APIs at someone else's cost. Not for authenticated, internal traffic.
 const buckets = new Map();
-function rateLimit({ windowMs = 60_000, max = 20 } = {}) {
+function rateLimit({ windowMs = 60_000, max = 20, name = '' } = {}) {
   return (req, res, next) => {
-    const key = req.ip + ':' + req.baseUrl;
+    const key = req.ip + ':' + req.baseUrl + ':' + name;
     const now = Date.now();
     const bucket = buckets.get(key) || [];
     const recent = bucket.filter(t => now - t < windowMs);

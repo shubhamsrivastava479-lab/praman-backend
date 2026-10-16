@@ -49,6 +49,28 @@ router.get('/case/:token', async (req, res) => {
   });
 });
 
+// Who to write to about privacy (shown on the privacy page).
+router.get('/privacy-info', async (req, res) => {
+  await db.read();
+  const ps = db.data.platformSettings || {};
+  res.json({ contact: process.env.PRIVACY_CONTACT_EMAIL || ps.privacyContact || '' });
+});
+
+// PDF of the report for an external viewer (same shared token).
+router.get('/ai-report/:token/pdf', async (req, res) => {
+  await db.read();
+  const c = db.data.cases.find(x => x.shareToken && x.shareToken === req.params.token);
+  if (!c || !c.aiCall) return res.status(404).json({ error: 'This link is invalid or has been revoked.' });
+  try {
+    const evidence = await storage.signEvidenceList(db.data.evidence.filter(e => e.caseId === c.id));
+    const custody = db.data.custody.filter(x => x.caseId === c.id);
+    const vendor = db.data.users.find(u => u.id === c.vendorId);
+    const R = buildAiReport(c, { evidence, custody, firm: vendor ? vendor.vendorName || '' : '', publicView: true });
+    const buf = await require('../services/report-pdf').render(R, { logoDataUrl: vendor && vendor.logoDataUrl });
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="Praman_Report_${String(R.case.claimNo || R.case.caseRef).replace(/[^A-Za-z0-9_-]/g, '')}.pdf"` }).send(buf);
+  } catch (e) { console.error('PDF error:', e.message); res.status(500).json({ error: 'The PDF could not be made.' }); }
+});
+
 // AI-assisted verification report for an external viewer (same shared token).
 router.get('/ai-report/:token', async (req, res) => {
   await db.read();

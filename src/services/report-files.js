@@ -42,6 +42,7 @@ function documentRows(c, evidence) {
         maskedAadhaar: !!a.maskedAadhaar,
         mimeType: e.mimeType || '',
         hasFile: !!e.fileUrl,
+        url: /^image\//.test(e.mimeType || '') ? e.fileUrl || null : null,
         link: fileLink(c, e),
         sha256: e.sha256 || ''
       };

@@ -123,7 +123,17 @@ const bigUpload = multer({
   limits: { fileSize: 1536 * 1024 * 1024 }
 });
 const OK_TYPES = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.wav': 'audio/wav', '.aac': 'audio/aac' };
-const CALL_TYPES = { whatsapp_video: 'WhatsApp video call', whatsapp_audio: 'WhatsApp voice call', phone: 'Phone call', other: 'Other call' };
+// What the executive asks a claimant to show on screen (claim investigations). Labels are fixed here, the page only sends key + status.
+const SCREEN_ITEMS = {
+  whatsapp_chats: 'WhatsApp chats with the garage, surveyor or other party',
+  fir: 'Police complaint / FIR / receipt',
+  photos: 'Accident photos and videos in the gallery (date and place visible)',
+  calls: 'Call log around the time of the incident',
+  vehicle_docs: 'RC, driving licence and policy on the phone',
+  bills: 'Repair estimate, bills or messages about the claim'
+};
+const SCREEN_STATUS = { shown: 'Shown', refused: 'Customer refused', na: 'Not applicable' };
+const CALL_TYPES = { google_meet: 'Google Meet video call', whatsapp_video: 'WhatsApp video call', whatsapp_audio: 'WhatsApp voice call', phone: 'Phone call', other: 'Other call' };
 
 router.post('/case/:caseId/external-recording', requireAuth, bigUpload.single('recording'), async (req, res) => {
   const tmp = req.file && req.file.path;
@@ -154,18 +164,39 @@ router.post('/case/:caseId/external-recording', requireAuth, bigUpload.single('r
     const callType = CALL_TYPES[b.callType] || CALL_TYPES.other;
     const callAt = b.callAt && !isNaN(Date.parse(b.callAt)) ? new Date(b.callAt).toISOString() : now();
     const screen = b.screenShared === '1';
-    const notes = String(b.notes || '').slice(0, 3000);
+    let notes = String(b.notes || '').slice(0, 3000);
+    // Screen-share checklist (claim investigations): what the customer showed, what they refused.
+    let check = null;
+    if (b.checklist && c.caseType !== 'policy_verification') {
+      try {
+        const raw = JSON.parse(b.checklist);
+        const items = (Array.isArray(raw) ? raw : []).filter(i => SCREEN_ITEMS[i.key] && SCREEN_STATUS[i.status]).map(i => ({ key: i.key, label: SCREEN_ITEMS[i.key], status: i.status }));
+        if (items.length) {
+          check = { at: now(), by: req.user.email || 'executive', items };
+          notes = (notes ? notes + '\n\n' : '') + 'Screen-share checklist:\n' + items.map(i => `- ${SCREEN_STATUS[i.status]}: ${i.label}`).join('\n');
+        }
+      } catch { /* ignore a malformed checklist */ }
+    }
     const dur = Math.max(0, Math.min(600, parseInt(b.durationMin, 10) || 0));
     db.data.evidence.push({
       id: evidenceId, caseId: c.id, vendorId: c.vendorId, source: 'external_call', type: 'call_recording',
       caption: `${callType}${screen ? ' with screen share' : ''} — recorded by ${req.user.email || 'executive'} — ${new Date(callAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}${dur ? ' — ' + dur + ' min' : ''}`,
       fileUrl, mimeType: mime, fileName: String(req.file.originalname || '').slice(0, 120), size: req.file.size, sha256,
-      callType: b.callType || 'other', screenShared: screen, takenBy: req.user.email || 'agent',
+      callType: b.callType || 'other', screenShared: screen, screenCheck: check ? check.items : undefined, takenBy: req.user.email || 'agent',
       analysis: { documentType: 'call_recording', title: callType, keyDetails: notes, extractedText: '', observations: '' },
       receivedAt: callAt
     });
     custody(c.id, `Customer consent confirmed by ${req.user.email || 'executive'} for the recorded ${callType.toLowerCase()}${screen ? ' and screen sharing' : ''}`, req.user.email || 'agent');
     db.data.custody.push({ id: uid('cust'), caseId: c.id, event: `${callType} recording uploaded (${(req.file.size / 1048576).toFixed(1)} MB)`, actor: req.user.email || 'agent', hash: sha256, timestamp: now() });
+    if (check) {
+      const refused = check.items.filter(i => i.status === 'refused');
+      c.screenCheck = { at: check.at, by: check.by, evidenceId, shown: check.items.filter(i => i.status === 'shown').length, refused: refused.length, total: check.items.length };
+      custody(c.id, `Screen-share check done by ${check.by}: ${c.screenCheck.shown} shown, ${refused.length} refused, ${check.items.length - c.screenCheck.shown - refused.length} not applicable`, check.by);
+      if (refused.length) {
+        const flag = `Customer declined to show on screen: ${refused.map(i => i.label.toLowerCase()).join('; ')}`;
+        c.verificationFlags = [...(c.verificationFlags || []).filter(f => !/^Customer declined to show on screen/.test(f)), flag];
+      }
+    }
     await db.write();
     res.json({ ok: true, evidenceId });
   } catch (e) {

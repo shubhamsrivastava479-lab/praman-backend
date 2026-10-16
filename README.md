@@ -166,3 +166,33 @@ themselves in the dashboard, not set as server env vars).
 - [ ] Confirm data residency/retention requirements (India's DPDP Act,
       IRDAI record-keeping norms) — this affects which cloud region you pick
       for both the server and S3 bucket
+
+## Follow-up, API, webhooks, retention, tests
+
+- **Deadlines and reminders** (`src/services/followup.js`, `scheduler.js`): every new case gets a deadline (firm setting, default 48 h). AI-call cases get WhatsApp reminders with the call link (default every 6 h, max 3, none between 21:00 and 08:00 India time). Late cases are marked overdue. Cases opened before this feature (no `dueAt`) are never reminded automatically. Needs `PUBLIC_BASE_URL` and ONE server instance.
+- **API for the insurer's system** (`/api/v1`, `X-API-Key`): create cases, read status/results, get the report link. Keys are created on the vendor's *Automation & API* page and only a hash is stored.
+- **Webhooks**: `case.created`, `ai_call.completed`, `ai_call.handoff`, `case.reviewed`, `case.overdue`; HMAC-signed, retried 1 min / 5 min / 30 min / 2 h / 6 h / 24 h. Addresses must be https and public (private networks are refused).
+- **Data retention**: Super Admin → vendor → *Plan & billing* → days. Only stored *files* of finished cases are deleted, daily at about 03:30 India time; reports and chain of custody stay. A case can be put on *Legal hold*.
+- **System health and server problems**: Super Admin → *System health*. Set `ALERT_WEBHOOK_URL` for chat alerts.
+- **Tests**: `npm test` (uses a temporary data folder; never touches real data).
+
+## Review, notifications, reports, security and privacy (added later)
+
+- **Review flow**: an AI call that is clean still waits for a person's sign-off (firm setting). High-value cases (`secondReviewAbove` in Settings) need two different people. Ready remarks per firm. The sign-off history is kept.
+- **Checklists**: each firm can skip optional steps, mark steps *required* and add its own questions (Settings → *Checklist*). Core identity steps can never be removed. The investigator can tick an item "done by me" with a note.
+- **Signals** (`src/services/call-signals.js`): address vs Aadhaar, income vs cover, device and ID reuse across cases **of the same firm**, call quality. They raise flags; they never decide.
+- **Notifications**: bell on the dashboard (AI call finished, customer asked for a person, overdue, second review, data request). E-mail only if `SMTP_URL` is set.
+- **Reports**: on-screen report, server-made PDF with cover and logo (`/api/cases/:id/ai-report.pdf`), e-mail to the insurer, read-only **insurer** login (`/insurer.html`), integrity fingerprint on every report.
+- **Roles**: company admin, agent, viewer (read-only), insurer (finished reports only). Enforced on the server (`src/services/roles.js`).
+- **Security**: audit log (Settings → *Activity log*), optional two-step login with an authenticator app (per person).
+- **Backups**: automatic daily backup after 02:00 India time to the file storage, last 14 kept, API keys are never included. Super Admin → *Backups* has **Test** (opens and checks it) and **Restore** (needs typing RESTORE; a safety copy is made first).
+- **Relational mirror** (PostgreSQL only): `praman_m_cases`, `praman_m_evidence`, `praman_m_custody`, `praman_m_users` hold the same data in normal columns for SQL/BI tools. One-way copy, refreshed seconds after each save. Never write to them.
+- **Privacy (DPDP)**: `/privacy.html`; a customer can ask for erasure from their call page; the firm erases or declines with a reason (Settings → *Customer data-deletion requests*). Files are deleted, personal details cleared, the case number, result and activity record stay. Cases under legal hold cannot be erased.
+- **Customer call page**: progress step counter, pause, camera/mic test, slower voice, larger text, always-visible typing box, WhatsApp thank-you message.
+- **Live captions**: on the executive's live-call page (Captions button). Audio clips go to Gemini; nothing is stored.
+- **Android screen-share app**: not built — see `docs/ANDROID_APP.md`.
+- **AI usage**: Super Admin dashboard shows daily Gemini calls and failures.
+
+
+## Billing
+Per-case, subscription or hybrid billing with GST invoices, PDFs, payments and reminders. All prices are set by Super Admin (Super Admin -> Billing). See `docs/BILLING_GUIDE.md`.

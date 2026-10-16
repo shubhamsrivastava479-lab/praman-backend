@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Praman — Privacy notice</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
+<style>
+  :root{--bg:#f4f5f9;--card:#fff;--ink:#141a2b;--mute:#5b6478;--brand:#1f2a6b;--line:#dde1ec;--ok:#1f7a6c;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f131b;--card:#171d29;--ink:#e8eaf0;--mute:#9aa3b5;--brand:#9fb0ff;--line:#2b3446;}}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.6;}
+  main{max-width:720px;margin:0 auto;padding:22px 16px 60px;}
+  h1{font-size:24px;color:var(--brand);margin:0 0 4px;} h2{font-size:17px;margin:26px 0 6px;color:var(--brand);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px;}
+  p,li{font-size:15px;} li{margin:4px 0;} .mute{color:var(--mute);font-size:13px;}
+  textarea{width:100%;box-sizing:border-box;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);min-height:80px;}
+  button{font:inherit;font-weight:600;padding:12px 18px;border-radius:10px;border:0;background:var(--brand);color:#fff;cursor:pointer;margin-top:10px;min-height:44px;}
+  button:disabled{opacity:.5;}
+  #msg{margin-top:10px;font-weight:600;}
+</style>
+</head>
+<body>
+<main>
+  <img src="/logo-compact.png" alt="Praman" style="height:34px;width:auto;display:block;margin-bottom:6px;"><h1>Privacy notice</h1>
+  <div class="mute">How your information is used during an AI-assisted verification call</div>
+
+  <h2>Who is responsible for your data</h2>
+  <p>The insurance company or investigation firm that sent you the link decides why your data is collected and for how long it is kept. Praman provides the software that runs the call and stores the records on that firm's behalf.</p>
+
+  <h2>What is collected during the call</h2>
+  <ul>
+    <li>Video and audio of the call, and your spoken or typed answers (with a translation).</li>
+    <li>Photos: your face, a short eye-blink check, full-body photos where the check needs them, and your Aadhaar and PAN card photos (only masked numbers are kept in the report).</li>
+    <li>Your approximate location and your phone's type and browser, to confirm the call was made by you.</li>
+    <li>The messages and documents you send on WhatsApp for this case.</li>
+  </ul>
+
+  <h2>Why it is collected</h2>
+  <p>To verify your identity and the details of your policy or claim. It is not used for advertising and is not sold.</p>
+
+  <h2>Who can see it</h2>
+  <p>The firm's authorised staff, and the insurer if the firm shares the report with them. The call is run by an automated AI assistant; its notes are always checked by a person before the result is final. Some processing is done by service providers, such as cloud storage and AI services.</p>
+
+  <h2>How long it is kept</h2>
+  <p>Photos, recordings and documents are deleted automatically after the period set by the firm, unless the law requires the record to be kept longer.</p>
+
+  <h2>Your rights</h2>
+  <ul>
+    <li>Ask what data is held about you and for a copy of it.</li>
+    <li>Ask for a correction.</li>
+    <li>Ask for your personal data to be erased. The firm may have to refuse where the law requires it to keep the record, and will tell you the reason.</li>
+    <li>Complain to the firm's grievance contact below. If you are not satisfied, you may approach the Data Protection Board of India.</li>
+  </ul>
+  <p>Grievance contact: <b id="contact">please ask the firm that sent you the link</b></p>
+
+  <div class="card" id="reqCard" style="display:none;">
+    <b>Ask for my data to be erased</b>
+    <p class="mute" style="margin:6px 0;">Your request goes to the firm that sent you the link. They will erase your photos, recordings, answers and personal details, or tell you why they cannot.</p>
+    <textarea id="reason" maxlength="500" placeholder="Reason (optional)"></textarea>
+    <button id="send">Send my request</button>
+    <div id="msg" role="status"></div>
+  </div>
+
+  <p class="mute" style="margin-top:28px;">This notice is a general description. The firm's own privacy policy and the law apply.</p>
+</main>
+<script>
+const t = new URLSearchParams(location.search).get('t');
+if (t) document.getElementById('reqCard').style.display = '';
+fetch('/api/public/privacy-info').then(r => r.json()).then(d => { if (d.contact) document.getElementById('contact').textContent = d.contact; }).catch(() => {});
+document.getElementById('send').addEventListener('click', async () => {
+  const b = document.getElementById('send'); b.disabled = true;
+  try {
+    const r = await fetch('/api/ai-call/' + encodeURIComponent(t) + '/data-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: document.getElementById('reason').value }) });
+    if (!r.ok) throw new Error();
+    document.getElementById('msg').style.color = 'var(--ok)'; document.getElementById('msg').textContent = 'Your request was sent. The firm will contact you.';
+  } catch { b.disabled = false; document.getElementById('msg').textContent = 'The request could not be sent. Please try again.'; }
+});
+</script>
+<div style="text-align:center;margin:28px 0 18px;color:#778;font-size:11.5px;"><img src="/logo-compact.png" alt="Praman" style="height:26px;width:auto;display:block;margin:0 auto 4px;">Truth revealed, trust restored</div>
+</body>
+</html>

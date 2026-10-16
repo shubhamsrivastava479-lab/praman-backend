@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Praman — Super Admin Setup</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body{font-family:system-ui,sans-serif;background:#10151f;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;}
@@ -18,7 +22,7 @@
 </head>
 <body>
 <div class="card">
-  <h1>प्रमाण Praman</h1>
+  <h1 style="margin:0;text-align:center;"><img src="/logo.png" alt="Praman" style="display:block;width:230px;max-width:75%;height:auto;margin:0 auto 10px;"></h1>
   <div class="sub">One-time Super Admin setup. This works only if no Super Admin account exists yet — running it again will fail safely. You'll need the <b>SUPER_ADMIN_SETUP_KEY</b> from your server's .env file.</div>
   <div class="msg" id="msg"></div>
   <input id="setupKey" placeholder="Setup key (from .env)" type="password">

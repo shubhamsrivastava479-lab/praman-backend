@@ -17,6 +17,9 @@ router.get('/:token/:evidenceId', async (req, res) => {
   await db.read();
   const c = db.data.cases.find(x => x.shareToken && x.shareToken === req.params.token);
   const ev = c && db.data.evidence.find(e => e.id === req.params.evidenceId && e.caseId === c.id);
+  if (ev && ev.purgedAt) {
+    return res.status(410).type('html').send('<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:40px;text-align:center;color:#444">This file was deleted after the retention period ended. The report and the record of the verification are still available.</body>');
+  }
   if (!ev || !ev.fileUrl) {
     return res.status(404).type('html').send('<!doctype html><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:40px;text-align:center;color:#444">This file link is not valid, or the report link was turned off by the investigator.</body>');
   }

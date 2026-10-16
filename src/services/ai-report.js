@@ -3,7 +3,9 @@
 // share link, so nothing secret (call token, WhatsApp number, full ID numbers,
 // internal queue) can leak through either one.
 
+const crypto = require('crypto');
 const { typeLabel } = require('./ai-call-engine');
+const ckl = require('./checklist');
 const { fileLink, documentRows, recordingRows, chatRows } = require('./report-files');
 
 const SECTION_LABELS = {
@@ -16,10 +18,11 @@ const SECTION_LABELS = {
   police: 'Police / FIR',
   vehicle: 'Vehicle',
   witness: 'Witnesses',
-  chatHistory: 'WhatsApp history check'
+  chatHistory: 'WhatsApp history check',
+  custom: 'Additional questions'
 };
-const PIVC_ORDER = ['identity', 'policyDetails', 'healthDisclosure', 'incomeOccupation', 'nominee'];
-const CLAIM_ORDER = ['identity', 'lossDetails', 'police', 'vehicle', 'witness'];
+const PIVC_ORDER = ['identity', 'policyDetails', 'healthDisclosure', 'incomeOccupation', 'nominee', 'custom'];
+const CLAIM_ORDER = ['identity', 'lossDetails', 'police', 'vehicle', 'witness', 'custom'];
 
 const PHOTO_TYPES = {
   liveness_selfie: 'Live face photo',
@@ -77,7 +80,8 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
   const docs = a.docs || {};
   const pick = (o, keys) => keys.reduce((r, k) => (o && o[k] ? { ...r, [k]: o[k] } : r), {});
 
-  return {
+  const has = id => (a.checks || []).some(k => k.id === id && k.result !== 'unknown');
+  const out = {
     meta: {
       reportNo: `${c.caseRef || 'PR-' + String(c.claimNo || '').replace(/[^A-Za-z0-9]/g, '').slice(-10)}-R${(a.completedAt || a.startedAt || c.createdAt || '').slice(2, 10).replace(/-/g, '')}`,
       generatedAt: new Date().toISOString(),
@@ -110,6 +114,7 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
       summary: a.summary || '',
       concerns: a.concerns || [],
       flags: a.flags || [],
+      liveCallReasons: a.liveCallReasons || [],
       apparentAge: (a.captured || {}).apparentAgeRange || ''
     },
     photos,
@@ -129,8 +134,21 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
     },
     recordings,
     custody: custody.map(x => ({ at: x.timestamp, event: publicView ? x.event.replace(/,?\s*(from\s+)?IP\s+[0-9a-f:.]+/gi, '') : x.event, actor: x.actor })),
-    review: c.aiReview || null
+    review: c.aiReview || null,
+    reviewHistory: (c.aiReviewHistory || []).map(r => ({ finalVerdict: r.finalVerdict, remarks: r.remarks, reviewerName: r.reviewerName, reviewerDesignation: r.reviewerDesignation, reviewedAt: r.reviewedAt })),
+    reviewState: c.reviewState || null,
+    checklist: (() => { const items = ckl.buildChecklist(c); return { items, ...ckl.summarize(items) }; })(),
+    recordingMissing: a.status === 'completed' && !aiRecording,
+    idSources: {
+      aadhaar: !(docs.aadhaar || {}).received ? 'Not received' : has('aadhaar_api') ? 'Checked with the official Aadhaar record (OTP verification)' : 'Read by AI from the photo only — not checked with the official record',
+      pan: !(docs.pan || {}).received ? 'Not received' : has('pan_api') ? 'Checked with the official PAN record' : 'Read by AI from the photo only — not checked with the official record'
+    }
   };
+  // Fingerprint: changes if anything in the report is altered later. Same value on the dashboard and on the share link.
+  const body = { r: out.meta.reportNo, case: out.case, call: { ...out.call, recordingUrl: !!out.call.recordingUrl }, result: out.result, photos: out.photos.map(p => [p.type, p.at]), documents: out.documents,
+    checks: out.checks, sections: out.sections, locations: out.locations, custody: custody.map(x => [x.timestamp, x.event, x.actor]), review: out.review, history: out.reviewHistory, checklist: out.checklist.items.map(i => [i.id, i.status]) };
+  out.meta.fingerprint = crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+  return out;
 }
 
 module.exports = { buildAiReport };

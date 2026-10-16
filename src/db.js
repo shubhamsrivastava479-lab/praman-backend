@@ -24,10 +24,21 @@ const defaultData = () => ({
   callSessions: [],
   transcripts: [],
   reports: [],
+  webhookDeliveries: [], // events waiting to be / already sent to a vendor's system
+  errorLog: [],          // recent server problems (Super Admin → System health)
+  notifications: [],     // in-app notifications for a firm's team
+  auditLog: [],          // who did what (logins, settings, sign-offs, exports)
+  dataRequests: [],      // customers asking for their data to be deleted
+  backupLog: [],         // automatic backups saved to file storage
+  invoices: [],          // bills to vendor firms (draft / issued / paid / void) with their payments
+  wallets: {},           // prepaid wallet balance per firm: { vendorId: { balance } }
+  walletTxns: [],        // wallet ledger: top-ups, report and ID-check charges, refunds
+  billingSettings: {},   // Praman's own invoice details: legal name, GSTIN, bank, UPI, numbering
+  aiUsage: {},           // Gemini calls per day: { 'YYYY-MM-DD': { text, tts, errors, ... } }
   platformSettings: {} // Super Admin managed: geminiApiKey, gridlinesApiKey, R2, TURN ...
 });
 
-const dataDir = path.join(__dirname, '..', 'data');
+const dataDir = process.env.PRAMAN_DATA_DIR || path.join(__dirname, '..', 'data');
 const jsonFile = path.join(dataDir, 'db.json');
 const TABLE = (process.env.PRAMAN_TABLE || 'praman_records').replace(/[^a-z0-9_]/gi, '');
 const SEP = '\u0000';
@@ -154,7 +165,7 @@ class PgDb {
     this.queued = before.then(() => {
       this.queued = null;
       this.running = this.store.flush(this.data)
-        .then(r => { this.lastWriteError = null; this.lastWriteAt = new Date().toISOString(); return r; })
+        .then(r => { this.lastWriteError = null; this.lastWriteAt = new Date().toISOString(); try { require('./services/mirror').schedule(this); } catch { /* optional */ } return r; })
         .catch(e => {
           // Keep the change in memory and try again shortly, so a short
           // database hiccup does not lose anything.

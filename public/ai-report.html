@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>AI Verification Report — Praman</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -133,6 +137,7 @@
   <span class="sp" id="barText">AI verification report</span>
   <button class="main" onclick="downloadPdf()">Download PDF</button>
   <button onclick="window.print()">Print</button>
+  <button id="mailBtn" style="display:none;" onclick="emailPdf()">E-mail PDF</button>
   <button id="shareBtn" style="display:none;" onclick="copyShare()">Copy share link</button>
 </div>
 <main class="page" id="page"><div class="loading">Loading report…</div></main>
@@ -169,8 +174,9 @@ const openLink = (p, label) => p ? `<a class="flink" href="${esc(abs(p))}" targe
     else { page.innerHTML = '<div class="loading">This report link is not complete.</div>'; return; }
     R = await res.json();
     if (R.error) { page.innerHTML = '<div class="loading">' + esc(R.error) + '</div>'; return; }
+    if (vendorMode) { try { const o = await (await fetch('/api/notifications/review-options', { headers: { Authorization: 'Bearer ' + authToken } })).json(); window.CANNED = o.cannedRemarks || []; } catch {} }
     render();
-    if (vendorMode) document.getElementById('shareBtn').style.display = '';
+    if (vendorMode) { try { if (!['viewer','insurer'].includes(JSON.parse(localStorage.getItem('praman_user') || '{}').role)) { document.getElementById('mailBtn').style.display = ''; document.getElementById('shareBtn').style.display = ''; } } catch {} }
   } catch (e) { page.innerHTML = '<div class="loading">The report could not be loaded. Refresh the page to try again.</div>'; }
 })();
 
@@ -209,7 +215,10 @@ function render(){
       <tr><td>Verification call</td><td class="v">${dt(call.startedAt)}${call.durationMin ? ' · ' + call.durationMin + ' min' : ''}${call.language ? ' · ' + esc(call.language) : ''}</td></tr>
       <tr><td>Location at call start</td><td class="v">${llP(call.startLocation)}</td></tr>
       <tr><td>Red flags raised</td><td class="v">${res.flags.length}</td></tr>
+      <tr><td>Investigator sign-off</td><td class="v">${fin ? '<span class="verdict-cell ok">Done</span> — ' + esc(rv.reviewerName || 'investigator') : '<span class="verdict-cell mid">Pending</span> — the AI result is not final until an investigator signs off'}</td></tr>
     </table>
+    ${(res.liveCallReasons || []).length ? `<div class="boxnote" style="border-color:#B23A2C;color:#8A2A1F;"><b>A live call with an executive is recommended.</b> ${res.liveCallReasons.map(esc).join('; ')}.</div>` : ''}
+    ${R.recordingMissing ? '<div class="boxnote" style="border-color:#B23A2C;color:#8A2A1F;"><b>Call recording not received.</b> Only the answers and photos are available for this call. Consider a live call before relying on this result.</div>' : ''}
     <div class="summary-text">${res.summary ? esc(res.summary) : '<span class="empty">No AI summary available.</span>'}
       <span class="who">${fin ? `Final verdict by ${esc(rv.reviewerName || 'investigator')}${rv.reviewerDesignation ? ', ' + esc(rv.reviewerDesignation) : ''}, on ${d(rv.reviewedAt)}. AI recommendation was: ${esc(ai[0])}.` : 'This is the AI’s recommendation. It has not been signed off by an investigator yet.'}${c.spotCheckRequired ? ' Selected for a random quality spot-check.' : ''}${c.needsExecutive ? ' Customer asked to speak to a person.' : ''}</span>
     </div>`;
@@ -247,6 +256,15 @@ function render(){
       <div class="boxnote">All attempts are kept, including photos the AI asked the customer to retake.${res.apparentAge ? ' Apparent age range seen by AI in the full-body photo: ' + esc(res.apparentAge) + '.' : ''}</div>`
     : '<div class="plain empty">No photos were captured.</div>');
 
+  // Face next to the ID photos, so the reviewer can compare at a glance.
+  const faceP = R.photos.filter(p => p.type === 'liveness_selfie').slice(-1)[0];
+  const idImg = re => (R.received || []).find(r => r.url && re.test((r.documentType || '') + ' ' + (r.title || '')));
+  const aImg = idImg(/aadhaar|aadhar/i), pImg = idImg(/\bpan\b/i);
+  const faceChk = (R.checks || []).find(k => /face/i.test(k.label) && /aadhaar|id/i.test(k.label));
+  const sCompare = faceP && (aImg || pImg) ? S('Face and ID photos side by side', `<div class="photos">${[[faceP.url, 'Live face photo (taken during the call)'], aImg && [aImg.url, 'Photo on Aadhaar card'], pImg && [pImg.url, 'Photo on PAN card']].filter(Boolean).map(([u, l]) => `<figure><img src="${esc(u || '')}" alt="${esc(l)}"><figcaption><b>${esc(l)}</b></figcaption></figure>`).join('')}</div>
+      <div class="boxnote">Compare the faces yourself. ${faceChk ? 'The AI face comparison said: <b>' + esc(faceChk.result) + '</b>' + (faceChk.detail ? ' — ' + esc(faceChk.detail) : '') + '.' : ''}</div>`) : '';
+  const recHref = (call.recordingUrl ? abs(call.recordingUrl) : null);
+  const tmark = at => { if (!recHref || !call.startedAt || !at) return ''; const s = Math.max(0, Math.round((new Date(at) - new Date(call.startedAt)) / 1000)); return ` <a class="flink" href="${esc(recHref)}#t=${s}" target="_blank" rel="noopener" title="Open the recording at this moment">▶ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</a>`; };
   const A = R.documents.aadhaar || {}, P = R.documents.pan || {};
   const sDocs = S('Identity documents', T([['Detail', '30%'], ['Aadhaar card'], ['PAN card']], [
       ['Number', A.masked || 'Not received', P.masked || 'Not received'],
@@ -256,7 +274,7 @@ function render(){
       ["Father's / husband's name", '', P.fatherName],
       ['Address', A.address, '']
     ].map(r => `<tr><td style="color:var(--muted);background:#F7F8FC;">${esc(r[0])}</td><td>${esc(r[1] || '—')}</td><td>${esc(r[2] || '—')}</td></tr>`)) +
-    `<div class="boxnote">Read by AI from photos the customer sent on WhatsApp during the call. Only the last four digits of Aadhaar and PAN are stored.</div>`);
+    `<div class="boxnote"><b>How these were checked.</b> Aadhaar: ${esc(R.idSources.aadhaar)}. PAN: ${esc(R.idSources.pan)}.<br>Read by AI from photos the customer sent on WhatsApp during the call. Only the last four digits of Aadhaar and PAN are stored.</div>`);
 
   const rec = R.received || [];
   const docBlock = (x, i) => `
@@ -302,7 +320,18 @@ function render(){
   const sQ = S(m.isPolicy ? 'Verification questionnaire' : 'Investigation questionnaire', R.sections.map(s => `
     <h3><span>${esc(s.label)}</span>${s.status ? chip(s.status) : ''}</h3>
     ${s.notes ? `<div class="sec-note">${esc(s.notes)}</div>` : ''}
-    ${s.qa.length ? T([['#', '34px'], ['Question asked by AI', '43%'], ["Customer's answer"]], s.qa.map(q => `<tr><td class="qno">${++qn}</td><td>${esc(q.question)}</td><td>${q.answer ? esc(q.answer) : '<span class="empty">No clear answer</span>'}${q.original ? `<span class="orig">${esc(q.language)}: “${esc(q.original)}”</span>` : ''}${q.concern ? `<span class="concern">⚠ ${esc(q.concern)}</span>` : ''}</td></tr>`)) : ''}`).join('') || '<div class="plain empty">No questions were answered.</div>');
+    ${s.qa.length ? T([['#', '34px'], ['Question asked by AI', '43%'], ["Customer's answer"]], s.qa.map(q => `<tr><td class="qno">${++qn}</td><td>${esc(q.question)}</td><td>${q.answer ? esc(q.answer) : '<span class="empty">No clear answer</span>'}${tmark(q.at)}${q.original ? `<span class="orig">${esc(q.language)}: “${esc(q.original)}”</span>` : ''}${q.concern ? `<span class="concern">⚠ ${esc(q.concern)}</span>` : ''}</td></tr>`)) : ''}`).join('') || '<div class="plain empty">No questions were answered.</div>');
+
+  const CKR = { done: ['✔ Done', 'ok'], partial: ['● Needs a look', 'mid'], not_done: ['✘ Not done', 'bad'], in_progress: ['… In progress', 'mid'], pending: ['– Not reached', 'na'] };
+  const CK = R.checklist || { items: [], total: 0 };
+  let ckg = '';
+  const sList = CK.items.length ? S(m.isPolicy ? 'Verification checklist' : 'Investigation checklist',
+    `<div class="plain" style="margin-bottom:6px;">Every question and document required for this ${m.isPolicy ? 'verification' : 'investigation'}, marked by the AI during the call: <b>${CK.done} of ${CK.total} done</b>${CK.partial ? `, ${CK.partial} need a look` : ''}${CK.notDone ? `, ${CK.notDone} not done` : ''}${CK.pending ? `, ${CK.pending} not reached` : ''}.</div>` +
+    T([['#', '34px'], ['Item'], ['Result', '125px'], ['Note']], CK.items.map((x, i) => {
+      const g = x.group !== ckg ? `<tr><td colspan="4" style="background:#EEF1FA;font-weight:700;color:#22307A;">${esc(x.group)}</td></tr>` : ''; ckg = x.group;
+      const st = x.byHuman ? ['✔ Done by person', 'ok'] : (CKR[x.status] || CKR.pending);
+      return g + `<tr><td class="qno">${i + 1}</td><td>${esc(x.label)}${x.mandatory ? ' <b style="color:#B23A2C;font-size:11px;">REQUIRED</b>' : ''}</td><td><span class="chip c-${st[1]}">${st[0]}</span></td><td>${esc(x.detail || '')}</td></tr>`;
+    }))) : '';
 
   const sFlags = S('Red flags for the reviewer', res.flags.length ? `<ol class="flags">${res.flags.map(f => `<li>${esc(f)}</li>`).join('')}</ol>` : '<div class="plain">No red flags were raised.</div>');
 
@@ -317,10 +346,12 @@ function render(){
     ['Reviewed by', rv && rv.reviewerName ? esc(rv.reviewerName) + (rv.reviewerDesignation ? ', ' + esc(rv.reviewerDesignation) : '') : '<span class="empty">—</span>'],
     ['Reviewed on', rv ? d(rv.reviewedAt) : '<span class="empty">—</span>']
   ]);
-  const reviewForm = vendorMode ? `<div class="review-form no-print">
+  const reviewForm = vendorMode && !['viewer','insurer'].includes((() => { try { return JSON.parse(localStorage.getItem('praman_user') || '{}').role; } catch { return ''; } })()) ? `<div class="review-form no-print">
+      ${R.reviewState === 'awaiting_second_review' ? '<div class="hint" style="margin-bottom:8px;"><b>Second review needed.</b> The first sign-off is saved. A different person must now confirm the verdict.</div>' : ''}
       <label for="rvVerdict">Final verdict</label>
       <select id="rvVerdict">${VOPTS.map(([v, l]) => `<option value="${v}" ${(rv ? rv.finalVerdict : (res.decision || 'pending_verification')) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <label for="rvRemarks">Investigator remarks</label>
+      ${(window.CANNED || []).length ? `<select id="rvCanned" onchange="addCanned(this)"><option value="">Insert a ready remark…</option>${window.CANNED.map(t => `<option>${esc(t)}</option>`).join('')}</select>` : ''}
       <textarea id="rvRemarks" placeholder="Your observations after watching the recording and checking the photos">${esc(rv ? rv.remarks : '')}</textarea>
       <div class="row">
         <div><label for="rvName">Reviewed by</label><input id="rvName" value="${esc(rv ? rv.reviewerName : '')}"></div>
@@ -335,6 +366,7 @@ function render(){
       <div><div class="lbl">Seal of ${esc(m.firm || 'the firm')}</div></div>
     </div>`);
 
+  const sHist = (R.reviewHistory || []).length ? S('Earlier sign-offs (kept for audit)', T([['Date', '150px'], ['Verdict', '150px'], ['By'], ['Remarks']], R.reviewHistory.map(h => `<tr><td>${dt(h.reviewedAt)}</td><td>${esc((VERDICT[h.finalVerdict] || [h.finalVerdict])[0])}</td><td>${esc(h.reviewerName || '—')}</td><td>${esc(h.remarks || '')}</td></tr>`))) : '';
   const sCustody = S('Chain of custody', T([['Time', '150px'], ['Event']], R.custody.map(x => `<tr><td>${dt(x.at)}</td><td>${esc(x.event)}</td></tr>`)));
 
   document.getElementById('page').innerHTML = `
@@ -347,17 +379,42 @@ function render(){
       <p class="subtitle">${esc(m.caseTypeLabel.replace(/^./, ch => ch.toUpperCase()))}${m.isPolicy ? ' — pre-issuance verification call' : ''}</p>
     </div>
     ${summary}
-    ${sCase}${sCall}${sRecs}${sPhotos}${sDocs}${sReceived}${sChecks}${sQ}${sChats}${sFlags}${sLoc}${sReview}${sCustody}
+    ${sCase}${sCall}${sList}${sRecs}${sPhotos}${sCompare}${sDocs}${sReceived}${sChecks}${sQ}${sChats}${sFlags}${sLoc}${sReview}${sHist}${sCustody}
     <div class="declaration"><b>Note on this report.</b> The verification call was conducted by an automated AI assistant, and the customer was told so at the start. Answers were transcribed and translated by AI and may contain recognition errors; the call recording is the primary record. The AI result is a recommendation; the final verdict rests with the investigator who signs above. Full Aadhaar and PAN numbers are not stored.</div>
-    <div class="endmark">— End of report ${esc(m.reportNo)} —</div>`;
+    <div class="endmark">— End of report ${esc(m.reportNo)} —<br><span style="font-size:10px;color:#8A90A8;word-break:break-all;">Report fingerprint (SHA-256): ${esc(m.fingerprint || '')}</span></div>`;
   // number the sections in the order they appear on the page
   document.querySelectorAll('section.sec > h2').forEach((h, i) => { h.textContent = h.textContent.replace(/^\d+\.\s*/, (i + 1) + '. '); });
 }
 
-function downloadPdf(){
-  // The browser's "Save as PDF" uses the page title as the file name.
-  alert('In the print window, choose "Save as PDF" as the printer (Destination), then press Save.');
-  window.print();
+async function downloadPdf(){
+  // The server makes the PDF (cover page, firm logo, page numbers).
+  const url = vendorMode ? '/api/cases/' + encodeURIComponent(caseId) + '/ai-report.pdf' : '/api/public/ai-report/' + encodeURIComponent(shareToken) + '/pdf';
+  try {
+    const r = await fetch(url, vendorMode ? { headers: { Authorization: 'Bearer ' + authToken } } : undefined);
+    if (!r.ok) throw new Error((await r.json()).error || 'failed');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob());
+    a.download = 'Praman_Report_' + String((R.case && R.case.claimNo) || 'case').replace(/[^A-Za-z0-9_-]/g, '') + '.pdf'; a.click();
+  } catch (e) {
+    alert('The PDF could not be made (' + e.message + '). In the print window, choose "Save as PDF" instead.');
+    window.print();
+  }
+}
+
+async function emailPdf(){
+  const to = prompt('Send the PDF to which e-mail address?\n(Leave empty to use the insurer e-mail saved in Settings.)', '');
+  if (to === null) return;
+  try {
+    const r = await fetch('/api/cases/' + encodeURIComponent(caseId) + '/email-report', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken }, body: JSON.stringify({ to: to.trim() }) });
+    const j = await r.json();
+    alert(r.ok ? 'The report was e-mailed.' : (j.error || 'Could not send.'));
+  } catch { alert('Could not send. Please try again.'); }
+}
+
+function addCanned(sel){
+  if (!sel.value) return;
+  const t = document.getElementById('rvRemarks');
+  t.value = (t.value ? t.value.replace(/\s+$/, '') + '\n' : '') + sel.value;
+  sel.value = '';
 }
 
 async function saveReview(){
@@ -373,7 +430,7 @@ async function saveReview(){
     const r = await fetch('/api/cases/' + encodeURIComponent(caseId) + '/ai-review', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken }, body: JSON.stringify(body) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Could not save');
-    R.review = j.review; render();
+    R.review = j.review; if (j.reviewState) R.reviewState = j.reviewState; render();
     document.getElementById('rvMsg').textContent = 'Sign-off saved.';
   } catch (e) { msg.textContent = 'Sign-off not saved: ' + e.message; }
 }
@@ -388,5 +445,6 @@ async function copyShare(){
   } catch { alert('Could not create the share link. Try again.'); }
 }
 </script>
+<div style="text-align:center;margin:28px 0 18px;color:#778;font-size:11.5px;"><img src="/logo-compact.png" alt="Praman" style="height:26px;width:auto;display:block;margin:0 auto 4px;">Truth revealed, trust restored</div>
 </body>
 </html>

@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Live Video Call — Praman</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -54,6 +58,7 @@
     <video id="remote" autoplay playsinline></video>
     <div class="wait" id="wait">Send the link to the customer. The call starts as soon as they join.</div>
     <div class="media" id="mediaBox"><div id="mediaText"></div><button class="b2" id="mediaRetry" style="display:none;margin-top:8px;">Try camera &amp; mic again</button></div>
+    <div id="capBox" style="display:none;position:absolute;left:12px;right:12px;bottom:84px;background:rgba(10,14,28,.82);color:#fff;border-radius:10px;padding:8px 12px;font-size:15px;line-height:1.4;z-index:4;max-height:28%;overflow:auto;"></div>
     <video id="local" autoplay playsinline muted></video>
     <div class="flash" id="flash"></div>
     <div class="controls">
@@ -63,6 +68,7 @@
       <button class="c" id="frontBtn" title="Ask the customer to show their face">Ask: front camera</button>
       <button class="c photo" id="photoBtn">📸 Take photo</button>
       <button class="c" id="reconBtn" title="Reconnect video">Reconnect</button>
+      <button class="c" id="capBtn" title="Show what the customer says as text, with an English translation">Captions: off</button>
       <button class="c end" id="endBtn">End &amp; save recording</button>
     </div>
   </div>
@@ -185,6 +191,7 @@ function connect() {
       }
     } catch (e) { console.warn('signal', e); }
   });
+  socket.on('live-caption', c => { if (capOn) capShow(c); });
   socket.on('live-state', s => { custState = { ...custState, ...s }; setCust('joined'); });
   socket.on('live-replaced', () => { $('wait').style.display = 'flex'; $('wait').textContent = 'This call was opened in another tab.'; });
 }
@@ -291,6 +298,37 @@ $('photoBtn').addEventListener('click', () => {
     };
   }, 'image/jpeg', 0.92);
 });
+
+
+// ---- live captions (customer's voice as text + English) ----
+let capOn = false, capTimer = null;
+function capShow(c){
+  const box = $('capBox'); box.style.display = '';
+  const line = document.createElement('div');
+  line.innerHTML = (c.original && c.original !== c.english ? '<span style="opacity:.7">' + esc(c.original) + '</span><br>' : '') + '<b>' + esc(c.english || c.original) + '</b>';
+  box.appendChild(line); while (box.children.length > 4) box.removeChild(box.firstChild); box.scrollTop = box.scrollHeight;
+  clearTimeout(capTimer); capTimer = setTimeout(() => { box.style.display = 'none'; box.innerHTML = ''; }, 12000);
+}
+function capLoop(){
+  if (!capOn) return;
+  const src = $('remote').srcObject; const tracks = src ? src.getAudioTracks() : [];
+  if (!tracks.length || !window.MediaRecorder) return setTimeout(capLoop, 2000);
+  let rec; try { rec = new MediaRecorder(new MediaStream(tracks)); } catch { return setTimeout(capLoop, 4000); }
+  const parts = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); };
+  rec.onstop = async () => {
+    if (capOn && parts.length) {
+      const blob = new Blob(parts, { type: rec.mimeType || 'audio/webm' });
+      if (blob.size > 3000) socket.emit('live-caption-audio', await blob.arrayBuffer(), blob.type, () => {});
+    }
+    capLoop();
+  };
+  rec.start(); setTimeout(() => { try { rec.stop(); } catch {} }, 5000);
+}
+$('capBtn').onclick = () => {
+  capOn = !capOn; $('capBtn').textContent = 'Captions: ' + (capOn ? 'on' : 'off'); $('capBtn').classList.toggle('off', capOn);
+  if (capOn) capLoop(); else { $('capBox').style.display = 'none'; $('capBox').innerHTML = ''; }
+};
 
 // ---- controls ----
 $('micBtn').onclick = () => { if (!local) return; const on = !local.getAudioTracks()[0]?.enabled; local.getAudioTracks().forEach(t => t.enabled = on); $('micBtn').classList.toggle('off', !on); $('micBtn').textContent = on ? 'Mute' : 'Unmute'; };

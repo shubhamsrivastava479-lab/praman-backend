@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Automation &amp; API</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root{--bg:#f1f3f5;--card:#fff;--line:#dde1e6;--ink:#10151f;--mute:#667;--brand:#c8781f;--ok:#1f7a6c;--bad:#b23a2c;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f131b;--card:#171d29;--line:#2b3446;--ink:#e8eaf0;--mute:#9aa3b5;}}
+  body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);margin:0;}
+  .wrap{max-width:820px;margin:0 auto;padding:22px 16px 60px;}
+  h1{font-size:20px;margin:0 0 4px;} h2{font-size:15px;margin:0 0 4px;}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px;}
+  .top a{color:var(--brand);font-size:13px;text-decoration:none;font-weight:600;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  .hint{font-size:12px;color:var(--mute);line-height:1.55;margin-top:6px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;}
+  label{font-size:12.5px;display:flex;flex-direction:column;gap:3px;flex:1;min-width:150px;}
+  label.inline{flex-direction:row;align-items:center;gap:7px;min-width:0;flex:none;}
+  textarea{font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);}
+  input,select{font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);}
+  input[type=checkbox]{padding:0;}
+  button{font:inherit;font-size:13px;padding:9px 14px;border:none;border-radius:6px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer;}
+  button.sec{background:#10151f;} button.sm{padding:5px 9px;font-size:11.5px;}
+  button:disabled{opacity:.5;cursor:default;}
+  code,pre{background:rgba(127,127,127,.14);border-radius:5px;font-size:12px;}
+  code{padding:2px 5px;} pre{padding:10px;overflow:auto;line-height:1.5;margin:8px 0 0;}
+  .msg{font-size:12.5px;margin-top:8px;min-height:16px;} .msg.ok{color:var(--ok);} .msg.bad{color:var(--bad);}
+  .secret{background:#fff8e6;border:1px solid #f0d58a;color:#4a3a00;border-radius:8px;padding:10px;margin-top:10px;font-size:12.5px;word-break:break-all;}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;} th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);}
+  .st-delivered{color:var(--ok);font-weight:700;} .st-failed{color:var(--bad);font-weight:700;} .st-pending{color:#8a5416;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div><img src="/logo-compact.png" alt="Praman" style="height:34px;width:auto;display:block;margin-bottom:6px;"><h1>Automation &amp; API</h1><div class="hint" id="who"></div></div><a href="/index.html">← Back to dashboard</a></div>
+
+  <div class="card">
+    <h2>Deadlines and customer reminders</h2>
+    <div class="hint">Every new case gets a deadline. For AI-call cases the customer gets WhatsApp reminders with the call link until the call is done. Cases past their deadline are marked <b>late</b> on your dashboard.</div>
+    <div class="row">
+      <label>Deadline: hours after the case is opened<input id="tat" type="number" min="1" max="2160"></label>
+      <label>Send a reminder every (hours)<input id="every" type="number" min="1" max="336"></label>
+      <label>Maximum reminders per case<input id="max" type="number" min="0" max="20"></label>
+    </div>
+    <div class="row">
+      <label>No reminders from (India time, hour)<input id="qf" type="number" min="0" max="23"></label>
+      <label>until (hour)<input id="qt" type="number" min="0" max="23"></label>
+      <label>WhatsApp template that carries the link<input id="tpl" placeholder="claim_investigation_intake"></label>
+    </div>
+    <div class="row"><label class="inline"><input type="checkbox" id="auto"> Send reminders automatically</label></div>
+    <div class="hint">The template must be approved by Meta, with one variable: the link. You can already use the same template as for the first message.</div>
+    <h2 style="margin-top:18px;">Review, alerts and reports</h2>
+    <div class="row"><label class="inline"><input type="checkbox" id="rev"> An investigator must sign off every AI call before the case is completed (recommended)</label></div>
+    <div class="hint">When this is on, even a call the AI marks "Verified" shows as <b>Awaiting review</b> until someone opens the report and gives the final verdict. Turn it off only if you want clean calls to complete by themselves.</div>
+    <div class="row">
+      <label>E-mail for alerts (optional; needs the mail server set up by Praman)<input id="nem" placeholder="ops@yourfirm.com"></label>
+      <label>Insurer e-mail for reports (optional)<input id="iem" placeholder="claims@insurer.com"></label>
+      <label>Second reviewer above this policy value (0 = off)<input id="sra" type="number" min="0"></label>
+    </div>
+    <div class="row"><label style="flex:1 1 100%">Ready remarks for reviewers (one per line, up to 12)<textarea id="canned" rows="4" placeholder="Documents match the customer's statements&#10;Address differs from Aadhaar — field visit advised"></textarea></label></div>
+    <div class="row"><label class="inline"><input type="checkbox" id="cmsg"> Send the customer a WhatsApp thank-you when the AI call is finished</label></div>
+    <div class="row"><label>Company logo for the PDF cover (PNG or JPEG, under 250 KB; saved as soon as you choose it)<input id="logoFile" type="file" accept="image/png,image/jpeg"></label><img id="logoPrev" alt="" style="max-height:48px;display:none;border:1px solid var(--line);border-radius:6px;"><button class="sm sec" id="logoClear" type="button" style="display:none;">Remove logo</button></div>
+    <div class="row"><button id="saveFlow">Save</button></div>
+    <div class="msg" id="flowMsg"></div>
+  </div>
+
+  <div class="card" id="ckCard">
+    <h2>Your checklist — what the AI asks and collects</h2>
+    <div class="hint">Choose a service, then decide which standard questions are asked, add your own questions, and mark the items that <b>must</b> be done. If a mandatory item is missing, the call can never end as "Verified" and a live call is recommended. Identity steps (name, confirmations, face, eye blink, Aadhaar, PAN) cannot be switched off. Changes apply to calls that start after you save.</div>
+    <div class="row"><label>Service<select id="ckService"></select></label></div>
+    <div id="ckList" style="margin-top:10px;"></div>
+    <h2 style="margin-top:14px;">Your own questions</h2>
+    <div id="ckExtra"></div>
+    <div class="row"><input id="ckNew" maxlength="300" placeholder="Type a question the AI should ask, e.g. Which garage will repair the vehicle?" style="flex:1;min-width:220px;"><button class="sec" id="ckAdd">Add question</button></div>
+    <div class="row"><button id="ckSave">Save checklist</button></div>
+    <div class="msg" id="ckMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>API key — open cases from your own system</h2>
+    <div class="hint">Your insurer system or CRM can create cases and read results directly, without anyone typing. Keep the key secret, like a password.</div>
+    <div class="row"><div id="keyState" style="font-size:13px;"></div></div>
+    <div class="row"><button id="newKey">Create new key</button><button class="sec" id="delKey" style="display:none;">Turn API off</button></div>
+    <div id="keyShown"></div>
+    <div class="msg" id="keyMsg"></div>
+    <details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">How to use it</summary>
+      <div class="hint">Open a case (the customer gets the WhatsApp link by itself; add <code>"sendLink": false</code> to only get the link back):</div>
+<pre id="curl1"></pre>
+      <div class="hint">Read the result any time, using the case number, claim/policy number or the id:</div>
+<pre id="curl2"></pre>
+      <div class="hint">Other calls: <code>GET /api/v1/cases?status=open&amp;limit=50</code>, <code>GET /api/v1/cases/&lt;id&gt;/report</code> (permanent report link), <code>GET /api/v1/services</code>. Sending the same <code>externalRef</code> again returns the same case instead of a duplicate. Services: <code>pivc_life</code>, <code>pivc_term</code>, <code>motor_claim</code> (as in your plan).</div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>Webhook — we tell your system when something happens</h2>
+    <div class="hint">When the address below is set, Praman sends a message to it as soon as an event happens. If your server is down we try again (after 1 min, 5 min, 30 min, 2 h, 6 h and 24 h).</div>
+    <div class="row"><label style="flex:3;">Webhook address (https://…)<input id="whUrl" placeholder="https://your-system.example.com/praman-webhook"></label></div>
+    <div class="row" id="whEvents"></div>
+    <div class="row"><button id="saveWh">Save webhook</button><button class="sec" id="testWh">Send test message</button><button class="sec" id="newSecret" title="If you lost the signing secret or it was shared by mistake">New signing secret</button></div>
+    <div id="secretShown"></div>
+    <div class="msg" id="whMsg"></div>
+    <details style="margin-top:8px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">What we send, and how to check it is from us</summary>
+      <div class="hint">A POST with JSON like <code>{"id","event","createdAt","data":{"caseId","caseRef","claimNo","status","aiCall":{"decision","summary","flags","checks":[…]}, "review":…}}</code>. Answer with any <b>2xx</b> status within 10 seconds. The header <code>X-Praman-Signature: t=…,v1=…</code> is an HMAC-SHA256 of <code>t + "." + body</code> with your signing secret — check it before trusting the message, and ignore messages older than 5 minutes. The header <code>X-Praman-Delivery</code> is unique per message, so you can ignore repeats.</div>
+<pre>const crypto = require('crypto');
+function ok(secret, rawBody, header) {
+  const m = /t=(\d+),v1=([a-f0-9]+)/.exec(header || '');
+  if (!m || Math.abs(Date.now()/1000 - m[1]) > 300) return false;
+  const want = crypto.createHmac('sha256', secret).update(m[1] + '.' + rawBody).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(want), Buffer.from(m[2]));
+}</pre>
+    </details>
+    <h2 style="margin-top:16px;">Recent messages</h2>
+    <table><thead><tr><th>Time</th><th>Event</th><th>Status</th><th>Tries</th><th></th></tr></thead><tbody id="deliv"></tbody></table>
+    <div class="hint" id="delivEmpty" style="display:none;">Nothing sent yet.</div>
+  </div>
+
+  <div class="card">
+    <h2>Your login: two-step code</h2>
+    <div class="hint">Adds a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy) to your login. Recommended for every admin.</div>
+    <div id="tfaState" class="hint"></div>
+    <div id="tfaSetup" style="display:none;">
+      <div class="hint">1. In your authenticator app choose <b>Add account → Enter a setup key</b>. 2. Type this key: <code id="tfaKey" style="font-size:14px;user-select:all;"></code> 3. Enter the 6-digit code the app shows.</div>
+      <div class="row"><label>6-digit code<input id="tfaCode" inputmode="numeric" maxlength="6"></label><button id="tfaOn" class="sm">Turn on</button></div>
+    </div>
+    <div class="row"><button id="tfaStart" class="sm" style="display:none;">Set up two-step login</button></div>
+    <div id="tfaOff" style="display:none;">
+      <div class="row"><label>Password<input id="tfaPw" type="password"></label><label>Current 6-digit code<input id="tfaCode2" inputmode="numeric" maxlength="6"></label><button id="tfaDis" class="sm sec">Turn off</button></div>
+    </div>
+    <div class="msg" id="tfaMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Customer data-deletion requests</h2>
+    <div class="hint">Customers can ask for their personal data to be erased from the link on their call page. <b>Erase</b> deletes their photos, recordings, answers and personal details but keeps the case number, result and activity record. If the law or your insurer requires you to keep the record, <b>decline</b> and write the reason.</div>
+    <table><thead><tr><th>Asked on</th><th>Case</th><th>Status</th><th></th></tr></thead><tbody id="dreqRows"></tbody></table>
+    <div class="hint" id="dreqEmpty" style="display:none;">No requests.</div>
+    <div class="msg" id="dreqMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Activity log</h2>
+    <div class="hint">Who did what: logins, setting changes, sign-offs, report downloads, team changes. It cannot be edited.</div>
+    <table><thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Detail</th></tr></thead><tbody id="auditRows"></tbody></table>
+    <div class="row"><button class="sm sec" id="auditMore">Show older</button></div>
+  </div>
+
+  <div class="card" id="walCard" style="display:none">
+    <h2>Wallet</h2>
+    <div style="font-size:26px;font-weight:700" id="walBal"></div>
+    <div class="hint" id="walInfo"></div>
+    <div class="hint" id="walRates"></div>
+    <h3 style="font-size:13px;margin:14px 0 4px">Add money</h3>
+    <div class="hint" id="walPay"></div>
+    <div class="row"><input id="walAmt" type="number" min="1" placeholder="Amount paid ₹" style="max-width:150px"><input id="walRef" placeholder="UTR / transaction no." style="max-width:200px"><button class="sm" id="walSend">I have paid</button></div>
+    <div class="msg" id="walMsg"></div>
+    <h3 style="font-size:13px;margin:14px 0 4px">Recent activity <a href="#" id="walCsv" style="font-size:12px;margin-left:8px">Download all (CSV)</a></h3>
+    <table><thead><tr><th>When</th><th>What</th><th>Amount</th><th>Balance</th></tr></thead><tbody id="walRows"></tbody></table>
+  </div>
+
+  <div class="card" id="billCard">
+    <h2>Billing</h2>
+    <div class="hint" id="billPlan">Loading…</div>
+    <div id="billBlocked" class="msg bad"></div>
+    <div id="billMonth" style="margin-top:8px"></div>
+    <table><thead><tr><th>Invoice</th><th>Month</th><th>Total</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody id="billRows"></tbody></table>
+    <div class="hint" id="billPay"></div>
+  </div>
+
+  <div class="card">
+    <h2>Data retention</h2>
+    <div class="hint" id="ret"></div>
+    <div class="hint">After the period ends, only the stored <b>files</b> (photos, recordings, documents) of finished cases are deleted. The case, the AI report and the full record of what happened (chain of custody) stay. To keep the files of one case for ever (court case, complaint), open the case and use <b>Legal hold</b>. To change the period, contact Praman.</div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem('praman_token');
+const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
+if (!token || !user) location.href = '/login.html';
+if (user && ['agent','viewer','insurer'].includes(user.role)) location.href = '/index.html';
+const H = (x) => Object.assign({ Authorization: 'Bearer ' + token }, x || {});
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function loadLogo(){ const d = await api('GET', '/api/workflow/branding'); showLogo(d.logoDataUrl); }
+function showLogo(u){ $('logoPrev').src = u || ''; $('logoPrev').style.display = u ? '' : 'none'; $('logoClear').style.display = u ? '' : 'none'; }
+$('logoFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (f.size > 250000) { alert('The logo is too large. Please use an image under 250 KB.'); e.target.value = ''; return; }
+  const r = new FileReader();
+  r.onload = async () => { const d = await api('PUT', '/api/workflow/branding', { logoDataUrl: r.result }); if (d.error) alert(d.error); else showLogo(r.result); };
+  r.readAsDataURL(f);
+});
+$('logoClear').addEventListener('click', async () => { await api('PUT', '/api/workflow/branding', { logoDataUrl: '' }); showLogo(''); $('logoFile').value = ''; });
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: H(body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { localStorage.removeItem('praman_token'); location.href = '/login.html'; return {}; }
+  const d = await r.json().catch(() => ({}));
+  d._ok = r.ok; return d;
+}
+function say(id, text, ok) { const m = $(id); m.textContent = text || ''; m.className = 'msg ' + (ok ? 'ok' : 'bad'); }
+$('who').textContent = user.vendorName + ' · ' + user.email;
+
+// ---------- reminders ----------
+async function loadFlow() {
+  const d = await api('GET', '/api/workflow/settings'); const s = d.settings || {};
+  $('tat').value = s.tatHours; $('every').value = s.remindEveryHours; $('max').value = s.maxReminders;
+  $('qf').value = s.quietFrom; $('qt').value = s.quietTo; $('tpl').value = s.reminderTemplate; $('auto').checked = !!s.autoRemind; $('rev').checked = s.requireReview !== false; $('nem').value = s.notifyEmail || ''; $('iem').value = s.insurerEmail || ''; $('sra').value = s.secondReviewAbove || 0; $('canned').value = (s.cannedRemarks || []).join('\n'); $('cmsg').checked = s.completionMessage !== false;
+  $('ret').innerHTML = d.retentionDays ? `Stored files are deleted <b>${d.retentionDays} days</b> after a case is finished.` : 'Stored files are <b>kept</b> (no automatic deletion is set for your account).';
+}
+$('saveFlow').onclick = async () => {
+  const d = await api('PUT', '/api/workflow/settings', { tatHours: $('tat').value, remindEveryHours: $('every').value, maxReminders: $('max').value, quietFrom: $('qf').value, quietTo: $('qt').value, reminderTemplate: $('tpl').value.trim(), autoRemind: $('auto').checked, requireReview: $('rev').checked, notifyEmail: $('nem').value.trim(), insurerEmail: $('iem').value.trim(), secondReviewAbove: $('sra').value, cannedRemarks: $('canned').value.split('\n'), completionMessage: $('cmsg').checked });
+  say('flowMsg', d._ok ? 'Saved. New cases use these settings; existing cases keep their deadline.' : (d.error || 'Not saved'), d._ok);
+};
+
+
+// ---------- two-step login ----------
+async function loadTfa() {
+  const d = await api('GET', '/api/auth/2fa');
+  $('tfaState').innerHTML = d.enabled ? 'Two-step login is <b style="color:var(--ok)">on</b> for your account.' : 'Two-step login is <b>off</b>.';
+  $('tfaStart').style.display = d.enabled ? 'none' : ''; $('tfaOff').style.display = d.enabled ? '' : 'none'; $('tfaSetup').style.display = 'none';
+}
+$('tfaStart').onclick = async () => { const d = await api('POST', '/api/auth/2fa/setup', {}); if (d.secret) { $('tfaKey').textContent = d.secret; $('tfaSetup').style.display = ''; $('tfaStart').style.display = 'none'; } else say('tfaMsg', d.error || 'Could not start', false); };
+$('tfaOn').onclick = async () => { const d = await api('POST', '/api/auth/2fa/enable', { code: $('tfaCode').value }); say('tfaMsg', d._ok ? 'Two-step login is on. You will need a code the next time you log in.' : (d.error || 'Not saved'), d._ok); if (d._ok) loadTfa(); };
+$('tfaDis').onclick = async () => { const d = await api('POST', '/api/auth/2fa/disable', { password: $('tfaPw').value, code: $('tfaCode2').value }); say('tfaMsg', d._ok ? 'Two-step login is off.' : (d.error || 'Not changed'), d._ok); if (d._ok) loadTfa(); };
+
+// ---------- data-deletion requests ----------
+async function loadDreq() {
+  const l = await api('GET', '/api/workflow/data-requests');
+  const list = Array.isArray(l) ? l : [];
+  $('dreqEmpty').style.display = list.length ? 'none' : '';
+  $('dreqRows').innerHTML = list.map(r => `<tr><td>${esc(new Date(r.createdAt).toLocaleDateString('en-IN'))}</td><td>${esc(r.caseRef || r.claimNo)}${r.reason ? `<div class="hint">${esc(r.reason)}</div>` : ''}</td><td>${esc(r.status)}${r.note ? `<div class="hint">${esc(r.note)}</div>` : ''}</td><td>${r.status === 'open' ? `<button class="sm" onclick="dreq('${esc(r.id)}','erase')">Erase</button> <button class="sm sec" onclick="dreq('${esc(r.id)}','decline')">Decline</button>` : ''}</td></tr>`).join('');
+}
+async function dreq(id, action) {
+  let note = '';
+  if (action === 'decline') { note = prompt('Why can the data not be erased? The customer may ask.'); if (!note) return; }
+  else if (!confirm('This permanently deletes the customer\'s photos, recordings, answers and personal details for this case. It cannot be undone. Continue?')) return;
+  const d = await api('POST', '/api/workflow/data-requests/' + encodeURIComponent(id), { action, note });
+  say('dreqMsg', d._ok ? (action === 'erase' ? 'Data erased.' : 'Request declined.') : (d.error || 'Failed'), d._ok); loadDreq();
+}
+
+// ---------- activity log ----------
+let auditOldest = null;
+async function loadAudit(more) {
+  const l = await api('GET', '/api/workflow/audit?limit=50' + (more && auditOldest ? '&before=' + encodeURIComponent(auditOldest) : ''));
+  const list = Array.isArray(l) ? l : [];
+  if (list.length) auditOldest = list[list.length - 1].at;
+  $('auditMore').style.display = list.length < 50 ? 'none' : '';
+  const html = list.map(a => `<tr><td>${esc(new Date(a.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }))}</td><td>${esc(a.who)}</td><td>${esc(a.action.replace(/_/g, ' '))}</td><td>${esc(a.detail)}</td></tr>`).join('');
+  $('auditRows').innerHTML = more ? $('auditRows').innerHTML + html : html;
+}
+$('auditMore').onclick = () => loadAudit(true);
+
+// ---------- api key + webhook ----------
+const ORIGIN = location.origin;
+let shownKey = '';
+function showCurl(key) {
+  if (key) shownKey = key; key = key || shownKey;
+  $('curl1').textContent = `curl -X POST ${ORIGIN}/api/v1/cases \\\n  -H "X-API-Key: ${key || 'pk_live_…'}" -H "Content-Type: application/json" \\\n  -d '{"policyNo":"POL-12345","whatsappNumber":"919876543210","insuredName":"Rajesh Kumar","service":"pivc_life","externalRef":"YOUR-REF-1"}'`;
+  $('curl2').textContent = `curl ${ORIGIN}/api/v1/cases/POL-12345 -H "X-API-Key: ${key || 'pk_live_…'}"`;
+}
+async function loadIntegration() {
+  const d = await api('GET', '/api/integration');
+  $('keyState').innerHTML = d.hasKey ? `API is <b style="color:var(--ok)">on</b> — key <code>${esc(d.keyPrefix)}…</code>, created ${esc(new Date(d.keyCreatedAt).toLocaleDateString('en-IN'))}${d.keyLastUsedAt ? ', last used ' + esc(new Date(d.keyLastUsedAt).toLocaleString('en-IN')) : ', not used yet'}` : 'API is <b>off</b>. Create a key to turn it on.';
+  $('newKey').textContent = d.hasKey ? 'Replace key (old one stops working)' : 'Create key';
+  $('delKey').style.display = d.hasKey ? '' : 'none';
+  $('whUrl').value = d.webhookUrl || '';
+  $('whEvents').innerHTML = (d.allEvents || []).map(e => `<label class="inline"><input type="checkbox" value="${esc(e)}" ${(d.events || []).length === 0 || d.events.includes(e) ? 'checked' : ''}> <code>${esc(e)}</code></label>`).join('');
+  showCurl();
+}
+$('newKey').onclick = async () => {
+  if ($('newKey').textContent.startsWith('Replace') && !confirm('The old key will stop working at once. Continue?')) return;
+  const d = await api('POST', '/api/integration/key');
+  if (!d.apiKey) return say('keyMsg', d.error || 'Could not create key', false);
+  $('keyShown').innerHTML = `<div class="secret"><b>Copy this key now. It will not be shown again.</b><br><code id="k">${esc(d.apiKey)}</code> <button class="sm" onclick="navigator.clipboard.writeText(document.getElementById('k').textContent)">Copy</button></div>`;
+  showCurl(d.apiKey); say('keyMsg', '', true); loadIntegration();
+};
+$('delKey').onclick = async () => { if (confirm('Turn the API off? Your system will stop working until a new key is created.')) { await api('DELETE', '/api/integration/key'); $('keyShown').innerHTML = ''; loadIntegration(); } };
+$('newSecret').onclick = () => saveWebhook(true);
+$('saveWh').onclick = () => saveWebhook(false);
+async function saveWebhook(rotateSecret) {
+  if (rotateSecret && !confirm('Your system must start using the new secret, otherwise it will refuse our messages. Continue?')) return;
+  const events = [...$('whEvents').querySelectorAll('input:checked')].map(i => i.value);
+  const d = await api('PUT', '/api/integration/webhook', { webhookUrl: $('whUrl').value.trim(), events, rotateSecret });
+  if (!d._ok) return say('whMsg', d.error || 'Not saved', false);
+  say('whMsg', $('whUrl').value.trim() ? 'Saved.' : 'Webhook turned off.', true);
+  if (d.signingSecret) $('secretShown').innerHTML = `<div class="secret"><b>Signing secret — copy it now, it will not be shown again.</b><br><code id="s">${esc(d.signingSecret)}</code> <button class="sm" onclick="navigator.clipboard.writeText(document.getElementById('s').textContent)">Copy</button></div>`;
+  loadIntegration();
+}
+$('testWh').onclick = async () => {
+  say('whMsg', 'Sending…', true);
+  const d = await api('POST', '/api/integration/test');
+  say('whMsg', d.ok ? 'Your server answered OK (' + d.code + ').' : ('Test failed: ' + (d.error || 'unknown')), !!d.ok);
+};
+async function loadDeliveries() {
+  const list = await api('GET', '/api/integration/deliveries');
+  const rows = Array.isArray(list) ? list : [];
+  $('delivEmpty').style.display = rows.length ? 'none' : 'block';
+  $('deliv').innerHTML = rows.map(x => `<tr><td>${esc(new Date(x.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }))}</td><td><code>${esc(x.event)}</code></td>
+    <td class="st-${esc(x.status)}">${esc(x.status)}${x.lastError && x.status !== 'delivered' ? `<br><span style="font-weight:400;color:var(--mute)">${esc(x.lastError)}</span>` : ''}</td><td>${x.attempts}</td>
+    <td>${x.status !== 'delivered' ? `<button class="sm sec" onclick="retry('${esc(x.id)}')">Send again</button>` : ''}</td></tr>`).join('');
+}
+async function retry(id) { await api('POST', '/api/integration/deliveries/' + id + '/retry'); setTimeout(loadDeliveries, 1500); }
+
+loadFlow(); loadLogo(); loadTfa(); loadDreq(); loadAudit(); loadIntegration(); loadDeliveries();
+
+// ---------- checklist editor ----------
+let ck = null;
+function ckRender() {
+  const sec = {};
+  $('ckList').innerHTML = '<table><thead><tr><th>Item</th><th style="width:70px">Asked</th><th style="width:90px">Mandatory</th></tr></thead><tbody>' + ck.items.map((i, n) =>
+    `<tr><td>${esc(i.label)}${i.core ? ' <span class="hint">(always asked)</span>' : ''}</td><td><input type="checkbox" data-n="${n}" data-k="asked" ${i.asked ? 'checked' : ''} ${i.core ? 'disabled' : ''}></td><td><input type="checkbox" data-n="${n}" data-k="mandatory" ${i.mandatory ? 'checked' : ''}></td></tr>`).join('') + '</tbody></table>';
+  $('ckList').querySelectorAll('input').forEach(el => el.onchange = () => { ck.items[+el.dataset.n][el.dataset.k] = el.checked; });
+  $('ckExtra').innerHTML = ck.extra.length ? '<table><tbody>' + ck.extra.map((e, n) =>
+    `<tr><td>${esc(e.text)}</td><td style="width:90px"><label class="inline"><input type="checkbox" data-x="${n}" ${e.mandatory ? 'checked' : ''}> Mandatory</label></td><td style="width:70px"><button class="sm sec" data-del="${n}">Remove</button></td></tr>`).join('') + '</tbody></table>' : '<div class="hint">None yet.</div>';
+  $('ckExtra').querySelectorAll('input[data-x]').forEach(el => el.onchange = () => { ck.extra[+el.dataset.x].mandatory = el.checked; });
+  $('ckExtra').querySelectorAll('button[data-del]').forEach(el => el.onclick = () => { ck.extra.splice(+el.dataset.del, 1); ckRender(); });
+}
+async function ckLoad(service) {
+  const d = await api('GET', '/api/workflow/checklist-config' + (service ? '?service=' + encodeURIComponent(service) : ''));
+  if (!d._ok) { say('ckMsg', d.error || 'Could not load', false); return; }
+  ck = d;
+  $('ckService').innerHTML = d.services.map(s => `<option value="${esc(s.key)}" ${s.key === d.service ? 'selected' : ''}>${esc(s.label)}</option>`).join('');
+  ckRender();
+}
+$('ckService').onchange = () => ckLoad($('ckService').value);
+$('ckAdd').onclick = () => { const t = $('ckNew').value.trim(); if (!t) return; if (ck.extra.length >= 15) { say('ckMsg', 'You can add up to 15 questions.', false); return; } ck.extra.push({ key: '', text: t, mandatory: false }); $('ckNew').value = ''; ckRender(); };
+$('ckSave').onclick = async () => {
+  const body = { service: ck.service, skip: ck.items.filter(i => !i.asked && !i.core).map(i => i.id),
+    mandatory: ck.items.filter(i => i.mandatory).map(i => i.id), extra: ck.extra.map(e => ({ key: e.key, text: e.text })) };
+  const d = await api('PUT', '/api/workflow/checklist-config', body);
+  if (!d._ok) { say('ckMsg', d.error || 'Not saved', false); return; }
+  // mandatory flags of the firm's own questions: they get their final ids after saving, so save once more with them
+  const ids = d.extra.map((e, n) => ck.extra[n] && ck.extra[n].mandatory ? e.id : null).filter(Boolean);
+  if (ids.length) await api('PUT', '/api/workflow/checklist-config', { ...body, extra: d.extra.map(e => ({ key: e.key, text: e.text })), mandatory: body.mandatory.concat(ids) });
+  say('ckMsg', 'Saved. New calls use this checklist.', true); ckLoad(ck.service);
+};
+ckLoad();
+
+// ---------- billing ----------
+const rs = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const escH = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function loadBilling() {
+  const d = await api('GET', '/api/billing');
+  if (d.error) { $('billCard').style.display = 'none'; return; }
+  if (!d.plan) { $('billPlan').textContent = 'No billing plan has been set for your account yet. Praman will confirm it with you.'; }
+  else {
+    const p = d.plan; let t = `<b>${escH(p.modelLabel)}.</b> `;
+    if (p.subscription) t += `Monthly fee ${rs(p.subscription.monthlyFee)}${p.subscription.includedCases != null ? `, includes ${p.subscription.includedCases} cases` : ', unlimited cases'}${p.subscription.overagePerCase != null ? `, extra cases ${rs(p.subscription.overagePerCase)} each` : ''}. `;
+    const pr = p.prices.filter(x => x.price != null);
+    if (!p.subscription || p.subscription.overagePerCase == null) t += pr.length ? 'Per case: ' + pr.map(x => `${escH(x.label)} ${rs(x.price)}`).join(', ') + '. ' : '';
+    if (p.gstPercent) t += `GST ${p.gstPercent}% extra. `;
+    if (p.trialUntil) t += `Free trial until ${escH(p.trialUntil)}.`;
+    $('billPlan').innerHTML = t;
+  }
+  $('billBlocked').textContent = d.blocked || '';
+  $('billMonth').innerHTML = d.thisMonth ? `<div class="hint"><b>${escH(d.thisMonth.label)} so far:</b> ${d.thisMonth.cases} billable case${d.thisMonth.cases === 1 ? '' : 's'}${d.thisMonth.trialCases ? ' (+' + d.thisMonth.trialCases + ' free trial)' : ''} · about <b>${rs(d.thisMonth.total)}</b> including GST. ${escH(d.thisMonth.note)}</div>` : '';
+  $('billRows').innerHTML = d.invoices.map(i => `<tr><td>${escH(i.number)}</td><td>${escH(i.period)}</td><td>${rs(i.total)}</td><td>${i.outstanding ? rs(i.outstanding) : '—'}</td><td>${escH({ issued: 'Due', partial: 'Part-paid', paid: 'Paid', overdue: 'Overdue', void: 'Cancelled' }[i.status] || i.status)}</td><td><a href="#" data-pdf="${i.id}">PDF</a></td></tr>`).join('') || '<tr><td colspan="6" class="hint">No invoices yet.</td></tr>';
+  document.querySelectorAll('[data-pdf]').forEach(a => a.onclick = async e => {
+    e.preventDefault();
+    const r = await fetch('/api/billing/invoices/' + a.dataset.pdf + '/pdf', { headers: H() });
+    if (!r.ok) return alert('The PDF could not be made.');
+    const b = await r.blob(), l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = 'invoice.pdf'; l.click();
+  });
+  const pay = d.payTo || {};
+  $('billPay').innerHTML = d.outstanding ? `<b>Outstanding: ${rs(d.outstanding)}.</b> ` + (pay.bank && pay.bank.account ? `Pay to ${escH(pay.bank.name)}, A/c ${escH(pay.bank.account)}, IFSC ${escH(pay.bank.ifsc)}. ` : '') + (pay.upi ? `UPI: ${escH(pay.upi)}. ` : '') + 'Mention the invoice number in the payment reference.' : '';
+}
+loadBilling();
+
+// ---------- wallet ----------
+async function loadWallet() {
+  const d = await api('GET', '/api/wallet');
+  if (!d.enabled) return;
+  $('walCard').style.display = '';
+  $('walBal').innerHTML = `<span style="color:${d.balance < 0 ? '#b23a2c' : 'inherit'}">${rs(d.balance)}</span>`;
+  $('walInfo').innerHTML = `This month so far: <b>${d.thisMonth.reports}</b> report${d.thisMonth.reports === 1 ? '' : 's'}, <b>${d.thisMonth.kyc}</b> ID check${d.thisMonth.kyc === 1 ? '' : 's'}, <b>${rs(d.thisMonth.spent)}</b> spent.` + (d.lowAlert != null ? ` You get an alert at ${rs(d.lowAlert)}.` : '') + (d.pending ? ` <b style="color:#b23a2c">${d.pending} case(s) are waiting for balance.</b>` : '');
+  const gst = d.gstPercent ? ` + ${d.gstPercent}% GST` : '';
+  const parts = [...d.rates.reports.filter(x => x.price != null).map(x => `${escH(x.label)} ${rs(x.price)}`), ...d.rates.checks.map(x => `${escH(x.label)} ${rs(x.price)}`)];
+  $('walRates').innerHTML = parts.length ? 'Each deduction' + gst + ': ' + parts.join(' · ') : '';
+  const pay = d.payTo || {};
+  $('walPay').innerHTML = (pay.bank && pay.bank.account ? `Pay to ${escH(pay.bank.name)}, A/c ${escH(pay.bank.account)}, IFSC ${escH(pay.bank.ifsc)}. ` : '') + (pay.upi ? `UPI: ${escH(pay.upi)}. ` : '') + 'After paying, enter the amount and the UTR here. The balance is added once Praman confirms the payment.';
+  $('walRows').innerHTML = d.ledger.map(t => `<tr><td>${new Date(t.at).toLocaleString('en-IN')}</td><td>${escH(t.desc)}${t.reference ? ' · ' + escH(t.reference) : ''}</td><td style="color:${t.amount < 0 ? '#b23a2c' : '#1f7a6c'}">${t.type === 'topup_request' ? 'waiting for confirmation (' + rs(t.amount) + ')' : rs(t.amount)}</td><td>${t.balanceAfter != null ? rs(t.balanceAfter) : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="hint">Nothing yet.</td></tr>';
+}
+$('walSend').onclick = async () => { const r = await api('POST', '/api/wallet/topup-request', { amount: $('walAmt').value, reference: $('walRef').value }); say('walMsg', r.error || 'Sent. Praman will confirm and add the money.', !r.error); if (!r.error) { $('walAmt').value = ''; $('walRef').value = ''; loadWallet(); } };
+$('walCsv').onclick = async e => { e.preventDefault(); const r = await fetch('/api/wallet/ledger.csv', { headers: H() }); const b = await r.blob(), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'wallet-ledger.csv'; a.click(); };
+loadWallet();
+</script>
+</body>
+</html>

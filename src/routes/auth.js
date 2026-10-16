@@ -2,6 +2,8 @@ const express = require('express');
 const { db, uid } = require('../db');
 const { hashPassword, comparePassword, signToken } = require('../services/auth');
 const { requireAuth } = require('../middleware/auth');
+const totp = require('../services/totp');
+const audit = require('../services/audit');
 
 const router = express.Router();
 
@@ -12,11 +14,25 @@ router.post('/signup', (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, code } = req.body;
   await db.read();
   const user = db.data.users.find(u => u.email.toLowerCase() === (email || '').toLowerCase());
   if (!user || !(await comparePassword(password || '', user.passwordHash))) {
+    audit.log('anonymous', 'login_failed', String(email || '').slice(0, 120), user && (user.parentVendorId || user.id));
+    await db.write().catch(() => {});
     return res.status(401).json({ error: 'Invalid email or password' });
+  }
+  if (user.totpEnabled) {
+    const lock = twoFaLock(user.id);
+    if (lock) return res.status(429).json({ needCode: true, error: 'Too many wrong codes. Please wait ' + lock + ' minutes and try again.' });
+    if (!code) return res.status(401).json({ needCode: true, error: 'Enter the 6-digit code from your authenticator app.' });
+    if (!totp.verify(user.totpSecret, code)) {
+      twoFaFail(user.id);
+      audit.log(user, 'login_failed', 'wrong two-step code', user.parentVendorId || user.id);
+      await db.write().catch(() => {});
+      return res.status(401).json({ needCode: true, error: 'That code is not correct. Try the newest code.' });
+    }
+    twoFaOk(user.id);
   }
 
   // Approval gate: a vendor_admin must be approved; an agent's whole company
@@ -24,16 +40,60 @@ router.post('/login', async (req, res) => {
   if (user.role === 'vendor_admin' && user.approved === false) {
     return res.status(403).json({ error: user.status === 'suspended' ? 'Your account is suspended. Contact the platform admin.' : 'Your account is pending approval by a platform admin.' });
   }
-  if (user.role === 'agent') {
+  if (require('../services/roles').isTeam(user.role)) {
     const parent = db.data.users.find(u => u.id === user.parentVendorId);
     if (!parent || parent.approved === false) {
       return res.status(403).json({ error: 'Your company account is pending approval by a platform admin.' });
     }
   }
 
-  const vendorRootId = user.role === 'agent' ? user.parentVendorId : user.id;
+  const vendorRootId = require('../services/roles').isTeam(user.role) ? user.parentVendorId : user.id;
   const token = signToken({ ...user, vendorRootId });
+  audit.log({ ...user, vendorRootId }, 'login', user.totpEnabled ? 'with two-step code' : '');
+  await db.write().catch(() => {});
   res.json({ token, user: { id: user.id, email: user.email, vendorName: user.vendorName, role: user.role || 'vendor_admin' } });
+});
+
+// ---------- Two-step login (optional, per person) ----------
+const fails = new Map(); // userId -> { n, until }
+const twoFaLock = id => { const f = fails.get(id); return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 60000) : 0; };
+const twoFaFail = id => { const f = fails.get(id) || { n: 0 }; f.n++; if (f.n >= 5) { f.until = Date.now() + 10 * 60000; f.n = 0; } fails.set(id, f); };
+const twoFaOk = id => fails.delete(id);
+
+router.get('/2fa', requireAuth, async (req, res) => {
+  await db.read();
+  const me = db.data.users.find(u => u.id === req.user.id);
+  res.json({ enabled: !!(me && me.totpEnabled) });
+});
+router.post('/2fa/setup', requireAuth, async (req, res) => {
+  await db.read();
+  const me = db.data.users.find(u => u.id === req.user.id);
+  if (!me) return res.status(404).json({ error: 'Account not found' });
+  if (me.totpEnabled) return res.status(409).json({ error: 'Two-step login is already on.' });
+  me.totpPending = totp.newSecret();
+  await db.write();
+  res.json({ secret: me.totpPending, otpauth: totp.otpauthUrl(me.totpPending, me.email) });
+});
+router.post('/2fa/enable', requireAuth, async (req, res) => {
+  await db.read();
+  const me = db.data.users.find(u => u.id === req.user.id);
+  if (!me || !me.totpPending) return res.status(400).json({ error: 'Start the setup first.' });
+  if (!totp.verify(me.totpPending, req.body && req.body.code)) return res.status(400).json({ error: 'That code is not correct. Check the code in your app and try again.' });
+  me.totpSecret = me.totpPending; me.totpPending = undefined; me.totpEnabled = true;
+  audit.log(req.user, '2fa_enabled', me.email);
+  await db.write();
+  res.json({ ok: true });
+});
+router.post('/2fa/disable', requireAuth, async (req, res) => {
+  await db.read();
+  const me = db.data.users.find(u => u.id === req.user.id);
+  if (!me || !me.totpEnabled) return res.json({ ok: true });
+  const b = req.body || {};
+  if (!(await comparePassword(b.password || '', me.passwordHash)) || !totp.verify(me.totpSecret, b.code)) return res.status(400).json({ error: 'Password or code is not correct.' });
+  me.totpEnabled = false; me.totpSecret = undefined;
+  audit.log(req.user, '2fa_disabled', me.email);
+  await db.write();
+  res.json({ ok: true });
 });
 
 // ---------- Super Admin bootstrap (one-time, platform operator only) ----------
@@ -214,14 +274,15 @@ router.post('/vendor-google-login', async (req, res) => {
     const onboardToken = jwtLib.sign({ purpose: 'vendor_onboard', email: g.email, name: g.name }, process.env.JWT_SECRET, { expiresIn: '30m' });
     return res.json({ status: 'new', email: g.email, name: g.name, onboardToken });
   }
+  if (user.totpEnabled) return res.status(403).json({ error: 'This account uses two-step login. Please log in with your email, password and authenticator code.' });
   if (user.role === 'vendor_admin' && user.approved === false) {
     return res.json({ status: user.status === 'suspended' ? 'suspended' : 'pending', firmName: user.vendorName });
   }
-  if (user.role === 'agent') {
+  if (require('../services/roles').isTeam(user.role)) {
     const parent = db.data.users.find(u => u.id === user.parentVendorId);
     if (!parent || parent.approved === false) return res.json({ status: 'pending', firmName: parent ? parent.vendorName : '' });
   }
-  const vendorRootId = user.role === 'agent' ? user.parentVendorId : user.id;
+  const vendorRootId = require('../services/roles').isTeam(user.role) ? user.parentVendorId : user.id;
   const token = signToken({ ...user, vendorRootId });
   res.json({ status: 'ok', token, user: { id: user.id, email: user.email, vendorName: user.vendorName, role: user.role || 'vendor_admin' } });
 });
@@ -306,24 +367,25 @@ router.get('/me', requireAuth, async (req, res) => {
   const keys = plans.allowedServices(db.data, req.user);
   res.json({
     user: { id: me.id, email: me.email, role: me.role || 'vendor_admin', name: me.agentName || me.profile?.contactName || '', vendorName: firm ? firm.vendorName : me.vendorName },
-    services: plans.publicList(keys, req.user.role === 'agent' ? null : (firm && firm.servicePrices))
+    services: plans.publicList(keys, require('../services/roles').isTeam(req.user.role) ? null : (firm && firm.servicePrices))
   });
 });
 
 // ---------- Agent accounts (created by a vendor_admin, for concurrent calls) ----------
 
 router.get('/agents', requireAuth, async (req, res) => {
-  if (req.user.role === 'agent') return res.status(403).json({ error: 'Only the company admin account can manage agents' });
+  if (require('../services/roles').isTeam(req.user.role)) return res.status(403).json({ error: 'Only the company admin account can manage team members' });
   await db.read();
   const agents = db.data.users
-    .filter(u => u.role === 'agent' && u.parentVendorId === req.user.id)
-    .map(a => ({ id: a.id, email: a.email, name: a.agentName, createdAt: a.createdAt }));
+    .filter(u => require('../services/roles').isTeam(u.role) && u.parentVendorId === req.user.id)
+    .map(a => ({ id: a.id, email: a.email, name: a.agentName, role: a.role, createdAt: a.createdAt }));
   res.json(agents);
 });
 
 router.post('/agents', requireAuth, async (req, res) => {
-  if (req.user.role === 'agent') return res.status(403).json({ error: 'Only the company admin account can create agents' });
+  if (require('../services/roles').isTeam(req.user.role)) return res.status(403).json({ error: 'Only the company admin account can create team members' });
   const { email, password, name } = req.body;
+  const role = ['agent', 'viewer', 'insurer'].includes(req.body.role) ? req.body.role : 'agent';
   if (!email || !password || !name) return res.status(400).json({ error: 'email, password and name are required' });
   await db.read();
   if (db.data.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
@@ -334,21 +396,23 @@ router.post('/agents', requireAuth, async (req, res) => {
     email,
     vendorName: req.user.vendorName,
     agentName: name,
-    role: 'agent',
+    role,
     parentVendorId: req.user.id,
     passwordHash: await hashPassword(password),
     createdAt: new Date().toISOString()
   };
   db.data.users.push(agent);
+  audit.log(req.user, 'team_added', `${email} as ${role}`);
   await db.write();
-  res.status(201).json({ id: agent.id, email: agent.email, name: agent.agentName });
+  res.status(201).json({ id: agent.id, email: agent.email, name: agent.agentName, role });
 });
 
 router.delete('/agents/:id', requireAuth, async (req, res) => {
-  if (req.user.role === 'agent') return res.status(403).json({ error: 'Only the company admin account can remove agents' });
+  if (require('../services/roles').isTeam(req.user.role)) return res.status(403).json({ error: 'Only the company admin account can remove team members' });
   await db.read();
   const idx = db.data.users.findIndex(u => u.id === req.params.id && u.parentVendorId === req.user.id);
   if (idx === -1) return res.status(404).json({ error: 'Agent not found' });
+  audit.log(req.user, 'team_removed', db.data.users[idx].email);
   db.data.users.splice(idx, 1);
   await db.write();
   res.json({ ok: true });

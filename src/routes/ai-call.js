@@ -9,6 +9,7 @@ const engine = require('../services/ai-call-engine');
 const { caseFileKey } = require('../services/ids');
 const { pcmToWav } = require('../services/wav');
 const { rateLimit } = require('../services/security');
+const webhooks = require('../services/webhooks');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const fs = require('fs');
@@ -27,15 +28,30 @@ async function load(token) {
 }
 
 // Turns the AI's English line into the customer's language + Gemini voice.
+// Translation and voice are remembered (same question, same language = no new Gemini cost), and
+// the Super Admin can switch the AI voice off: then the customer's phone reads the text aloud (free).
+const speechCache = require('../services/speech-cache');
 async function speak(text, language) {
   let displayText = text, problem = null;
-  try { if (language && language !== 'English') displayText = await gemini.translateText(text, language); }
-  catch (e) { console.warn('AI call translate failed:', e.message); problem = 'translation: ' + shortErr(e); }
-  let audio = null;
+  const lang = language && language !== 'English' ? language : '';
   try {
-    const { base64Audio, mimeType } = await gemini.generateSpeech(displayText);
-    audio = pcmToWav(Buffer.from(base64Audio, 'base64'), mimeType).toString('base64');
-  } catch (e) { console.warn('AI call TTS failed:', e.message); problem = (problem ? problem + '; ' : '') + 'voice: ' + shortErr(e); }
+    if (lang) {
+      displayText = speechCache.get('t', lang, text);
+      if (displayText === undefined) { displayText = await gemini.translateText(text, lang); speechCache.set('t', lang, text, displayText); }
+    }
+  } catch (e) { displayText = text; console.warn('AI call translate failed:', e.message); problem = 'translation: ' + shortErr(e); }
+  let audio = null;
+  const voiceOff = (await require('../services/platform-settings').getSetting('aiVoice', 'AI_VOICE')) === 'phone';
+  if (!voiceOff) {
+    audio = speechCache.get('a', lang, displayText) || null;
+    if (!audio) {
+      try {
+        const { base64Audio, mimeType } = await gemini.generateSpeech(displayText);
+        audio = pcmToWav(Buffer.from(base64Audio, 'base64'), mimeType).toString('base64');
+        speechCache.set('a', lang, displayText, audio);
+      } catch (e) { console.warn('AI call TTS failed:', e.message); problem = (problem ? problem + '; ' : '') + 'voice: ' + shortErr(e); }
+    }
+  }
   return { displayText, audio, problem };
 }
 async function withVoice(turn, language, c) {
@@ -64,6 +80,14 @@ const now = () => new Date().toISOString();
 const custody = (c, event) => db.data.custody.push({ id: uid('cust'), caseId: c.id, event, actor: 'ai_agent', timestamp: now() });
 const shortErr = e => String((e && e.message) || e || 'error').replace(/key=[^&\s]+/gi, 'key=…').replace(/\s+/g, ' ').slice(0, 160);
 
+// File storage (R2) failed: keep the call going, and tell the team why.
+function noteStorageProblem(c, err) {
+  const a = c.aiCall;
+  const note = 'Some photos could not be saved to file storage — check Super Admin → Storage settings';
+  if (!a.flags.includes(note)) a.flags.push(note);
+  if (!a.storageProblemLogged) { a.storageProblemLogged = true; custody(c, `Photo could not be saved to file storage (${err}) — check the R2 settings in Super Admin`); }
+}
+
 // Only one screen may run the call. Each page load sends its own id in the
 // X-Call-Client header; the latest /start wins, older screens get 409 and stop
 // (otherwise two tabs = two AI voices talking over each other).
@@ -72,6 +96,7 @@ router.use('/:token', async (req, res, next) => {
   const cid = req.get('X-Call-Client');
   if (!cid) return next();
   const c = await load(req.params.token);
+  if (c && c.aiCall) c.aiCall.lastActivityAt = now(); // reminders are not sent while the customer is on the call
   if (c && c.aiCall && c.aiCall.clientId && c.aiCall.clientId !== cid) return res.status(409).json({ error: 'This call continued on another screen.', replaced: true });
   next();
 });
@@ -110,7 +135,8 @@ router.post('/:token/start', async (req, res) => {
       const turn = c.aiCall.i === 0 && !(c.aiCall.answers || []).length ? engine.turnFor(c, engine.welcomeText(c), null, true) : engine.peekTurn(c);
       return res.json({ turn: await withVoice(turn, c.aiCall.language, c) });
     }
-    const turn = engine.startSession(c, { language: language || 'English', location, deviceInfo, ip });
+    const firmRow = (db.data.users || []).find(u => u.id === c.vendorId);
+    const turn = engine.startSession(c, { language: language || 'English', location, deviceInfo, ip, config: require('../services/checklist-config').forCase(firmRow, c) });
     c.aiCall.startAttempt = attempt || null;
     if (clientId) c.aiCall.clientId = clientId;
     await db.write();
@@ -127,7 +153,7 @@ router.post('/:token/turn', upload.single('audio'), async (req, res) => {
   if (c0.aiCall.status !== 'in_progress') return res.status(409).json({ error: 'The call is not active.' });
   const stage = req.body.stage;
   try {
-    let input = { empty: true }, sttError = null;
+    let input = { empty: true }, sttError = null, noisy = false;
     const typed = String(req.body.text || '').trim().slice(0, 500);
     if (typed) {
       // Customer typed the answer (voice not working / noisy place).
@@ -140,7 +166,8 @@ router.post('/:token/turn', upload.single('audio'), async (req, res) => {
       try {
         const t = await gemini.transcribeAndTranslateAudio(req.file.buffer.toString('base64'), 'audio/wav');
         const english = String(t.english || '').trim();
-        if (english) input = { english, original: t.original, language: t.language };
+        if (english && t.clear !== false) input = { english, original: t.original, language: t.language };
+        else noisy = true; // only noise / too faint: treated as "not heard", never as an answer
       } catch (e) {
         sttError = shortErr(e);
         console.error('AI call speech-to-text failed:', sttError);
@@ -169,10 +196,22 @@ router.post('/:token/turn', upload.single('audio'), async (req, res) => {
     if (wrongStage(c, stage)) turn = engine.peekTurn(c);
     else {
       if (prep.aiDown && !c.aiCall.aiDownLogged) { c.aiCall.aiDownLogged = true; custody(c, `AI answer check could not run (${prep.aiDown}) — simple rules used; please review the answers`); }
+      // Also a red flag, so the call can never end as plain "verified" when the AI did not really check the answers.
+      const stepNow = c.aiCall.queue[c.aiCall.i];
+      if (prep.aiDown && stepNow && !['photo', 'burst'].includes(stepNow.type)) {
+        const note = 'AI could not check some answers (service busy) — answers were judged by simple rules; please read them yourself';
+        if (!c.aiCall.flags.includes(note)) c.aiCall.flags.push(note);
+      }
       if (input.typed) custody(c, 'Customer typed the answer instead of speaking');
+      if (noisy) c.aiCall.noisy = (c.aiCall.noisy || 0) + 1;
       turn = engine.apply(c, input, prep); await db.write();
     }
-    res.json({ turn: await withVoice(turn, c.aiCall.language, c), heard: input.english || null });
+    // Many failed attempts in a row: offer the customer a person (the page highlights the "Talk to a person" button).
+    const aq = c.aiCall;
+    const trouble = (aq.noisy || 0) + (aq.sttErrors || 0);
+    const offerHuman = trouble >= 4 && !aq.humanOffered;
+    if (offerHuman) { aq.humanOffered = true; custody(c, 'The AI offered the customer a call with a person because of repeated audio problems'); await db.write(); }
+    res.json({ turn: { ...(await withVoice(turn, c.aiCall.language, c)), offerHuman }, heard: input.english || null, noisy });
   } catch (err) {
     console.error('AI call turn error:', err.message);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -195,7 +234,9 @@ router.post('/:token/photo', upload.single('photo'), async (req, res) => {
     const step0 = c0.aiCall.queue[c0.aiCall.i];
     const prep = wrongStage(c0, req.body.stage) ? {} : await engine.prepare(c0, { photoB64 });
     const evId = uid('ev');
-    const fileUrl = await storage.saveFile(req.file.buffer, caseFileKey(c0.id, evId, 'jpg'), 'image/jpeg');
+    let fileUrl = null, storeErr = null;
+    try { fileUrl = await storage.saveFile(req.file.buffer, caseFileKey(c0.id, evId, 'jpg'), 'image/jpeg'); }
+    catch (e) { storeErr = shortErr(e); console.error('AI call photo could not be stored:', storeErr); }
 
     await db.read();
     const c = db.data.cases.find(x => x.id === c0.id);
@@ -208,7 +249,8 @@ router.post('/:token/photo', upload.single('photo'), async (req, res) => {
       const at = new Date();
       turn = engine.apply(c, {}, prep);
       const result = prep.body || prep.face || {};
-      db.data.evidence.push({
+      if (!fileUrl) noteStorageProblem(c, storeErr);
+      else db.data.evidence.push({
         id: evId, caseId: c.id, vendorId: c.vendorId, source: 'ai_call', type: info.type,
         caption: `${info.caption} — ${at.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} — ${locText}`,
         fileUrl, mimeType: 'image/jpeg',
@@ -237,8 +279,12 @@ router.post('/:token/burst', upload.array('frames', 16), async (req, res) => {
     const b = prep.blink || {};
     const pick = [b.openFrameIndex, b.closedFrameIndex].filter(i => Number.isInteger(i) && i >= 0 && i < files.length);
     if (!pick.length) pick.push(0, files.length - 1);
-    const urls = [];
-    for (const i of [...new Set(pick)]) { const evId = uid('ev'); urls.push({ evId, url: await storage.saveFile(files[i].buffer, caseFileKey(c0.id, evId, 'jpg'), 'image/jpeg') }); }
+    const urls = []; let storeErr = null;
+    for (const i of [...new Set(pick)]) {
+      const evId = uid('ev');
+      try { urls.push({ evId, url: await storage.saveFile(files[i].buffer, caseFileKey(c0.id, evId, 'jpg'), 'image/jpeg') }); }
+      catch (e) { storeErr = shortErr(e); console.error('AI call blink frame could not be stored:', storeErr); }
+    }
 
     await db.read();
     const c = db.data.cases.find(x => x.id === c0.id);
@@ -249,6 +295,7 @@ router.post('/:token/burst', upload.array('frames', 16), async (req, res) => {
       const locText = engine.notePhotoLocation(c, loc, 'Eye blink check');
       const at = new Date();
       turn = engine.apply(c, {}, prep);
+      if (storeErr) noteStorageProblem(c, storeErr);
       urls.forEach(({ evId, url: fileUrl }, n) => db.data.evidence.push({
         id: evId, caseId: c.id, vendorId: c.vendorId, source: 'ai_call', type: 'liveness_blink',
         caption: `Eye blink check frame ${n + 1} (${n === 0 ? 'eyes open' : 'eyes closed'}) — ${at.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} — ${locText}`,
@@ -270,7 +317,7 @@ router.post('/:token/handoff', async (req, res) => {
   const c = await load(req.params.token);
   if (!c) return notFound(res);
   const ok = engine.requestHuman(c, String((req.body || {}).reason || '').slice(0, 200));
-  if (ok) await db.write();
+  if (ok) { webhooks.emit('ai_call.handoff', c); require('../services/notifications').notify(c.vendorId, { type: 'handoff', caseId: c.id, text: `Customer asked to speak to a person — case ${c.caseRef}` }); await db.write(); }
   const msg = 'No problem. Our team will call you soon. Thank you for your time.';
   res.json({ ok: true, message: msg, ...(ok ? await speak(msg, c.aiCall.language) : {}) });
 });
@@ -305,6 +352,39 @@ router.post('/:token/advance', async (req, res) => {
   }
 });
 
+// WhatsApp thank-you after the call (free-form text works because the customer messaged us during the call).
+// Never blocks or fails the call; one message per case.
+function thankCustomer(c, firmRow) {
+  try {
+    if (!require('../services/followup').settingsOf(firmRow).completionMessage || c.aiCall.thankSentAt || !c.whatsappNumber) return;
+    const account = (db.data.whatsappAccounts || []).find(a => a.id === c.whatsappAccountId);
+    if (!account) return;
+    const hi = ['Hindi', 'Marathi'].includes(c.aiCall.language);
+    const name = c.insuredName ? ' ' + c.insuredName : '';
+    const text = hi
+      ? `धन्यवाद${name}। आपकी वेरिफिकेशन कॉल पूरी हो गई है (केस ${c.caseRef}). हमारी टीम इसे देखेगी। अभी आपको कुछ करने की ज़रूरत नहीं है।`
+      : `Thank you${name}. Your verification call is complete (case ${c.caseRef}). Our team will review it. You do not need to do anything now.`;
+    c.aiCall.thankSentAt = new Date().toISOString();
+    require('../services/whatsapp').sendTextMessage(c.whatsappNumber, text, account)
+      .then(() => { db.data.custody.push({ id: uid('cust'), caseId: c.id, event: 'Thank-you message sent to the customer on WhatsApp', actor: 'system', timestamp: new Date().toISOString() }); })
+      .catch(e => console.error('Thank-you message not sent:', e.message));
+  } catch (e) { console.error('Thank-you message error:', e.message); }
+}
+
+// The customer asks for their personal data to be erased (DPDP). One open request per case.
+router.post('/:token/data-request', rateLimit({ windowMs: 3600_000, max: 5, name: 'data-request' }), async (req, res) => {
+  const c = await load(req.params.token);
+  if (!c) return notFound(res);
+  const open = (db.data.dataRequests || []).find(r => r.caseId === c.id && r.status === 'open');
+  if (!open) {
+    (db.data.dataRequests ||= []).push({ id: uid('dreq'), vendorId: c.vendorId, caseId: c.id, caseRef: c.caseRef, claimNo: c.claimNo, status: 'open', reason: String((req.body || {}).reason || '').slice(0, 500), createdAt: new Date().toISOString() });
+    db.data.custody.push({ id: uid('cust'), caseId: c.id, event: 'Customer asked for their personal data to be erased', actor: 'customer', timestamp: new Date().toISOString() });
+    require('../services/notifications').notify(c.vendorId, { type: 'data_request', caseId: c.id, text: `Customer asked to erase their data — case ${c.caseRef}` });
+    await db.write();
+  }
+  res.json({ ok: true });
+});
+
 router.post('/:token/complete', async (req, res) => {
   const c0 = await load(req.params.token);
   if (!c0) return notFound(res);
@@ -315,9 +395,13 @@ router.post('/:token/complete', async (req, res) => {
     await db.read();
     const c = db.data.cases.find(x => x.id === c0.id);
     if (c.aiCall.status === 'completed') return res.json({ ok: true, decision: c.aiCall.decision });
-    engine.applyFinish(c, summary);
+    const firmRow = (db.data.users || []).find(u => u.id === c.vendorId);
+    engine.applyFinish(c, summary, { requireReview: require('../services/followup').settingsOf(firmRow).requireReview, otherCases: db.data.cases.filter(x => x.vendorId === c.vendorId && x.id !== c.id) });
+    webhooks.emit('ai_call.completed', c);
+    thankCustomer(c, firmRow);
+    if (c.reviewState === 'awaiting_review') require('../services/notifications').notify(c.vendorId, { type: 'ai_review', caseId: c.id, text: `AI call finished — case ${c.caseRef} is waiting for your review` });
     await db.write();
-    res.json({ ok: true });
+    res.json({ ok: true, decision: c.aiCall.decision });
   } catch (err) {
     console.error('AI call complete error:', err.message);
     res.status(500).json({ error: 'Could not finish the call. Please try again.' });
@@ -346,7 +430,7 @@ router.post('/:token/recording', cleanTmp, uploadVideo.single('recording'), asyn
     const c2 = db.data.cases.find(x => x.id === c.id);
     db.data.evidence.push({
       id: evId, caseId: c2.id, vendorId: c2.vendorId, source: 'ai_call', type: 'call_recording', size: req.file.size,
-      caption: `AI verification call recording — ${new Date().toLocaleString()}`,
+      caption: `AI verification call recording — ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
       fileUrl, mimeType: mime, receivedAt: new Date().toISOString()
     });
     db.data.custody.push({ id: uid('cust'), caseId: c2.id, event: 'AI verification call recording saved', actor: 'ai_agent', timestamp: new Date().toISOString() });

@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Praman — Agent Dashboard</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body{font-family:system-ui,sans-serif;background:#f1f3f5;margin:0;color:#10151f;}
@@ -40,6 +44,13 @@
   .ws-pivc-only, .ws-motor-only{display:none;}
   body[data-svc="pivc_life"] .ws-pivc-only, body[data-svc="pivc_term"] .ws-pivc-only, body[data-svc="all"] .ws-pivc-only{display:block;}
   body[data-svc="motor_claim"] .ws-motor-only, body[data-svc="all"] .ws-motor-only{display:block;}
+  .flow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .flow button{background:#fff;color:#10151f;border:1px solid #dde1e6;padding:8px 12px;font-size:12px;border-radius:9px;text-align:left;font-weight:600;}
+  .flow button b{display:block;font-size:19px;line-height:1.1;}
+  .flow button.bad b{color:#b23a2c;} .flow button.warn b{color:#8a5416;}
+  .flow button.on{border-color:#c8781f;box-shadow:0 0 0 2px #f4e3cc;}
+  .pill{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;margin-left:4px;}
+  .pill.over{background:#f6e0db;color:#7a1f1f;} .pill.soon{background:#f4e3cc;color:#8a5416;}
   .view{display:none;}
   .view.active{display:block;}
   .ai-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:8px;}
@@ -60,13 +71,15 @@
 <body>
 <div class="shell">
   <div class="sidebar">
-    <h1>प्रमाण Praman</h1>
+    <h1 style="display:flex;justify-content:space-between;align-items:center;"><span style="background:#fff;border-radius:8px;padding:3px 8px;display:inline-flex;align-items:center;vertical-align:middle;"><img src="/logo-compact.png" alt="Praman" style="height:30px;width:auto;"></span> <button id="bell" class="secondary" onclick="toggleBell()" title="Notifications" aria-label="Notifications" style="padding:3px 9px;font-size:14px;position:relative;">🔔<span id="bellN" style="display:none;position:absolute;top:-6px;right:-6px;background:#e5484d;color:#fff;border-radius:9px;font-size:10px;padding:1px 5px;"></span></button></h1>
+    <div id="bellBox" style="display:none;background:#1a2130;border:1px solid #2b3446;border-radius:8px;max-height:260px;overflow:auto;margin-bottom:10px;font-size:12px;"></div>
     <div style="font-size:11.5px;color:#aab;margin-bottom:14px;" id="vendorLabel"></div>
     <div class="ws-switch" id="wsSwitch"></div>
     <button class="navbtn active" id="navCases" onclick="showView('cases')">Cases</button>
     <button class="navbtn" id="navWA" onclick="showView('whatsapp')">WhatsApp Connection</button>
-    <button class="navbtn" id="navTeam" onclick="showView('team')" style="display:none;">Team / Agents</button>
+    <button class="navbtn" id="navTeam" onclick="showView('team')" style="display:none;">Team</button>
     <button class="navbtn" id="navPerf" onclick="showView('performance')">Performance</button>
+    <a class="navbtn" id="navSettings" href="/settings.html" style="display:none;text-decoration:none;box-sizing:border-box;">⚙️ Automation &amp; API</a>
     <input id="caseSearch" placeholder="Search: case no., claim no., name, mobile" oninput="renderCaseList()" style="width:100%;margin-top:14px;box-sizing:border-box;background:#1a2130;border:1px solid #2b3446;color:#e8eaf0;">
     <div id="caseList" style="margin-top:10px;"></div>
     <div style="position:absolute;bottom:16px;left:16px;">
@@ -76,6 +89,7 @@
   <div class="main">
 
     <div id="view-cases" class="view active">
+      <div id="flowStrip" style="display:none;"></div>
       <div class="ws-head" id="wsHead" style="display:none;"></div>
       <div class="card" id="noPlanBox" style="display:none;"><b>No service in your plan yet</b><div class="hint">Your firm's Praman plan does not include any verification or investigation service yet. Please contact Praman to activate the services you need.</div></div>
       <div class="card" id="newCaseCard">
@@ -164,18 +178,19 @@
 
     <div id="view-team" class="view">
       <div class="card">
-        <h2 style="margin-top:0;">Team / Agents</h2>
+        <h2 style="margin-top:0;">Team</h2>
         <p style="font-size:12.5px;color:#555;">Add an agent login per person handling calls. Agents share your company's cases and WhatsApp connection — so multiple calls can run at the same time.</p>
         <div class="form-row">
-          <input id="agentName" placeholder="Agent name">
-          <input id="agentEmail" placeholder="Agent email" type="email">
-          <input id="agentPassword" placeholder="Agent password" type="password">
+          <input id="agentName" placeholder="Name">
+          <input id="agentEmail" placeholder="Email" type="email">
+          <input id="agentPassword" placeholder="Password" type="password">
+          <select id="agentRole" title="Role"><option value="agent">Agent (works on cases)</option><option value="viewer">Viewer (read-only)</option><option value="insurer">Insurer (finished reports only)</option></select>
         </div>
-        <button onclick="createAgent()">Add agent</button>
+        <button onclick="createAgent()">Add team member</button>
         <div id="agentMsg" style="font-size:12.5px;margin-top:8px;"></div>
       </div>
       <div class="card">
-        <b>Agents</b>
+        <b>Team members</b>
         <div id="agentList" style="margin-top:10px;"></div>
       </div>
     </div>
@@ -188,6 +203,10 @@
       <div class="card">
         <b>Cases created — last 7 days</b>
         <div id="perfTrend" style="margin-top:10px;font-size:12px;"></div>
+      </div>
+      <div class="card" id="perfInsights" style="display:none;">
+        <b>AI call quality — last 30 days</b>
+        <div id="perfInsBody" style="margin-top:10px;font-size:12.5px;"></div>
       </div>
       <div class="card" id="perfAgentsCard" style="display:none;">
         <b>By Agent</b>
@@ -213,10 +232,37 @@ let waAccounts = [];
 const token = localStorage.getItem('praman_token');
 const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
 if (!token || !user) { location.href = '/login.html'; }
+if (user && user.role === 'insurer') location.replace('/insurer.html');
+if (user && user.role === 'viewer') document.head.insertAdjacentHTML('beforeend', '<style>#newCaseCard{display:none !important}</style>');
 
 function authHeaders(extra) { return Object.assign({ Authorization: 'Bearer ' + token }, extra || {}); }
 function logout() { localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
 
+let ntfItems = [];
+async function loadNtf() {
+  try {
+    const r = await fetch(API + '/api/notifications', { headers: authHeaders() });
+    if (!r.ok) return;
+    const j = await r.json();
+    ntfItems = j.items || [];
+    const b = document.getElementById('bellN');
+    b.style.display = j.unread ? '' : 'none'; b.textContent = j.unread > 99 ? '99+' : j.unread;
+    if (document.getElementById('bellBox').style.display !== 'none') drawBell();
+  } catch {}
+}
+function drawBell() {
+  const box = document.getElementById('bellBox');
+  box.innerHTML = ntfItems.length ? ntfItems.map(n => `<div onclick="ntfOpen('${escH(n.caseId || '')}')" style="padding:8px 10px;border-bottom:1px solid #2b3446;cursor:pointer;${n.unread ? 'font-weight:600;' : 'opacity:.7;'}">${escH(n.text)}<div style="font-size:10.5px;color:#9aa;font-weight:400;">${escH(new Date(n.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }))}</div></div>`).join('') : '<div style="padding:10px;color:#9aa;">No notifications yet.</div>';
+}
+async function toggleBell() {
+  const box = document.getElementById('bellBox');
+  if (box.style.display === 'none') {
+    drawBell(); box.style.display = '';
+    fetch(API + '/api/notifications/read', { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: '{}' }).then(() => { document.getElementById('bellN').style.display = 'none'; });
+  } else box.style.display = 'none';
+}
+function ntfOpen(id) { if (id) { document.getElementById('bellBox').style.display = 'none'; openCase(id, true); } }
+setInterval(loadNtf, 30000);
 function showView(name){
   document.getElementById('view-cases').classList.toggle('active', name === 'cases');
   document.getElementById('view-whatsapp').classList.toggle('active', name === 'whatsapp');
@@ -237,6 +283,7 @@ function statCard(label, value){
 
 async function loadPerformance(){
   const isAgent = user.role === 'agent';
+const isTeamUser = ['agent', 'viewer', 'insurer'].includes(user.role), isReadOnly = ['viewer', 'insurer'].includes(user.role);
   document.getElementById('perfTitle').textContent = isAgent ? 'My Performance' : 'Company Performance';
 
   if (isAgent) {
@@ -264,11 +311,33 @@ async function loadPerformance(){
       statCard('Agents', d.agentCount) +
       statCard('Avg. Resolution', d.cases.avgResolutionHours ? d.cases.avgResolutionHours + ' hrs' : '—');
     document.getElementById('perfTrend').innerHTML = trendBars(d.trend7Days);
+    loadInsights();
     document.getElementById('perfAgentsCard').style.display = d.perAgent.length ? 'block' : 'none';
     document.getElementById('perfAgentRows').innerHTML = d.perAgent.map(a => `
       <tr><td>${a.name}</td><td>${a.assigned}</td><td>${a.completed}</td><td>${a.avgResolutionHours ? a.avgResolutionHours + ' hrs' : '—'}</td></tr>`).join('') ||
       '<tr><td colspan="4" style="color:#999;">No agents yet.</td></tr>';
   }
+}
+
+async function loadInsights(){
+  try {
+    const r = await fetch(API + '/api/analytics/insights?days=30', { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.totals.aiCases) { document.getElementById('perfInsights').style.display = 'none'; return; }
+    const VL = { verified: 'Verified', partially_verified: 'Partially verified', found_discrepancy: 'Discrepancy found', unverified: 'Unverified', handoff: 'Handed over', unknown: 'Unknown' };
+    const pct = (v) => v == null ? '—' : v + '%';
+    document.getElementById('perfInsights').style.display = 'block';
+    document.getElementById('perfInsBody').innerHTML =
+      `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">` +
+      statCard('AI cases', d.totals.aiCases) + statCard('Finished', d.totals.completed + ' (' + pct(d.completionRate) + ')') +
+      statCard('Link sent, not started', d.totals.linkSentNotStarted) + statCard('Asked for a person', pct(d.handoffRate)) +
+      statCard('Median call length', d.medianCallMinutes == null ? '—' : d.medianCallMinutes + ' min') + statCard('Median wait for sign-off', d.medianReviewWaitHours == null ? '—' : d.medianReviewWaitHours + ' hrs') +
+      statCard('Waiting for review', d.totals.awaitingReview) + statCard('Verdict changed by reviewer', d.aiChangedByReviewer) + `</div>` +
+      (Object.keys(d.decisions).length ? `<div style="margin-top:10px;"><b>Final results</b><br>${Object.entries(d.decisions).map(([k, v]) => escH(VL[k] || k) + ': <b>' + v + '</b>').join(' · ')}</div>` : '') +
+      (d.topFlags.length ? `<div style="margin-top:10px;"><b>Most common flags</b>${d.topFlags.map(f => `<div>${escH(f.flag)} — <b>${f.count}</b></div>`).join('')}</div>` : '') +
+      (d.reviewers.length ? `<div style="margin-top:10px;"><b>Sign-offs by person</b><br>${d.reviewers.map(x => escH(x.name) + ': <b>' + x.count + '</b>').join(' · ')}</div>` : '');
+  } catch {}
 }
 
 function trendBars(trend){
@@ -288,7 +357,7 @@ async function loadAgents(){
   const agents = await res.json();
   document.getElementById('agentList').innerHTML = agents.map(a => `
     <div class="wa-row">
-      <span><b>${a.name}</b> — ${a.email}</span>
+      <span><b>${escH(a.name)}</b> — ${escH(a.email)} <span class="pill" style="background:#e8ecf7;color:#33407a;">${escH(a.role || 'agent')}</span></span>
       <button class="danger" onclick="deleteAgent('${a.id}')">Remove</button>
     </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No agents added yet.</div>';
 }
@@ -300,11 +369,11 @@ async function createAgent(){
   if(!name || !email || !password){ alert('Fill in all fields'); return; }
   const res = await fetch(API + '/api/auth/agents', {
     method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
-    body: JSON.stringify({ name, email, password })
+    body: JSON.stringify({ name, email, password, role: document.getElementById('agentRole').value })
   });
   const data = await res.json();
   if(data.error){ document.getElementById('agentMsg').textContent = data.error; return; }
-  document.getElementById('agentMsg').textContent = `Agent "${name}" added — share their email/password with them to log in.`;
+  document.getElementById('agentMsg').textContent = `"${name}" added as ${data.role} — share their email/password with them to log in.`;
   document.getElementById('agentName').value = '';
   document.getElementById('agentEmail').value = '';
   document.getElementById('agentPassword').value = '';
@@ -367,18 +436,102 @@ async function loadCases(){
   const res = await fetch(API + '/api/cases', { headers: authHeaders() });
   if (res.status === 401) { logout(); return; }
   allCases = (await res.json()).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  await loadFlow();
   renderCaseList();
   loadUnassigned();
 }
+// ---------- deadlines, reminders, who handles what ----------
+let flow = {}, flowSummary = null, flowFilter = null, team = [];
+async function loadFlow(){
+  try {
+    const [rows, sum, tm] = await Promise.all([
+      fetch(API + '/api/workflow/cases', { headers: authHeaders() }).then(r => r.json()),
+      fetch(API + '/api/workflow/summary', { headers: authHeaders() }).then(r => r.json()),
+      team.length ? team : fetch(API + '/api/workflow/team', { headers: authHeaders() }).then(r => r.json())
+    ]);
+    flow = {}; (Array.isArray(rows) ? rows : []).forEach(r => flow[r.id] = r);
+    flowSummary = sum && !sum.error ? sum : null; team = Array.isArray(tm) ? tm : [];
+  } catch { flowSummary = null; }
+  renderStrip();
+}
+function renderStrip(){
+  const box = document.getElementById('flowStrip'), s = flowSummary;
+  if (!s || !s.open) { box.style.display = 'none'; return; }
+  const mineN = allCases.filter(c => c.status !== 'completed' && c.assignedAgentId === user.id).length;
+  const items = [['review', 'Awaiting review', s.review || 0, 'warn'], ['mine', 'My cases', mineN, ''], ['overdue', 'Overdue', s.overdue, 'bad'], ['soon', 'Due in 6 hours', s.dueSoon, 'warn'], ['waiting', 'Waiting for customer', s.waitingCustomer, ''], ['handoff', 'Asked for a person', s.handoff, 'warn'], ['unassigned', 'Not assigned', s.unassigned, '']];
+  box.className = 'flow'; box.style.display = 'flex';
+  box.innerHTML = `<button class="${flowFilter ? '' : 'on'}" onclick="setFlowFilter(null)"><b>${s.open}</b>Open cases</button>` +
+    items.map(([k, label, n, cls]) => `<button class="${cls} ${flowFilter === k ? 'on' : ''}" onclick="setFlowFilter('${k}')"><b>${n}</b>${label}</button>`).join('') +
+    `<button class="on" style="background:#c8781f;color:#fff;" onclick="nextCase()" title="Opens the most urgent case that is waiting for you"><b>▶</b>Next case</button>`;
+}
+// The most urgent open case for this person: customers waiting for a person, then reviews, then late, then due soon.
+function nextCase(){
+  const rank = c => { const f = flow[c.id] || {};
+    return c.aiCall && c.aiCall.status === 'handoff' ? 0 : ['awaiting_review', 'awaiting_second_review'].includes(c.reviewState) ? 1 : f.time === 'overdue' ? 2 : f.time === 'due_soon' ? 3 : 4; };
+  const open = allCases.filter(c => c.status !== 'completed' && (!c.assignedAgentId || c.assignedAgentId === user.id));
+  open.sort((a, b) => rank(a) - rank(b) || String(a.createdAt).localeCompare(String(b.createdAt)));
+  if (!open.length) { alert('Nothing is waiting for you right now.'); return; }
+  openCase(open[0].id, true);
+}
+function setFlowFilter(k){ flowFilter = flowFilter === k ? null : k; renderStrip(); renderCaseList(); }
+function flowMatch(c){
+  const f = flow[c.id] || {};
+  if (c.status === 'completed') return false;
+  return flowFilter === 'overdue' ? f.time === 'overdue' : flowFilter === 'soon' ? f.time === 'due_soon' :
+    flowFilter === 'waiting' ? (c.verificationMode === 'full_automation' && (!c.aiCall || ['not_started', 'in_progress'].includes(c.aiCall.status))) :
+    flowFilter === 'handoff' ? !!(c.aiCall && c.aiCall.status === 'handoff') : flowFilter === 'unassigned' ? !c.assignedAgentId :
+    flowFilter === 'review' ? ['awaiting_review', 'awaiting_second_review'].includes(c.reviewState) : flowFilter === 'mine' ? c.assignedAgentId === user.id : true;
+}
+function dueText(iso){ const d = new Date(iso), ms = d - Date.now(), h = Math.round(Math.abs(ms) / 3600e3); return (ms < 0 ? 'late by ' : 'due in ') + (h >= 48 ? Math.round(h / 24) + ' days' : h + ' h'); }
+function toLocalInput(iso){ const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+
+function flowCard(c){
+  const f = flow[c.id]; if (!f) return '';
+  const done = c.status === 'completed';
+  const admin = !['agent', 'viewer', 'insurer'].includes(user.role);
+  const opts = ['<option value="">— nobody —</option>'].concat(team.map(t => `<option value="${escH(t.id)}" ${t.id === c.assignedAgentId ? 'selected' : ''}>${escH(t.name)}${t.role === 'admin' ? ' (admin)' : ''}</option>`)).join('');
+  const rem = c.verificationMode !== 'full_automation' ? 'Reminders are only sent for AI-call cases.' :
+    f.remindersStopped ? 'Automatic reminders are <b>stopped</b> for this case.' :
+    `Reminders sent: <b>${f.reminders}</b>${f.nextReminderAt && !done ? ` · next about ${escH(new Date(f.nextReminderAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }))}` : ''}${f.skipReason ? ` · <span style="color:#b23a2c;">${escH(f.skipReason)}</span>` : ''}`;
+  return `<div class="card">
+    <b>Deadline &amp; follow-up</b> ${done ? '' : `<span class="pill ${f.time === 'overdue' ? 'over' : f.time === 'due_soon' ? 'soon' : ''}">${escH(dueText(f.dueAt))}</span>`}
+    ${f.escalatedAt ? `<span class="pill over">escalated</span>` : ''}
+    ${c.reviewState === 'awaiting_review' ? `<span class="pill soon" title="The AI call is finished. Open the report and give the final verdict.">AI call done — awaiting your review</span>` : ''}
+    <div class="form-row" style="margin-top:8px;align-items:center;">
+      <label style="font-size:12px;">Handled by</label><select id="flowAssign" onchange="flowAssign('${c.id}', this.value)">${opts}</select>
+      <label style="font-size:12px;">Due</label><input id="flowDue" type="datetime-local" value="${escH(toLocalInput(f.dueAt))}" onchange="flowDue('${c.id}', this.value)" ${done ? 'disabled' : ''}>
+    </div>
+    <div class="hint">${rem}</div>
+    ${done ? '' : `<div class="form-row" style="margin-top:8px;">
+      ${c.verificationMode === 'full_automation' ? `<button class="secondary" onclick="flowRemind('${c.id}')">Send reminder now</button>
+      <button class="secondary" onclick="flowStop('${c.id}', ${!f.remindersStopped})">${f.remindersStopped ? 'Turn automatic reminders on' : 'Stop automatic reminders'}</button>` : ''}
+      ${admin ? `<button class="secondary" onclick="flowHold('${c.id}', ${!f.legalHold})" title="Files of this case are never deleted by the data retention policy">${f.legalHold ? '🔓 Remove legal hold' : '🔒 Legal hold'}</button>` : ''}
+    </div>`}
+    ${f.legalHold ? '<div class="hint">🔒 Legal hold: stored files are kept even after the retention period.</div>' : ''}
+  </div>`;
+}
+async function flowPost(path, body){
+  const r = await fetch(API + '/api/workflow' + path, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body || {}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.error) { alert(d.error || 'Could not save.'); return false; }
+  return true;
+}
+async function flowAssign(id, to){ if (await flowPost(`/cases/${id}/assign`, { agentId: to || null })) { await loadCases(); openCase(id); } }
+async function flowDue(id, v){ if (v && await flowPost(`/cases/${id}/due`, { dueAt: new Date(v).toISOString() })) { await loadCases(); openCase(id); } }
+async function flowRemind(id){ if (confirm('Send the WhatsApp reminder with the call link to the customer now?') && await flowPost(`/cases/${id}/remind`)) { alert('Reminder sent.'); openCase(id); } }
+async function flowStop(id, stop){ if (await flowPost(`/cases/${id}/reminders`, { stop })) { await loadCases(); openCase(id); } }
+async function flowHold(id, on){ if (await flowPost(`/cases/${id}/legal-hold`, { on })) { await loadCases(); openCase(id); } }
+
 function renderCaseList(){
   const q = (document.getElementById('caseSearch').value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const inWs = ws === 'all' ? allCases : allCases.filter(c => c.service === ws);
+  // a follow-up filter (Overdue, Due soon…) looks across all services, like the numbers above it
+  const inWs = flowFilter ? allCases.filter(flowMatch) : (ws === 'all' ? allCases : allCases.filter(c => c.service === ws));
   const list = q ? inWs.filter(c => [c.caseRef, c.claimNo, c.policyNo, c.insuredName, c.whatsappNumber, c.vehicleNo].some(v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(q))) : inWs;
   document.getElementById('caseList').innerHTML = list.map(c => `
-    <div class="case-item" onclick="openCase('${c.id}')">
+    <div class="case-item" onclick="openCase('${c.id}', true)">
       <span style="font-size:10.5px;color:#c8781f;font-weight:700;">${escH(c.caseRef || '')}</span><br>
-      <b>${escH(c.claimNo)}</b>${ws === 'all' && svcInfo(c.service) ? ` <span style="font-size:10.5px;opacity:.7;">${escH(svcInfo(c.service).icon + ' ' + svcInfo(c.service).short)}</span>` : ''}<br>${escH(c.insuredName || '—')}<br>
-      <span style="opacity:.6">${escH(c.status)}</span>
+      <b>${escH(c.claimNo)}</b>${(ws === 'all' || flowFilter) && svcInfo(c.service) ? ` <span style="font-size:10.5px;opacity:.7;">${escH(svcInfo(c.service).icon + ' ' + svcInfo(c.service).short)}</span>` : ''}<br>${escH(c.insuredName || '—')}<br>
+      <span style="opacity:.6">${escH(c.status)}</span>${(flow[c.id] && flow[c.id].time === 'overdue') ? '<span class="pill over">late</span>' : (flow[c.id] && flow[c.id].time === 'due_soon') ? '<span class="pill soon">due soon</span>' : ''}
       ${c.assignedAgentName ? `<br><span style="color:#c8781f;font-size:11px;">👤 ${escH(c.assignedAgentName)}</span>` : ''}
     </div>`).join('') || `<div style="opacity:.6;font-size:12px;">${q ? 'No matching case' : 'No cases yet'}</div>`;
 }
@@ -473,7 +626,7 @@ async function createCase(){
   }
   ['claimNo','insuredName','whatsappNumber','policyValue','vehicleNo','district'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   await loadCases();
-  openCase(c.id);
+  openCase(c.id, true);
 }
 
 const PIVC_STEPS = [
@@ -493,6 +646,52 @@ const PIVC_RESULTS = [
 
 
 const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+function ckBtn(c, x){
+  if (c.status === 'completed' && c.reviewState === 'reviewed') return '';
+  if (x.byHuman) return ` <button class="secondary" style="padding:2px 7px;font-size:10.5px;" onclick="ckUndo('${c.id}','${escH(x.id)}')">Undo</button>`;
+  if (x.status === 'not_done' || x.status === 'partial') return ` <button class="link" style="padding:2px 7px;font-size:10.5px;" onclick="ckDone('${c.id}','${escH(x.id)}')" title="You asked or checked this yourself, for example on a live call">I did this myself</button>`;
+  return '';
+}
+async function ckDone(id, item){
+  const note = prompt('What did you ask or check, and what was the answer? (this is saved in the report with your name)');
+  if (note === null) return;
+  const r = await fetch(API + `/api/cases/${id}/checklist/${encodeURIComponent(item)}`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ note }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(d.error || 'Could not save'); return; }
+  openCase(id);
+}
+async function ckUndo(id, item){
+  if (!confirm('Set this item back to what the AI recorded?')) return;
+  await fetch(API + `/api/cases/${id}/checklist/${encodeURIComponent(item)}`, { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ undo: true }) });
+  openCase(id);
+}
+// Top of the case: how far the AI has got through this case's checklist, and what needs a person.
+function aiStrip(c){
+  const items = c.aiChecklist || [];
+  if (!items.length) return '';
+  const n = k => items.filter(x => x.status === k).length;
+  const done = n('done'), part = n('partial'), bad = n('not_done'), rest = items.length - done - part - bad;
+  const w = v => (v / items.length * 100).toFixed(1) + '%';
+  const attention = items.filter(x => x.status === 'partial' || x.status === 'not_done');
+  const a = c.aiCall || {};
+  const finished = ['completed', 'handoff'].includes(a.status);
+  const waiting = c.reviewState === 'awaiting_review';
+  const msg = a.status === 'handoff' ? '🙋 The customer asked for a person — please call them.'
+    : waiting ? '📝 The AI call is finished. Please open the report, check the points below, and give your final verdict.'
+    : finished ? '' : a.status === 'in_progress' ? 'The call is going on now. Ticks appear as the customer answers.' : 'The customer has not started the call yet.';
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><b>Verification progress</b>
+      <span style="font-size:12.5px;"><b style="color:#1f7a6c;">${done}</b> of ${items.length} done${part ? ` · <b style="color:#8a5416;">${part}</b> need a look` : ''}${bad ? ` · <b style="color:#b23a2c;">${bad}</b> not done` : ''}${rest ? ` · ${rest} not reached` : ''}</span></div>
+    <div role="img" aria-label="${done} of ${items.length} checklist items done" style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#e6e8ef;margin:8px 0;">
+      <span style="width:${w(done)};background:#1f7a6c;"></span><span style="width:${w(part)};background:#d9a441;"></span><span style="width:${w(bad)};background:#c44a3b;"></span></div>
+    ${msg ? `<div style="font-size:12.5px;margin-bottom:6px;">${msg}</div>` : ''}
+    ${(a.liveCallReasons || []).length ? `<div style="font-size:12.5px;margin-bottom:6px;color:#8a2a1f;">🎥 <b>A live call is recommended:</b> ${a.liveCallReasons.map(escH).join('; ')}. <button class="link" style="padding:3px 8px;font-size:11.5px;" onclick="window.open('/live.html?case=${encodeURIComponent(c.id)}','_blank')">Start live video call</button></div>` : ''}
+    ${attention.length ? `<div style="font-size:12px;font-weight:700;margin-top:4px;">Needs your attention (${attention.length})</div>
+      ${attention.slice(0, 6).map(x => `<div style="font-size:12px;margin:3px 0;">${x.status === 'not_done' ? '❌' : '🟡'} ${escH(x.label)}${x.detail ? ` <span style="color:#666;">— ${escH(x.detail)}</span>` : ''}${ckBtn(c, x)}</div>`).join('')}
+      ${attention.length > 6 ? `<div style="font-size:11.5px;color:#666;">…and ${attention.length - 6} more. The full checklist is in the AI call card below.</div>` : ''}` : (finished ? '<div style="font-size:12.5px;color:#1f7a6c;">✅ Everything on the checklist is done.</div>' : '')}
+    ${finished ? `<div style="margin-top:10px;"><button onclick="window.open('/ai-report.html?case=${encodeURIComponent(c.id)}','_blank')">Open AI verification report</button></div>` : ''}
+  </div>`;
+}
 function aiCard(c){
   const a = c.aiCall || {};
   const stateLabel = { not_started: 'Link sent — customer has not joined yet', in_progress: 'Call in progress or paused (customer can rejoin)', completed: 'Call completed', handoff: '🙋 Customer asked to talk to a person — please do an executive call' }[a.status || 'not_started'];
@@ -512,11 +711,21 @@ function aiCard(c){
   const checks = (a.checks || []).map(k => `<div class="evidence-item" style="font-size:12px;">${icon(k.result)} <b>${escH(k.label)}</b> — <span class="${cls(k.result)}">${escH(k.result)}</span>${k.detail ? ' · ' + escH(k.detail) : ''}</div>`).join('');
   const answers = (a.answers || []).map(x => `<div class="evidence-item" style="font-size:12px;"><b>${escH(x.question)}</b><br>${escH(x.english || x.original || '(no answer)')}${x.concern ? `<div style="color:#b23a2c;">⚠️ ${escH(x.concern)}</div>` : ''}</div>`).join('');
   const docs = a.docs || {};
+  const CK = { done: ['✅', 'Done', '#1f7a6c'], partial: ['🟡', 'Needs a look', '#8a5416'], not_done: ['❌', 'Not done', '#b23a2c'], in_progress: ['⏳', 'On it now', '#22307A'], pending: ['◻️', 'Not reached', '#8a90a8'] };
+  const ckItems = c.aiChecklist || [];
+  const ckN = k => ckItems.filter(x => x.status === k).length;
+  let ckGroup = '';
+  const checklistHtml = ckItems.length ? `
+      <div style="margin-top:12px;font-size:12.5px;"><b>Checklist for this ${c.caseType === 'policy_verification' ? 'verification' : 'investigation'}</b> — marked by the AI as the call goes on:
+        <span style="color:#1f7a6c;">${ckN('done')} of ${ckItems.length} done</span>${ckN('partial') ? ` · <span style="color:#8a5416;">${ckN('partial')} need a look</span>` : ''}${ckN('not_done') ? ` · <span style="color:#b23a2c;">${ckN('not_done')} not done</span>` : ''}${ckItems.length - ckN('done') - ckN('partial') - ckN('not_done') ? ` · ${ckItems.length - ckN('done') - ckN('partial') - ckN('not_done')} not reached yet` : ''}</div>
+      <div style="margin-top:6px;">${ckItems.map(x => { const m = CK[x.status] || CK.pending; const head = x.group !== ckGroup ? `<div style="font-size:11.5px;font-weight:700;color:#22307A;margin:8px 0 2px;">${escH(x.group)}</div>` : ''; ckGroup = x.group;
+        return head + `<div class="evidence-item" style="font-size:12px;display:flex;gap:8px;align-items:flex-start;"><span title="${m[1]}">${m[0]}</span><span style="flex:1;">${escH(x.label)}${x.mandatory ? ' <span style="font-size:10px;color:#b23a2c;font-weight:700;">REQUIRED</span>' : ''}${x.detail ? `<div style="color:#666;">${escH(x.detail)}</div>` : ''}${ckBtn(c, x) ? `<div>${ckBtn(c, x)}</div>` : ''}</span><span style="color:${m[2]};white-space:nowrap;font-weight:600;">${x.byHuman ? 'Done by you' : m[1]}</span></div>`; }).join('')}</div>` : '';
   return `
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><b>🤖 Full-automation AI call</b>${['completed','handoff'].includes(a.status) ? `<button onclick="window.open('/ai-report.html?case=${encodeURIComponent(c.id)}','_blank')">Open AI verification report</button>` : ''}</div>
       <div style="font-size:12px;color:#666;margin-top:4px;">${escH(stateLabel)}${a.startedAt ? ' · started ' + new Date(a.startedAt).toLocaleString() : ''}${a.completedAt ? ' · finished ' + new Date(a.completedAt).toLocaleString() : ''}</div>
       ${decision ? `<div style="margin-top:8px;font-weight:700;color:${decision[1]};">${decision[0]}</div>` : ''}
+      ${checklistHtml}
       ${a.summary ? `<p style="font-size:12.5px;line-height:1.55;">${escH(a.summary)}</p>` : ''}
       ${(a.flags || []).length ? `<div style="font-size:12px;color:#b23a2c;margin:6px 0;">⚠️ ${a.flags.map(escH).join('<br>⚠️ ')}</div>` : ''}
       ${docs.aadhaar && (docs.aadhaar.name || docs.aadhaar.masked) ? `<div class="evidence-item" style="font-size:12px;"><b>Aadhaar (read by AI)</b><br>Name: ${escH(docs.aadhaar.name || '—')} · DOB: ${escH(docs.aadhaar.dob || '—')} · Gender: ${escH(docs.aadhaar.gender || '—')} · Number: ${escH(docs.aadhaar.masked || '—')}<br>Address: ${escH(docs.aadhaar.address || '—')}</div>` : ''}
@@ -576,7 +785,7 @@ async function savePivc(caseId){
   if (res.ok) { alert('Checklist saved.'); loadCases(); } else alert('Failed to save.');
 }
 
-async function openCase(id){
+async function openCase(id, scroll){
   currentCaseId = id;
   const res = await fetch(API + '/api/cases/' + id, { headers: authHeaders() });
   const c = await res.json();
@@ -586,10 +795,11 @@ async function openCase(id){
   const callUrl = `${location.origin}/call.html?room=${roomId}&case=${c.id}`;
   const isPivc = c.caseType === 'policy_verification';
 
+  if (scroll) setTimeout(() => { const el = document.getElementById('caseDetail'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   document.getElementById('caseDetail').innerHTML = `
     <div class="card">
-      <div style="font-size:12px;color:#c8781f;font-weight:700;">Case no. ${escH(c.caseRef || '')} <span style="color:#999;font-weight:400;">· ID ${escH(c.id)}</span></div>
-      <h2>${escH(c.claimNo)} <span class="tag">${escH(c.status)}</span> ${isPivc ? `<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC · ${c.policyType === 'term' ? 'Term' : 'Life'}</span>` : ''} ${isAi ? '<span class="tag" style="background:#e2e8fb;color:#2b3a8c;">🤖 AI call</span>' : ''}</h2>
+      <div style="font-size:12px;color:#c8781f;font-weight:700;">Case no. ${escH(c.caseRef || '')} </div>
+      <h2>${escH(c.claimNo)} <span class="tag">${escH(({ in_progress: 'In progress', completed: 'Completed', open: 'Open' }[c.status]) || String(c.status || '').replace(/_/g, ' '))}</span> ${isPivc ? `<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC · ${c.policyType === 'term' ? 'Term' : 'Life'}</span>` : ''} ${isAi ? '<span class="tag" style="background:#e2e8fb;color:#2b3a8c;">🤖 AI call</span>' : ''}</h2>
       <div style="font-size:12.5px;color:#555;">${escH(c.insuredName || '')} · WhatsApp: ${escH(c.whatsappNumber)}</div>
       ${c.lastKnownLocation ? `<div style="font-size:11.5px;color:#888;margin-top:2px;">📍 Last captured location: ${c.lastKnownLocation.latitude.toFixed(5)}, ${c.lastKnownLocation.longitude.toFixed(5)} (±${Math.round(c.lastKnownLocation.accuracy||0)}m) — ${new Date(c.lastKnownLocation.capturedAt).toLocaleString()} <a href="https://maps.google.com/?q=${c.lastKnownLocation.latitude},${c.lastKnownLocation.longitude}" target="_blank">View on map</a></div>` : ''}
       ${c.spotCheckRequired ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f4e3cc;color:#8a5416;">🎯 Selected for spot-check review</span></div>` : ''}
@@ -605,6 +815,7 @@ async function openCase(id){
       </div>
       <div class="form-row" style="margin-top:10px;">
         <button class="link" onclick="window.open('/live.html?case=${encodeURIComponent(c.id)}','_blank')" title="Two-way video call with the customer: back camera, photos with location, recording">📹 Live video call</button>
+        ${isPivc ? '' : `<button class="link" style="background:#1f7a6c;" onclick="openScreenCheck('${c.id}')" title="Guided check: video call, customer shares screen, you record it and upload it here">🖥️ Screen-share check${c.screenCheck ? ' ✓' : ''}</button>`}
         <button class="secondary" onclick="openRecUpload('${c.id}')" title="Upload a WhatsApp video call (with screen share) that you recorded on your laptop">⬆ Upload call recording</button>
         <button onclick="sendIntake('${c.id}')">Send WhatsApp intake message</button>
         ${isPivc ? '' : `<button class="secondary" onclick="requestHistory('${c.id}')" title="Ask the customer to search WhatsApp for accident / theft / police and send screenshots">Ask for WhatsApp search screenshots</button>`}
@@ -614,6 +825,11 @@ async function openCase(id){
         <button class="secondary" onclick="getShareLink('${c.id}')">Get shareable link for company</button>
       </div>
     </div>
+
+    ${isAi ? aiStrip(c) : ''}
+    ${flowCard(c)}
+    ${isAi ? aiCard(c) : ''}
+    ${isPivc ? pivcCard(c) : ''}
 
     <div class="card">
       <b>Phone Verification (OTP via WhatsApp)</b>
@@ -644,9 +860,6 @@ async function openCase(id){
       </div>
       <div id="kycMsg" style="font-size:12px;margin-top:6px;"></div>
     </div>
-
-    ${isAi ? aiCard(c) : ''}
-    ${isPivc ? pivcCard(c) : ''}
 
     <div class="card">
       <b>WhatsApp Evidence Vault (${c.evidence.length})</b>
@@ -786,13 +999,14 @@ async function generateReport(caseId){
   document.getElementById('reportBox').innerHTML = data.html;
 }
 
-document.getElementById('vendorLabel').textContent = user ? user.vendorName + (user.role === 'agent' ? ' · Agent: ' + user.email : ' · Admin: ' + user.email) : '';
-if (user && user.role !== 'agent') document.getElementById('navTeam').style.display = 'block';
+document.getElementById('vendorLabel').textContent = user ? user.vendorName + (user.role !== 'vendor_admin' ? ' · ' + ({agent:'Agent',viewer:'Viewer',insurer:'Insurer'}[user.role] || 'User') + ': ' + user.email : ' · Admin: ' + user.email) : '';
+if (user && !['agent', 'viewer', 'insurer'].includes(user.role)) { document.getElementById('navTeam').style.display = 'block'; document.getElementById('navSettings').style.display = 'block'; }
 
 // ---------- Workspace: only the services this firm has bought ----------
 let myServices = [], ws = 'all';
 const WS_COLOR = { pivc_life: '#1f6f63', pivc_term: '#2b3a8c', motor_claim: '#8a4b12', all: '#10151f' };
 const svcInfo = k => myServices.find(x => x.key === k);
+loadNtf();
 async function loadWorkspace(){
   try {
     const r = await fetch(API + '/api/auth/me', { headers: authHeaders() });
@@ -820,7 +1034,7 @@ function setWorkspace(key){
   const x = svcInfo(key);
   if (x) {
     head.style.display = 'flex'; head.style.setProperty('--ws', WS_COLOR[key] || '#10151f');
-    head.innerHTML = `<div class="ic">${escH(x.icon)}</div><div><h2>${escH(x.label)}</h2><p>${escH(x.about)}</p></div>${x.price != null && user.role !== 'agent' ? `<div class="price">Your rate: ₹${escH(x.price)} / case</div>` : ''}`;
+    head.innerHTML = `<div class="ic">${escH(x.icon)}</div><div><h2>${escH(x.label)}</h2><p>${escH(x.about)}</p></div>${x.price != null && !isTeamUser ? `<div class="price">Your rate: ₹${escH(x.price)} / case</div>` : ''}`;
     document.title = `${x.short} — Praman`;
   } else if (!none) {
     head.style.display = 'flex'; head.style.setProperty('--ws', WS_COLOR.all);
@@ -849,6 +1063,78 @@ function applyFormFor(key){
 
 loadWorkspace().then(loadCases);
 loadWhatsappAccounts();
+</script>
+<dialog id="ssDlg" style="border:none;border-radius:12px;padding:18px;max-width:560px;width:calc(100% - 32px);">
+  <b style="font-size:15px;">🖥️ Screen-share check</b>
+  <div id="ssInfo" style="font-size:12.5px;color:#555;margin:4px 0 10px;"></div>
+  <div style="font-size:12.5px;line-height:1.55;">
+    <b>1. Call the customer</b>
+    <div class="form-row" style="margin:6px 0;"><button class="link" id="ssWa" style="background:#25a35a;">Open WhatsApp chat</button><button class="secondary" onclick="window.open('https://meet.google.com/new','_blank')">New Google Meet</button><button class="secondary" onclick="ssCopyInvite()">Copy invite message</button></div>
+    <div style="color:#666;">Start the <b>screen recording on your laptop first</b> (OBS: MP4, 720p), then place the video call. Ask the customer to tap <b>Share screen</b>.</div>
+    <b style="display:block;margin-top:10px;">2. Say this on the call (it is recorded)</b>
+    <div id="ssScript" style="background:#f4f6f8;border-radius:8px;padding:8px 10px;margin:6px 0;"></div>
+    <b style="display:block;margin-top:10px;">3. Ask the customer to show</b>
+    <div id="ssItems" style="margin:6px 0;"></div>
+    <b style="display:block;margin-top:10px;">4. Stop the recording and upload it</b>
+    <div class="form-row" style="margin:6px 0;"><select id="ssType"><option value="whatsapp_video">WhatsApp video call</option><option value="google_meet">Google Meet</option><option value="other">Other</option></select><input id="ssDur" type="number" min="0" placeholder="Duration (minutes)"></div>
+    <textarea id="ssNotes" rows="3" placeholder="Anything else you noticed (dates, names, mismatches)…" style="width:100%;padding:8px 10px;border:1px solid #dde1e6;border-radius:6px;font-family:inherit;font-size:13px;box-sizing:border-box;"></textarea>
+    <input id="ssFile" type="file" accept="video/mp4,video/webm,video/quicktime,audio/*,.mp4,.webm,.mov,.m4a,.mp3" style="margin:8px 0;width:100%;">
+    <label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0 10px;"><input type="checkbox" id="ssConsent" style="flex:none;min-width:0;margin-top:2px;"> The customer agreed on the call to the recording and to share their screen.</label>
+  </div>
+  <div id="ssProg" style="font-size:12.5px;color:#555;min-height:18px;"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="secondary" onclick="document.getElementById('ssDlg').close()">Cancel</button><button id="ssGo" onclick="uploadScreenCheck()">Save to case</button></div>
+</dialog>
+<script>
+const SS_ITEMS = [
+  ['whatsapp_chats', 'WhatsApp chats with the garage, surveyor or other party (search: accident, FIR, police)'],
+  ['fir', 'Police complaint / FIR / receipt'],
+  ['photos', 'Accident photos and videos in the gallery (date and place visible)'],
+  ['calls', 'Call log around the time of the incident'],
+  ['vehicle_docs', 'RC, driving licence and policy on the phone'],
+  ['bills', 'Repair estimate, bills or messages about the claim']
+];
+let ssCase = null;
+function openScreenCheck(caseId) {
+  ssCase = allCases.find(x => x.id === caseId) || { id: caseId };
+  const name = ssCase.insuredName || 'the customer';
+  document.getElementById('ssInfo').textContent = `${ssCase.caseRef || ''} · ${name}${ssCase.whatsappNumber ? ' · ' + ssCase.whatsappNumber : ''}`;
+  document.getElementById('ssScript').textContent = `"This is ${user.vendorName || 'our team'} calling about claim ${ssCase.claimNo || ''}. This call is being recorded for claim verification. Do you agree to the recording and to showing me a few things on your phone screen?"  (wait for a clear "yes")`;
+  document.getElementById('ssItems').innerHTML = SS_ITEMS.map(([k, l]) => `<div style="display:flex;gap:8px;align-items:center;margin:4px 0;"><select data-ss="${k}" style="flex:none;width:130px;"><option value="shown">Shown</option><option value="refused">Refused</option><option value="na" selected>Not applicable</option></select><span>${l}</span></div>`).join('');
+  ['ssDur', 'ssNotes', 'ssFile'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ssConsent').checked = false; document.getElementById('ssProg').textContent = ''; document.getElementById('ssGo').disabled = false;
+  document.getElementById('ssWa').onclick = () => {
+    const n = String(ssCase.whatsappNumber || '').replace(/\D/g, '');
+    if (!n) return alert('This case has no WhatsApp number.');
+    window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(ssInvite()), '_blank');
+  };
+  document.getElementById('ssDlg').showModal();
+}
+function ssInvite() {
+  return `Hello ${ssCase.insuredName || ''}, this is ${user.vendorName || 'our team'} regarding your claim ${ssCase.claimNo || ''}. We need a short video call (about 10 minutes) where you share your phone screen to show a few documents and chats. Please keep your phone charged and be ready. Thank you.`;
+}
+function ssCopyInvite() { navigator.clipboard.writeText(ssInvite()); document.getElementById('ssProg').textContent = 'Invite message copied. Paste it in WhatsApp.'; }
+function uploadScreenCheck() {
+  const f = document.getElementById('ssFile').files[0], prog = document.getElementById('ssProg');
+  if (!f) { prog.textContent = 'Choose the recording file.'; return; }
+  if (!document.getElementById('ssConsent').checked) { prog.textContent = 'Tick the consent box (the customer must agree to the recording).'; return; }
+  if (/\.(mkv|flv)$/i.test(f.name)) { prog.textContent = 'MKV/FLV do not play in browsers. In OBS: File → Remux Recordings → MP4, then upload the MP4.'; return; }
+  const items = [...document.querySelectorAll('[data-ss]')].map(s => ({ key: s.dataset.ss, status: s.value }));
+  const fd = new FormData();
+  fd.append('callType', document.getElementById('ssType').value); fd.append('durationMin', document.getElementById('ssDur').value || '');
+  fd.append('screenShared', '1'); fd.append('consent', '1'); fd.append('notes', document.getElementById('ssNotes').value);
+  fd.append('checklist', JSON.stringify(items)); fd.append('recording', f, f.name);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', API + '/api/live/case/' + encodeURIComponent(ssCase.id) + '/external-recording');
+  xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+  xhr.upload.onprogress = e => { if (e.lengthComputable) prog.textContent = `Uploading… ${Math.round(e.loaded / e.total * 100)}% (${(e.total / 1048576).toFixed(0)} MB) — keep this page open`; };
+  xhr.onload = () => {
+    let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status === 200 && d.ok) { prog.textContent = '✓ Saved to the case and added to the report.'; setTimeout(() => { document.getElementById('ssDlg').close(); loadCases && loadCases(); openCase(ssCase.id); }, 1200); }
+    else { prog.textContent = 'Not saved: ' + (d.error || ('error ' + xhr.status)); document.getElementById('ssGo').disabled = false; }
+  };
+  xhr.onerror = () => { prog.textContent = 'Upload failed — check the internet connection and try again.'; document.getElementById('ssGo').disabled = false; };
+  document.getElementById('ssGo').disabled = true; xhr.send(fd);
+}
 </script>
 <dialog id="recDlg" style="border:none;border-radius:12px;padding:18px;max-width:460px;width:calc(100% - 32px);">
   <b style="font-size:15px;">Upload a call recording</b>

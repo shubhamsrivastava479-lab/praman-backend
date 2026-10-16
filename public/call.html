@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Praman — Live Call (Agent)</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="/socket.io/socket.io.js"></script>
 <style>
@@ -23,7 +27,7 @@
 </style>
 </head>
 <body>
-<h1>Praman — Live Call (Agent view)</h1>
+<h1 style="display:flex;align-items:center;gap:10px;"><span style="background:#fff;border-radius:8px;padding:3px 8px;display:inline-flex;align-items:center;vertical-align:middle;"><img src="/logo-compact.png" alt="Praman" style="height:28px;width:auto;"></span> Live Call (Agent view)</h1>
 <div class="status">
   <span id="status">Connecting…</span>
   <span class="rec-badge" id="recBadge" style="display:none;"><span class="dot"></span>Recording</span>

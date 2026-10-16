@@ -218,4 +218,31 @@ async function moveFile(fileUrl, newKey) {
   return pub ? pub + newKey : prefix + newKey;
 }
 
-module.exports = { moveFile, saveFileFromPath, saveFile, isS3Configured, mediaDir, signedUrl, signEvidenceList, presignGet };
+// Permanently deletes a stored file (data retention). Missing files count as deleted.
+async function deleteFile(fileUrl) {
+  if (!fileUrl) return false;
+  if (fileUrl.startsWith('/media/')) {
+    try { await fs.promises.unlink(path.join(mediaDir, fileUrl.slice('/media/'.length))); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    return true;
+  }
+  const cfg = await getS3Config();
+  if (!cfg) throw new Error('Storage is not configured');
+  const prefix = `${cfg.endpoint.replace(/\/$/, '')}/${cfg.bucket}/`;
+  const pub = cfg.publicBaseUrl ? cfg.publicBaseUrl.replace(/\/$/, '') + '/' : null;
+  const key = fileUrl.startsWith(prefix) ? fileUrl.slice(prefix.length) : (pub && fileUrl.startsWith(pub) ? fileUrl.slice(pub.length) : null);
+  if (!key) throw new Error('File is not in the configured storage');
+  const r = await s3Request('DELETE', key.split('?')[0], cfg);
+  if (!r.ok && r.status !== 404) throw new Error(`Storage delete failed: ${r.status}`);
+  return true;
+}
+
+// Reads a stored file back (backups, restore). Local /media paths and private-bucket URLs.
+async function readFile(fileUrl) {
+  if (!fileUrl) throw new Error('No file');
+  if (fileUrl.startsWith('/media/')) return fs.promises.readFile(path.join(mediaDir, fileUrl.slice('/media/'.length)));
+  const r = await fetch(await signedUrl(fileUrl), { signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error(`Storage download failed: ${r.status}`);
+  return Buffer.from(await r.arrayBuffer());
+}
+
+module.exports = { readFile, deleteFile, moveFile, saveFileFromPath, saveFile, isS3Configured, mediaDir, signedUrl, signEvidenceList, presignGet };

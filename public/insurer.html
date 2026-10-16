@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Praman — Finished reports</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
+<style>
+  :root{--bg:#f1f3f5;--card:#fff;--line:#dde1e6;--ink:#10151f;--mute:#667;--brand:#1f2a6b;--ok:#1f7a6c;--bad:#b23a2c;--mid:#9a6a00;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f131b;--card:#171d29;--line:#2b3446;--ink:#e8eaf0;--mute:#9aa3b5;--brand:#9fb0ff;}}
+  body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);margin:0;}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 16px 60px;}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  h1{font-size:20px;margin:0;color:var(--brand);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;}
+  input{font:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);width:100%;box-sizing:border-box;margin-bottom:12px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;color:var(--mute);font-weight:600;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);}
+  td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  .chip{padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#e7ebf5;}
+  .c-ok{background:#dff3ee;color:var(--ok);} .c-bad{background:#fbe5e1;color:var(--bad);} .c-mid{background:#fff1cf;color:var(--mid);}
+  button,a.btn{font:inherit;font-size:12.5px;padding:6px 11px;border-radius:7px;border:1px solid var(--brand);background:var(--brand);color:#fff;cursor:pointer;text-decoration:none;display:inline-block;}
+  button.sec{background:transparent;color:var(--brand);}
+  .empty{color:var(--mute);padding:18px 4px;}
+  @media(max-width:640px){th:nth-child(4),td:nth-child(4){display:none;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div><img src="/logo-compact.png" alt="Praman" style="height:34px;width:auto;display:block;margin-bottom:6px;"><h1>Finished verification reports</h1><div id="who" style="font-size:12.5px;color:var(--mute);"></div></div><button class="sec" onclick="logout()">Log out</button></div>
+  <div class="card">
+    <input id="q" placeholder="Search claim / policy no. or name" oninput="draw()">
+    <div id="list"><div class="empty">Loading…</div></div>
+  </div>
+  <p style="font-size:12px;color:var(--mute);">You can see reports only after the firm's investigator has signed them off. This page is read-only.</p>
+</div>
+<script>
+const token = localStorage.getItem('praman_token');
+let user = null; try { user = JSON.parse(localStorage.getItem('praman_user')); } catch {}
+if (!token || !user) location.href = '/login.html';
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const V = { verified: ['Verified', 'ok'], partially_verified: ['Partially verified', 'mid'], found_discrepancy: ['Discrepancy found', 'bad'], unverified: ['Unverified', 'bad'] };
+let rows = [];
+function logout(){ localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
+async function load(){
+  document.getElementById('who').textContent = (user && user.vendorName ? user.vendorName + ' · ' : '') + (user && user.email || '');
+  const r = await fetch('/api/cases', { headers: { Authorization: 'Bearer ' + token } });
+  if (r.status === 401) return logout();
+  rows = (await r.json()).filter(c => c.aiCall); draw();
+}
+function verdictOf(c){ const rv = c.aiReview && c.aiReview.finalVerdict; return V[rv && rv !== 'pending_verification' ? rv : c.aiCall && c.aiCall.decision] || ['—', '']; }
+function draw(){
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const list = rows.filter(c => !q || (c.claimNo + ' ' + (c.insuredName || '') + ' ' + (c.caseRef || '')).toLowerCase().includes(q))
+    .sort((a, b) => String(b.completedAt || '').localeCompare(String(a.completedAt || '')));
+  document.getElementById('list').innerHTML = list.length ? `<table><thead><tr><th>Claim / policy</th><th>Customer</th><th>Result</th><th>Finished</th><th></th></tr></thead><tbody>${list.map(c => { const v = verdictOf(c); return `<tr>
+    <td><b>${esc(c.claimNo)}</b><div style="font-size:11.5px;color:var(--mute)">${esc(c.caseRef || '')}</div></td><td>${esc(c.insuredName || '—')}</td>
+    <td><span class="chip c-${v[1]}">${esc(v[0])}</span></td><td>${c.completedAt ? esc(new Date(c.completedAt).toLocaleDateString('en-IN')) : '—'}</td>
+    <td style="white-space:nowrap"><a class="btn" href="/ai-report.html?case=${encodeURIComponent(c.id)}" target="_blank" rel="noopener">View</a> <button class="sec" onclick="pdf('${esc(c.id)}','${esc(c.claimNo)}')">PDF</button></td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">No finished reports yet.</div>';
+}
+async function pdf(id, no){
+  const r = await fetch('/api/cases/' + encodeURIComponent(id) + '/ai-report.pdf', { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) return alert('The PDF could not be made.');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'Praman_Report_' + String(no).replace(/[^A-Za-z0-9_-]/g, '') + '.pdf'; a.click();
+}
+load();
+</script>
+</body>
+</html>

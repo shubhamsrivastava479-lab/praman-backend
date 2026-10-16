@@ -1,5 +1,6 @@
 const express = require('express');
 const { buildAiReport } = require('../services/ai-report');
+const checklist = require('../services/checklist');
 const { documentRows, recordingRows, chatRows } = require('../services/report-files');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -11,6 +12,8 @@ const storage = require('../services/storage');
 const { requireAuth } = require('../middleware/auth');
 const { nextCaseRef, normRef, caseFileKey } = require('../services/ids');
 const plans = require('../services/plans');
+const followup = require('../services/followup');
+const webhooks = require('../services/webhooks');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB, for Excel bulk upload
 const os = require('os');
@@ -48,6 +51,9 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
   policyType = plans.SERVICES[svc].policyType || policyType;
   const HIGH_VALUE_THRESHOLD = 1000000; // ₹10,00,000 — above this, self-verification is disabled
   const parsedValue = policyValue ? Number(policyValue) : null;
+  const firm = (db.data.users || []).find(u => u.id === vendorId);
+  const createdAt = new Date();
+  const dueAt = new Date(createdAt.getTime() + followup.settingsOf(firm).tatHours * 3600e3).toISOString();
   const newCase = {
     id: uid('case'),
     caseRef: nextCaseRef(db.data),
@@ -67,7 +73,8 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
     status: 'in_progress',
     verdict: null,
     verificationMode: normMode(verificationMode),
-    createdAt: new Date().toISOString()
+    dueAt,
+    createdAt: createdAt.toISOString()
   };
   if (newCase.verificationMode === 'full_automation') {
     newCase.aiCall = { token: crypto.randomBytes(14).toString('hex'), status: 'not_started' };
@@ -88,11 +95,18 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
 
 router.get('/', async (req, res) => {
   await db.read();
-  res.json(db.data.cases.filter(c => c.vendorId === req.user.vendorRootId).map(c => ({ ...c, service: plans.serviceOfCase(c) })));
+  const roles = require('../services/roles');
+  // The list only needs the headline of each case; the full record (answers, steps, checks, files)
+  // is loaded when one case is opened. This keeps the list fast with thousands of cases.
+  const slimAi = a => a && ({ status: a.status, decision: a.decision, language: a.language, startedAt: a.startedAt, completedAt: a.completedAt, summary: a.summary && String(a.summary).slice(0, 240), flags: (a.flags || []).slice(0, 6), flagCount: (a.flags || []).length, liveCallReasons: a.liveCallReasons, token: a.token });
+  res.json(db.data.cases.filter(c => c.vendorId === req.user.vendorRootId && (req.user.role !== 'insurer' || roles.insurerCan(c)))
+    .map(c => ({ ...c, aiCall: slimAi(c.aiCall), liveCall: c.liveCall ? { token: c.liveCall.token } : c.liveCall, pivcChecklist: undefined, service: plans.serviceOfCase(c) })));
 });
+
 
 // Refuses a service the firm has not bought. Returns an error message or null.
 function serviceBlocked(req, svc) {
+  if (req.user.role !== 'super_admin') { const b = require('../services/billing').blockReason(db.data, plans.firmOf(db.data, req.user), new Date(), svc); if (b) return b; }
   const allowed = plans.allowedServices(db.data, req.user);
   if (allowed.includes(svc)) return null;
   return `Your Praman plan does not include ${plans.SERVICES[svc].label}. Contact Praman to add it.`;
@@ -238,6 +252,8 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
       results.push({ row: rawRow, status: 'skipped', reason: `${plans.SERVICES[svc].label} is not in your plan` });
       continue;
     }
+    const payBlock = require('../services/billing').blockReason(db.data, plans.firmOf(db.data, req.user), new Date(), svc);
+    if (payBlock) { results.push({ row: rawRow, status: 'skipped', reason: payBlock }); continue; }
 
     const newCase = buildCase({
       vendorId: req.user.vendorRootId,
@@ -253,10 +269,12 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
       verificationMode: row.verificationmode || row.mode || defaultMode
     });
     db.data.cases.push(newCase);
+    require('../services/wallet').onCaseCreated(db.data, newCase);
     db.data.custody.push({
       id: uid('cust'), caseId: newCase.id, event: 'Case opened via bulk Excel upload',
       actor: 'agent', timestamp: new Date().toISOString()
     });
+    webhooks.emit('case.created', newCase);
 
     let waStatus = 'not_sent';
     if (account) {
@@ -316,6 +334,7 @@ router.post('/', async (req, res) => {
   });
 
   db.data.cases.push(newCase);
+  require("../services/wallet").onCaseCreated(db.data, newCase);
   db.data.custody.push({
     id: uid('cust'),
     caseId: newCase.id,
@@ -323,6 +342,7 @@ router.post('/', async (req, res) => {
     actor: req.body.actor || 'agent',
     timestamp: new Date().toISOString()
   });
+  webhooks.emit('case.created', newCase);
   await db.write();
   res.status(201).json(newCase);
 });
@@ -336,7 +356,7 @@ router.get('/:id', async (req, res) => {
   const transcripts = db.data.transcripts.filter(t => t.caseId === c.id);
   const report = db.data.reports.filter(r => r.caseId === c.id).slice(-1)[0] || null;
   const baseUrl = baseUrlFor(req);
-  res.json({ ...c, evidence, custody, transcripts, report, customerLink: customerLink(c, baseUrl) });
+  res.json({ ...c, evidence, custody, transcripts, report, customerLink: customerLink(c, baseUrl), aiChecklist: checklist.buildChecklist(c) });
 });
 
 // Files for the formatted report (report.html): every received document with
@@ -358,7 +378,7 @@ router.get('/:id/report-files', async (req, res) => {
 router.get('/:id/ai-report', async (req, res) => {
   await db.read();
   const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
-  if (!c) return res.status(404).json({ error: 'Case not found' });
+  if (!c || (req.user.role === 'insurer' && !require('../services/roles').insurerCan(c))) return res.status(404).json({ error: 'Case not found' });
   // The report carries permanent file links (/f/<shareToken>/<id>), so make
   // sure this case has a share token before building it.
   if (!c.shareToken) {
@@ -373,6 +393,71 @@ router.get('/:id/ai-report', async (req, res) => {
 });
 
 // Reviewer sign-off on the AI report (the AI result is only a recommendation).
+// A person did a checklist item themselves (for example asked the question on a live call).
+router.post('/:id/checklist/:itemId', async (req, res) => {
+  await db.read();
+  const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
+  if (!c || !c.aiCall) return res.status(404).json({ error: 'Case not found' });
+  const item = checklist.buildChecklist(c).find(i => i.id === req.params.itemId);
+  if (!item) return res.status(404).json({ error: 'Checklist item not found' });
+  const ov = (c.checklistOverrides ||= {});
+  const by = req.user.name || req.user.email || 'a team member';
+  if (req.body && req.body.undo) { delete ov[item.id]; }
+  else {
+    const note = String((req.body || {}).note || '').trim().slice(0, 300);
+    if (!note) return res.status(400).json({ error: 'Please write a short note: what you asked or checked, and the answer.' });
+    ov[item.id] = { by, at: new Date().toISOString(), note };
+  }
+  db.data.custody.push({ id: uid('cust'), caseId: c.id, event: req.body && req.body.undo ? `Checklist item "${item.label}" set back to the AI's result by ${by}` : `Checklist item "${item.label}" marked as done by ${by}: ${ov[item.id].note}`, actor: 'agent', timestamp: new Date().toISOString() });
+  await db.write();
+  res.json({ ok: true, aiChecklist: checklist.buildChecklist(c) });
+});
+
+// Builds the report data for a case (same as the on-screen report).
+async function reportData(c, publicView) {
+  const evidence = await storage.signEvidenceList(db.data.evidence.filter(e => e.caseId === c.id));
+  const custody = db.data.custody.filter(x => x.caseId === c.id);
+  const vendor = db.data.users.find(u => u.id === c.vendorId);
+  return { R: buildAiReport(c, { evidence, custody, firm: vendor ? vendor.vendorName || '' : '', publicView }), vendor };
+}
+const pdfName = R => 'Praman_Report_' + String(R.case.claimNo || R.case.caseRef).replace(/[^A-Za-z0-9_-]/g, '') + '.pdf';
+
+// PDF made on the server (cover page, logo, page numbers).
+router.get('/:id/ai-report.pdf', async (req, res) => {
+  await db.read();
+  const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
+  if (!c || !c.aiCall || (req.user.role === 'insurer' && !require('../services/roles').insurerCan(c))) return res.status(404).json({ error: 'Case not found' });
+  try {
+    const { R, vendor } = await reportData(c, false);
+    const buf = await require('../services/report-pdf').render(R, { logoDataUrl: vendor && vendor.logoDataUrl });
+    require('../services/audit').log(req.user, 'report_pdf_downloaded', c.caseRef);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${pdfName(R)}"` }).send(buf);
+  } catch (e) { console.error('PDF error:', e.message); res.status(500).json({ error: 'The PDF could not be made. Please try again.' }); }
+});
+
+// Send the PDF to the insurer (or any address) by e-mail. Needs the mail server (SMTP_URL) to be set up.
+router.post('/:id/email-report', async (req, res) => {
+  if (req.user.role === 'viewer' || req.user.role === 'insurer') return res.status(403).json({ error: 'Not allowed.' });
+  await db.read();
+  const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
+  if (!c || !c.aiCall) return res.status(404).json({ error: 'Case not found' });
+  const ntf = require('../services/notifications');
+  if (!ntf.transport()) return res.status(503).json({ error: 'E-mail is not set up on this server yet (SMTP_URL). Download the PDF and send it yourself.' });
+  const firmRow = (db.data.users || []).find(u => u.id === c.vendorId);
+  const to = String((req.body && req.body.to) || require('../services/followup').settingsOf(firmRow).insurerEmail || '').trim();
+  if (!to) return res.status(400).json({ error: 'Enter an e-mail address, or save the insurer e-mail in Settings.' });
+  try {
+    const { R, vendor } = await reportData(c, false);
+    const buf = await require('../services/report-pdf').render(R, { logoDataUrl: vendor && vendor.logoDataUrl });
+    const ok = await ntf.sendMail(to, `Verification report ${R.meta.reportNo}`, `Please find the verification report for ${R.case.caseRef} (${R.case.claimNo}) attached.\n\nSent from Praman on behalf of ${R.meta.firm}.`, [{ filename: pdfName(R), content: buf }]);
+    if (!ok) return res.status(502).json({ error: 'The e-mail could not be sent. Check the address and the mail server settings.' });
+    require('../services/audit').log(req.user, 'report_emailed', `${c.caseRef} to ${to}`);
+    db.data.custody.push({ id: uid('cust'), caseId: c.id, event: `Report PDF e-mailed to ${to}`, actor: req.user.email || 'agent', timestamp: new Date().toISOString() });
+    await db.write();
+    res.json({ ok: true });
+  } catch (e) { console.error('Email report error:', e.message); res.status(500).json({ error: 'The e-mail could not be sent.' }); }
+});
+
 router.post('/:id/ai-review', async (req, res) => {
   await db.read();
   const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
@@ -380,17 +465,39 @@ router.post('/:id/ai-review', async (req, res) => {
   const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
   const VERDICTS = ['verified', 'partially_verified', 'found_discrepancy', 'unverified', 'pending_verification'];
   const b = req.body || {};
+  if (c.aiReview) (c.aiReviewHistory ||= []).push(c.aiReview); // earlier sign-offs are kept, never overwritten
   c.aiReview = {
     finalVerdict: VERDICTS.includes(b.finalVerdict) ? b.finalVerdict : 'pending_verification',
     remarks: clip(b.remarks, 4000),
     reviewerName: clip(b.reviewerName, 120),
     reviewerDesignation: clip(b.reviewerDesignation, 120),
-    reviewedAt: new Date().toISOString()
+    reviewedAt: new Date().toISOString(),
+    reviewedByLogin: clip(req.user.email, 120) // who was logged in (the name above is typed by hand)
   };
   if (c.caseType === 'policy_verification' && c.aiReview.finalVerdict !== 'pending_verification') c.pivcResult = c.aiReview.finalVerdict;
+  if (c.aiReview.finalVerdict !== 'pending_verification') {   // a person has decided
+    const firm = (db.data.users || []).find(u => u.id === c.vendorId);
+    const fs_ = require('../services/followup').settingsOf(firm);
+    const value = require('../services/call-signals').parseAmount(c.policyValue) || 0;
+    const needsTwo = fs_.secondReviewAbove > 0 && value > fs_.secondReviewAbove;
+    const prev = (c.aiReviewHistory || []).filter(h => h.finalVerdict !== 'pending_verification').pop();
+    const firstBy = c.reviewState === 'awaiting_second_review' && prev ? prev.reviewedByLogin : null;
+    if (needsTwo && c.reviewState !== 'awaiting_second_review') {
+      c.reviewState = 'awaiting_second_review';   // a different person must confirm
+      require('../services/notifications').notify(c.vendorId, { type: 'second_review', caseId: c.id, text: `Case ${c.caseRef} needs a second reviewer (value above the firm's limit)` });
+    } else if (needsTwo && firstBy && firstBy === c.aiReview.reviewedByLogin) {
+      c.aiReview = c.aiReviewHistory.pop();   // same person cannot confirm their own sign-off — undo this save
+      return res.status(409).json({ error: 'This case needs a second reviewer. Please ask a different person to sign off.' });
+    } else {
+      c.reviewState = 'reviewed';
+      if (c.status !== 'completed') { c.status = 'completed'; c.completedAt = new Date().toISOString(); }
+    }
+  }
   db.data.custody.push({ id: uid('cust'), caseId: c.id, event: `Report reviewed by ${c.aiReview.reviewerName || 'reviewer'} — final verdict: ${c.aiReview.finalVerdict}`, actor: 'agent', timestamp: new Date().toISOString() });
+  webhooks.emit('case.reviewed', c);
+  require('../services/audit').log(req.user, 'review_signed', `${c.caseRef} → ${c.aiReview.finalVerdict}`);
   await db.write();
-  res.json({ ok: true, review: c.aiReview });
+  res.json({ ok: true, review: c.aiReview, reviewState: c.reviewState });
 });
 
 router.patch('/:id', async (req, res) => {
@@ -531,3 +638,5 @@ router.post('/:id/share-link', async (req, res) => {
 module.exports = router;
 module.exports.customerLink = customerLink;
 module.exports.baseUrlFor = baseUrlFor;
+module.exports.buildCase = buildCase;
+module.exports.findDuplicate = findDuplicate;

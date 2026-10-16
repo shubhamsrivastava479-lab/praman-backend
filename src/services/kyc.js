@@ -9,7 +9,18 @@ const BASE_URL = 'https://api.gridlines.io';
 // convention but should be double-checked against your account's API
 // reference page once you're logged in there.
 
-async function gridlinesRequest(path, body, { apiKey, authType = 'API-Key' }) {
+// Every paid call goes through here. If the firm has a wallet, the price is deducted first and
+// given back when the provider call fails. credentials.billTo = { vendorId, caseId } says who pays.
+async function gridlinesRequest(path, body, credentials, kind) {
+  const { apiKey, authType = 'API-Key', billTo } = credentials;
+  const wallet = require('./wallet'), { db } = require('../db');
+  let row = null;
+  if (billTo && kind) { row = wallet.chargeKyc(db.data, billTo.vendorId, kind, { caseId: billTo.caseId }); if (row) await db.write(); }
+  try { return await rawRequest(path, body, { apiKey, authType }); }
+  catch (e) { if (row) { wallet.refund(db.data, row.id, 'Refund (check failed)'); await db.write(); } throw e; }
+}
+
+async function rawRequest(path, body, { apiKey, authType = 'API-Key' }) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: {
@@ -31,7 +42,7 @@ async function verifyDrivingLicence(dlNumber, dateOfBirth, credentials) {
   return gridlinesRequest(
     '/dl-api/fetch',
     { driving_license_number: dlNumber, date_of_birth: dateOfBirth },
-    credentials
+    credentials, 'dl'
   );
 }
 
@@ -42,7 +53,7 @@ async function generateAadhaarOtp(aadhaarNumber, credentials) {
   return gridlinesRequest(
     '/aadhaar-api/otp/generate',
     { aadhaar_number: aadhaarNumber, consent: 'Y', consent_text: 'Consent given for KYC verification' },
-    credentials
+    credentials, 'aadhaar_generate'
   );
 }
 
@@ -50,7 +61,7 @@ async function verifyAadhaarOtp(referenceId, otp, credentials) {
   return gridlinesRequest(
     '/aadhaar-api/otp/verify',
     { reference_id: referenceId, otp },
-    credentials
+    credentials, 'aadhaar_verify'
   );
 }
 
@@ -60,7 +71,7 @@ async function verifyPan(panNumber, nameOnPan, dateOfBirth, credentials) {
   return gridlinesRequest(
     '/pan-api/fetch',
     { pan_number: panNumber, name_as_per_pan: nameOnPan, date_of_birth: dateOfBirth, consent: 'Y' },
-    credentials
+    credentials, 'pan'
   );
 }
 

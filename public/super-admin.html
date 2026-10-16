@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Praman — Super Admin</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#04345a">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body{font-family:system-ui,sans-serif;background:#f1f3f5;margin:0;color:#10151f;}
@@ -33,8 +37,8 @@
 </head>
 <body>
 <div class="topbar">
-  <h1>प्रमाण Praman — Super Admin</h1>
-  <button onclick="logout()">Log out</button>
+  <h1 style="display:flex;align-items:center;gap:10px;"><span style="background:#fff;border-radius:8px;padding:3px 8px;display:inline-flex;align-items:center;vertical-align:middle;"><img src="/logo-compact.png" alt="Praman" style="height:28px;width:auto;"></span> Super Admin</h1>
+  <span><a href="/billing-admin.html" style="background:#c8781f;color:#fff;padding:7px 14px;border-radius:6px;font-size:12px;text-decoration:none;margin-right:8px">💰 Billing</a><button onclick="logout()">Log out</button></span>
 </div>
 <div class="main">
 
@@ -54,11 +58,36 @@
   </div>
 
   <div class="card">
+    <b>AI usage — last 30 days</b>
+    <div id="aiUse" style="margin-top:10px;font-size:12.5px;"></div>
+    <div id="aiFirms" style="margin-top:10px;font-size:12.5px;"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Backups</h2>
+    <div class="hint" style="font-size:12.5px;color:#666;">A backup of all data (not the stored files, and not the API keys) is made automatically every day after 2 am India time and the last 14 are kept. <b>Test</b> opens a backup and checks it without changing anything — do this once after you set up file storage.</div>
+    <div id="bkInfo" style="font-size:12.5px;margin:8px 0;"></div>
+    <button onclick="bkRun()">Make a backup now</button>
+    <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;"><tbody id="bkRows"></tbody></table>
+    <div id="bkMsg" style="font-size:12.5px;margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
     <h2>Vendor Companies</h2>
     <table>
       <tr><th>Company</th><th>Email</th><th>Cases</th><th>Agents</th><th>WhatsApp</th><th>Status</th><th></th></tr>
       <tbody id="vendorRows"></tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>System health</h2>
+    <div id="healthBox" style="font-size:12.5px;line-height:1.7;">Loading…</div>
+    <div style="margin-top:8px;"><button class="save" onclick="loadHealth()">Refresh</button> <button class="save" style="background:#22307A;" onclick="runRetention(true)">Preview data clean-up</button> <button class="save" style="background:#b23a2c;" onclick="runRetention(false)">Run data clean-up now</button></div>
+    <div id="retMsg" style="font-size:12.5px;margin-top:8px;"></div>
+    <h2 style="margin-top:16px;font-size:14px;">Recent server problems <button class="action" style="background:#eef0f3;color:#333;margin-left:8px;" onclick="clearErrors()">Clear</button></h2>
+    <div class="hint">The same problem is shown once, with a counter. Passwords, keys and ID numbers are never written here. Set <code>ALERT_WEBHOOK_URL</code> (Slack / Discord / Google Chat) on Render to get a message for every new problem.</div>
+    <div id="errBox" style="font-size:12px;margin-top:6px;"></div>
   </div>
 
   <div class="card">
@@ -73,6 +102,14 @@
     </div>
 
     <div style="margin-bottom:14px;">
+      <label style="font-size:12.5px;font-weight:600;">AI voice for the customer call</label>
+      <div class="form-row" style="margin-top:6px;">
+        <select id="aiVoice"><option value="gemini">Gemini voice (natural, costs per spoken line)</option><option value="phone">Customer's phone reads the text (free, more robotic)</option></select>
+      </div>
+      <div class="hint">Spoken lines are remembered, so a question costs voice money only the first time it is spoken in each language. Choose the phone voice only if cost matters more than sound.</div>
+    </div>
+
+    <div style="margin-bottom:14px;">
       <label style="font-size:12.5px;font-weight:600;">Gridlines API Key <span class="source-tag" id="gridlinesSourceTag"></span></label>
       <div class="form-row" style="margin-top:6px;">
         <input id="gridlinesApiKey" placeholder="Leave blank to keep current key" type="password">
@@ -81,6 +118,7 @@
     </div>
 
     <button class="save" onclick="saveSettings()">Save Settings</button>
+    <button class="save" style="background:#22307A;" onclick="testGemini()">Test Gemini key</button>
     <div id="settingsMsg" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
@@ -102,6 +140,7 @@
       <input id="s3PublicBaseUrl" placeholder="Public base URL (optional, e.g. a CDN domain)">
     </div>
     <button class="save" onclick="saveStorageSettings()">Save Storage Settings</button>
+    <button class="save" style="background:#22307A;" onclick="testStorage()">Test storage</button>
     <div id="storageMsg" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
@@ -167,6 +206,8 @@ function planEditor(v){
       <span style="white-space:nowrap;">₹ <input class="pl-price" data-k="${esc(x.key)}" type="number" min="0" step="1" placeholder="per case" value="${v.servicePrices[x.key] != null ? esc(v.servicePrices[x.key]) : ''}" style="width:110px;min-width:0;flex:none;padding:6px 8px;"> / case</span>
     </label>`).join('')}
     </div>
+    <div style="margin:10px 0;"><b>Data retention</b> <span class="hint">— stored files (photos, recordings, documents) are deleted this many days after a case is finished. Empty = keep for ever. Minimum 30. The report and the record of events stay.</span><br>
+      <input class="pl-ret" type="number" min="30" max="3650" placeholder="days (empty = keep)" value="${v.retentionDays ? esc(v.retentionDays) : ''}" style="width:160px;min-width:0;flex:none;padding:6px 8px;margin-top:4px;"></div>
     <button class="save" onclick="savePlan('${esc(v.id)}')">Save plan</button> <span id="planMsg-${esc(v.id)}" style="margin-left:8px;"></span>
     <div style="margin-top:10px;">${billLine(v, 'thisMonth')}<br>${billLine(v, 'lastMonth')}</div>
   </div>`;
@@ -177,10 +218,10 @@ async function savePlan(id){
   const prices = {}; box.querySelectorAll('.pl-price').forEach(x => { if (x.value !== '') prices[x.dataset.k] = x.value; });
   const msg = document.getElementById('planMsg-' + id);
   if (!services.length && !confirm('No service selected — this firm will not be able to create any case. Continue?')) return;
-  const r = await fetch(`/api/super-admin/vendors/${id}/plan`, { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ services, prices }) });
+  const r = await fetch(`/api/super-admin/vendors/${id}/plan`, { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ services, prices, retentionDays: (box.querySelector('.pl-ret') || {}).value }) });
   const d = await r.json();
   msg.textContent = d.ok ? '✓ Saved' : (d.error || 'Not saved'); msg.style.color = d.ok ? '#1f7a6c' : '#b23a2c';
-  if (d.ok) { const v = vendorCache.find(x => x.id === id); v.services = d.services; v.servicePrices = d.servicePrices; document.getElementById('plansum-' + id).textContent = planSummary(v); }
+  if (d.ok) { const v = vendorCache.find(x => x.id === id); v.services = d.services; v.servicePrices = d.servicePrices; v.retentionDays = (box.querySelector('.pl-ret').value || null); document.getElementById('plansum-' + id).textContent = planSummary(v); }
 }
 function togglePlan(id){ const r = document.getElementById('planrow-' + id); if (r) r.style.display = r.style.display === 'none' ? 'table-row' : 'none'; }
 async function loadVendors(){
@@ -235,6 +276,7 @@ async function loadSettings(){
   const s = await res.json();
   document.getElementById('geminiApiKey').placeholder = s.geminiApiKey ? `Current: ${s.geminiApiKey}` : 'Not set — enter a key';
   document.getElementById('geminiSourceTag').textContent = s.geminiSource;
+  if (document.getElementById('aiVoice')) document.getElementById('aiVoice').value = s.aiVoice || 'gemini';
   document.getElementById('gridlinesApiKey').placeholder = s.gridlinesApiKey ? `Current: ${s.gridlinesApiKey}` : 'Not set — enter a key';
   document.getElementById('gridlinesSourceTag').textContent = s.gridlinesSource;
   document.getElementById('gridlinesAuthType').value = s.gridlinesAuthType || '';
@@ -291,6 +333,25 @@ async function downloadBackup(){
   a.download = `praman-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
 }
 
+async function testStorage(){
+  const m = document.getElementById('storageMsg'); m.style.color = '#555'; m.textContent = 'Testing upload…';
+  try {
+    const d = await (await fetch('/api/super-admin/test-storage', { method: 'POST', headers: authHeaders() })).json();
+    m.style.color = d.ok ? '#1f7a6c' : '#b23a2c';
+    m.innerHTML = d.ok ? '✓ ' + esc(d.message) : '✗ Storage is not working. ' + (d.hint ? '<b>' + esc(d.hint) + '</b><br>' : '') + '<span style="color:#888">' + esc(d.error || '') + '</span>';
+  } catch { m.textContent = 'Test failed — try again.'; }
+}
+async function testGemini(){
+  const m = document.getElementById('settingsMsg'); m.style.color = '#555'; m.textContent = 'Testing Gemini (text and voice)…';
+  try {
+    const d = await (await fetch('/api/super-admin/test-gemini', { method: 'POST', headers: authHeaders() })).json();
+    m.style.color = d.ok ? '#1f7a6c' : '#b23a2c';
+    m.innerHTML = (d.ok ? '✓ Gemini works — text and voice.' : '✗ Gemini is not fully working.') +
+      '<br>Text/translation: ' + (d.text.ok ? '✓ ' + esc(d.text.sample) : '✗ <span style="color:#888">' + esc(d.text.error) + '</span>') +
+      '<br>AI voice: ' + (d.voice.ok ? '✓' : '✗ <span style="color:#888">' + esc(d.voice.error) + '</span>') +
+      (d.hint ? '<br><b>' + esc(d.hint) + '</b>' : '');
+  } catch { m.textContent = 'Test failed — try again.'; }
+}
 async function saveStorageSettings(){
   const body = {
     s3Endpoint: document.getElementById('s3Endpoint').value.trim(),
@@ -315,7 +376,7 @@ async function saveSettings(){
   const gridlinesAuthType = document.getElementById('gridlinesAuthType').value.trim();
   const res = await fetch('/api/super-admin/settings', {
     method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
-    body: JSON.stringify({ geminiApiKey, gridlinesApiKey, gridlinesAuthType })
+    body: JSON.stringify({ geminiApiKey, gridlinesApiKey, gridlinesAuthType, aiVoice: document.getElementById('aiVoice') ? document.getElementById('aiVoice').value : undefined })
   });
   const data = await res.json();
   document.getElementById('settingsMsg').textContent = data.ok ? 'Saved.' : (data.error || 'Failed to save.');
@@ -355,6 +416,10 @@ async function loadPlatformPerformance(){
     `<tr><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${v.vendorName}</td><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${v.caseCount}</td></tr>`
   ).join('') || '<tr><td colspan="2" style="color:#999;padding:6px;">No vendors yet.</td></tr>';
 
+  const u = d.aiUsage || { text: 0, voice: 0, errors: 0, days: [] };
+  document.getElementById('aiUse').innerHTML = `Text/understanding calls: <b>${u.text}</b> · Voice calls: <b>${u.voice}</b> · Failed calls: <b style="color:${u.errors ? '#b23a2c' : 'inherit'}">${u.errors}</b> · Lines re-used from memory since last restart: <b>${u.cacheHits || 0}</b><div style="color:#888;font-size:11.5px;margin-top:4px;">Counted since this feature was added; the count is for the whole platform. Use it with your Google billing page to watch cost.</div>`;
+  document.getElementById('aiFirms').innerHTML = (d.aiCallsByFirm || []).length ? '<b>Finished AI calls by company</b>' + d.aiCallsByFirm.map(f => `<div>${String(f.vendorName).replace(/[<>&]/g, '')} — ${f.aiCalls}</div>`).join('') : '';
+
   const warnBox = document.getElementById('storageWarning');
   if (!d.storage.usingCloud) {
     warnBox.style.display = 'block';
@@ -364,9 +429,62 @@ async function loadPlatformPerformance(){
   }
 }
 
+async function loadHealth(){
+  const box = document.getElementById('healthBox');
+  try {
+    const d = await (await fetch('/api/super-admin/health', { headers: authHeaders() })).json();
+    const yes = (ok, label, bad) => `<span style="color:${ok ? '#1f7a6c' : '#b23a2c'}">${ok ? '✓' : '✗'} ${label}${ok ? '' : ' — ' + bad}</span>`;
+    const job = (j) => !j ? '<span style="color:#888">not run yet</span>' : j.error ? `<span style="color:#b23a2c">failed: ${esc(j.error)}</span>` : `ok, ${esc(new Date(j.at).toLocaleTimeString('en-IN'))}`;
+    box.innerHTML = [
+      `Running for <b>${d.uptimeMinutes}</b> min · memory <b>${d.memoryMb} MB</b> · open cases <b>${d.cases.open}</b>${d.cases.overdue ? ` (<b style="color:#b23a2c">${d.cases.overdue} overdue</b>)` : ''}`,
+      yes(d.database.persistent, 'Database saves permanently', 'set DATABASE_URL on Render') + (d.database.lastSaveError ? ` <span style="color:#b23a2c">· last save failed: ${esc(d.database.lastSaveError.message)}</span>` : ''),
+      yes(d.keys.gemini, 'Gemini key', 'AI cannot work') + ' &nbsp; ' + yes(d.keys.storage, 'File storage (R2)', 'photos are lost on restart') + ' &nbsp; ' + yes(d.keys.gridlines, 'Gridlines key', 'Aadhaar / PAN checks off'),
+      yes(d.keys.publicBaseUrl, 'PUBLIC_BASE_URL', 'automatic reminders cannot make links') + ' &nbsp; ' + (d.keys.alertWebhook ? '✓ problem alerts on' : '<span style="color:#888">problem alerts off (ALERT_WEBHOOK_URL)</span>'),
+      `Webhooks: <b>${d.webhooks.pending}</b> waiting, <b style="color:${d.webhooks.failed ? '#b23a2c' : 'inherit'}">${d.webhooks.failed}</b> failed · Background jobs: reminders ${job(d.jobs.followup)}; webhooks ${job(d.jobs.webhooks)}; clean-up ${job(d.jobs.retention)}`,
+      `Server problems in the last 24 hours: <b style="color:${d.errors24h ? '#b23a2c' : '#1f7a6c'}">${d.errors24h}</b>`
+    ].join('<br>');
+  } catch { box.textContent = 'Could not load.'; }
+  loadErrors();
+}
+async function loadErrors(){
+  const box = document.getElementById('errBox');
+  try {
+    const list = await (await fetch('/api/super-admin/errors', { headers: authHeaders() })).json();
+    box.innerHTML = list.length ? list.slice(0, 30).map(e => `<div style="padding:6px 0;border-bottom:1px solid #f0f1f3;"><b>${esc(e.source)}</b> ${e.count > 1 ? `<span class="tag pending">×${e.count}</span>` : ''} <span style="color:#888">${esc(new Date(e.lastAt).toLocaleString('en-IN'))}${e.path ? ' · ' + esc(e.path) : ''}</span><br>${esc(e.message)}${e.stack ? `<br><span style="color:#999;font-size:11px;">${esc(e.stack)}</span>` : ''}</div>`).join('') : '<span style="color:#1f7a6c">✓ No problems recorded.</span>';
+  } catch { box.textContent = ''; }
+}
+async function clearErrors(){ if (!confirm('Clear the list of problems?')) return; await fetch('/api/super-admin/errors', { method: 'DELETE', headers: authHeaders() }); loadErrors(); loadHealth(); }
+async function runRetention(dry){
+  const m = document.getElementById('retMsg');
+  if (!dry && !confirm('Delete the stored files of every finished case whose retention period is over? This cannot be undone.')) return;
+  m.style.color = '#555'; m.textContent = dry ? 'Checking…' : 'Deleting…';
+  const d = await (await fetch('/api/super-admin/retention/run', { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ dryRun: dry }) })).json();
+  if (d.error) { m.style.color = '#b23a2c'; m.textContent = d.error; return; }
+  m.style.color = '#1f7a6c';
+  m.textContent = dry ? `${d.files} file(s) in ${d.cases} case(s) are past their retention period${d.files ? ' and would be deleted.' : '.'}` : `Deleted ${d.deleted} file(s)${d.failed ? `, ${d.failed} could not be deleted yet` : ''}.`;
+}
+
 loadVendors();
 loadSettings();
 loadPlatformPerformance();
+loadHealth();
+
+async function bkLoad(){
+  const r = await fetch('/api/super-admin/backups', { headers: authHeaders() }); if (!r.ok) return;
+  const d = await r.json();
+  document.getElementById('bkInfo').innerHTML = d.cloud ? 'Saved in your cloud storage (R2).' : '<b style="color:#b23a2c">Saved on the server disk only.</b> Set up Cloudflare R2 in Platform Settings, otherwise backups are lost when the server restarts.';
+  const esc = v => String(v == null ? '' : v).replace(/[<>&"]/g, '');
+  document.getElementById('bkRows').innerHTML = d.items.map(b => `<tr><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${esc(new Date(b.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }))} <span style="color:#888">${esc(b.label)}</span></td><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${(b.bytes / 1024).toFixed(0)} KB · ${b.counts ? (b.counts.cases || 0) + ' cases' : ''}</td><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${b.verifiedAt ? '✓ tested ' + esc(new Date(b.verifiedAt).toLocaleDateString('en-IN')) : 'not tested'}</td><td style="padding:6px;border-bottom:1px solid #f0f1f3;white-space:nowrap;"><button class="secondary" onclick="bkVerify('${esc(b.id)}')">Test</button> <button class="danger" onclick="bkRestore('${esc(b.id)}')">Restore</button></td></tr>`).join('') || '<tr><td style="color:#999;padding:6px;">No backups yet.</td></tr>';
+}
+async function bkRun(){ document.getElementById('bkMsg').textContent = 'Making a backup…'; const r = await fetch('/api/super-admin/backups/run', { method: 'POST', headers: authHeaders() }); const d = await r.json(); document.getElementById('bkMsg').textContent = r.ok ? 'Backup saved.' : d.error; bkLoad(); }
+async function bkVerify(id){ document.getElementById('bkMsg').textContent = 'Testing…'; const r = await fetch('/api/super-admin/backups/' + id + '/verify', { method: 'POST', headers: authHeaders() }); const d = await r.json(); document.getElementById('bkMsg').textContent = r.ok ? 'This backup opens correctly and matches what was recorded.' : d.error; bkLoad(); }
+async function bkRestore(id){
+  const w = prompt('This REPLACES all current data with this backup. A safety backup of the current data is made first.\n\nType RESTORE to continue.');
+  if (w !== 'RESTORE') return;
+  const r = await fetch('/api/super-admin/backups/' + id + '/restore', { method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ confirm: 'RESTORE' }) });
+  const d = await r.json(); document.getElementById('bkMsg').textContent = r.ok ? 'Restored. Reload the page.' : d.error; bkLoad();
+}
+bkLoad();
 </script>
 </body>
 </html>
