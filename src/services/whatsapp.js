@@ -82,28 +82,68 @@ async function downloadMedia(mediaId, token) {
   return { buffer, mimeType: meta.mime_type, sha256: meta.sha256 };
 }
 
+// Turns Meta's error reply into a plain sentence that says what to fix.
+const HINTS = {
+  132001: 'Template not found for this language. Open WhatsApp Manager > Message templates and check the template name and that its status is Approved.',
+  132000: 'The template needs exactly one variable {{1}} in its body (it carries the customer link).',
+  132005: 'The template text is too long after filling in the variable.',
+  132007: 'Meta rejected the template content (policy).',
+  132012: 'Template variable format is wrong.',
+  132015: 'This template is paused by Meta (low quality). Create a new one.',
+  132016: 'This template is disabled by Meta. Create a new one.',
+  131030: 'This number is not allowed to receive messages yet. While the Meta app is not Live, add the number as a recipient in the Meta app, or make the app Live.',
+  131047: 'More than 24 hours since the customer last wrote: only an approved template can be sent.',
+  131026: 'The message could not be delivered. Check the customer number (with country code 91) and that it is on WhatsApp.',
+  131042: 'WhatsApp payment method problem. Check the payment method in Meta Business settings.',
+  131056: 'Too many messages to this number in a short time. Try again later.',
+  133010: 'This phone number is not registered on WhatsApp Cloud API yet. Finish Register phone number in Meta > Step 2. Production setup.',
+  130429: 'Too many messages per second. Try again in a minute.',
+  190: 'The access token is invalid or expired. Create a new System user token and reconnect the number.',
+  10: 'The token does not have permission. It needs whatsapp_business_messaging and whatsapp_business_management.',
+  200: 'The token does not have permission for this WhatsApp account. Assign the WhatsApp account to the System user (Full control).',
+  100: 'Meta did not accept the request (wrong Phone Number ID or number format).'
+};
+async function metaError(res, what) {
+  const raw = await res.text();
+  let code, msg = raw;
+  try { const e = JSON.parse(raw).error || {}; code = e.code; msg = [e.message, e.error_data && e.error_data.details].filter(Boolean).join(' - '); } catch {}
+  const err = new Error(`${what}: ${HINTS[code] || 'WhatsApp refused the message.'} (Meta code ${code || res.status}: ${String(msg).slice(0, 300)})`);
+  err.metaCode = code;
+  return err;
+}
+
 async function sendTextMessage(to, body, { token, phoneNumberId }) {
   const res = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } })
   });
-  if (!res.ok) throw new Error(`Failed to send message: ${await res.text()}`);
+  if (!res.ok) throw await metaError(res, 'Could not send message');
   return res.json();
 }
 
 async function sendTemplateMessage(to, templateName, { token, phoneNumberId }, languageCode = 'en', components = []) {
-  const res = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
+  const post = lang => fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
       to,
       type: 'template',
-      template: { name: templateName, language: { code: languageCode }, components }
+      template: { name: templateName, language: { code: lang }, components }
     })
   });
-  if (!res.ok) throw new Error(`Failed to send template: ${await res.text()}`);
+  let res = await post(languageCode);
+  // Templates are often saved as English (US); try the other English code once if "not found".
+  if (!res.ok && (languageCode === 'en' || languageCode === 'en_US')) {
+    const err = await metaError(res.clone(), 'x');
+    if (err.metaCode === 132001) {
+      const alt = await post(languageCode === 'en' ? 'en_US' : 'en');
+      if (alt.ok) return alt.json();
+      throw await metaError(alt, `Could not send template "${templateName}"`);
+    }
+  }
+  if (!res.ok) throw await metaError(res, `Could not send template "${templateName}"`);
   return res.json();
 }
 

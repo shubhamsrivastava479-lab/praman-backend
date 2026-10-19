@@ -44,7 +44,12 @@ function inQuietHours(now, s) {
 }
 
 const isOpen = c => c.status !== 'completed';
-const dueOf = (c, s) => c.dueAt || new Date(new Date(c.createdAt).getTime() + s.tatHours * 3600e3).toISOString();
+const dueOf = (c, s) => {
+  if (c.dueAt) return c.dueAt;
+  let base = new Date(c.createdAt).getTime();
+  if (!Number.isFinite(base)) base = Date.now();     // an older record with no valid date must not break the list
+  return new Date(base + (s.tatHours || 48) * 3600e3).toISOString();
+};
 
 // Does this case still wait for the customer? (link sent, AI call not finished)
 function waitingForCustomer(c) {
