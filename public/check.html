@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Praman self-check</title><link rel="icon" type="image/png" href="/favicon.png">
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:24px auto;padding:0 16px;color:#1b2233}
+h1{font-size:20px}.row{border:1px solid #d9dce6;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:14px}
+.ok{color:#157e46;font-weight:700}.bad{color:#b3261e;font-weight:700}pre{white-space:pre-wrap;word-break:break-all;background:#f4f5f9;padding:8px;border-radius:6px;font-size:12px}</style></head>
+<body>
+<h1>Praman self-check</h1>
+<p style="font-size:13px;color:#555">Open this page while logged in to the dashboard (same browser). It only reads; nothing is changed. Send a screenshot of this page if something is wrong.</p>
+<div id="out">Checking…</div>
+<script>
+const out = document.getElementById('out');
+const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const add = (ok, title, detail) => { out.insertAdjacentHTML('beforeend', `<div class="row"><span class="${ok ? 'ok' : 'bad'}">${ok ? 'OK' : 'PROBLEM'}</span> — ${esc(title)}${detail ? `<pre>${esc(detail)}</pre>` : ''}</div>`); };
+(async () => {
+  out.innerHTML = '';
+  let token = null; try { token = localStorage.getItem('praman_token'); } catch {}
+  if (!token) { add(false, 'You are not logged in in this browser', 'Log in at /login.html first, then open this page again.'); return; }
+  const H = { Authorization: 'Bearer ' + token };
+  const get = async (path) => { const t0 = Date.now(); try { const r = await fetch(path, { headers: H }); const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch {} return { status: r.status, ms: Date.now() - t0, j, txt }; } catch (e) { return { status: 0, ms: Date.now() - t0, err: e.message }; } };
+  const me = await get('/api/auth/me');
+  const mu = me.j && (me.j.user || me.j);
+  if (mu && mu.email) add(true, `Logged in as ${mu.email} (${mu.role})`, `services: ${((me.j && me.j.services) || []).map(s => s.key).join(', ') || 'none'}`);
+  else add(false, 'Login check failed (status ' + me.status + ')', me.err || me.txt.slice(0, 200));
+  const cs = await get('/api/cases');
+  if (Array.isArray(cs.j)) add(true, `Cases list: ${cs.j.length} case(s) returned in ${cs.ms} ms`, cs.j.map(c => `${c.caseRef || c.id} · service ${c.service} · ${c.status}`).join('\n') || '(empty)');
+  else add(false, 'Cases list failed (status ' + cs.status + ')', cs.err || (cs.txt || '').slice(0, 300));
+  const sm = await get('/api/workflow/summary');
+  if (sm.j && !sm.j.error) add(true, 'Deadlines summary works', `open cases: ${sm.j.open}`);
+  else add(false, 'Deadlines summary failed (status ' + sm.status + ')', sm.err || (sm.txt || '').slice(0, 300));
+  const an = await get('/api/analytics/company');
+  if (an.j && an.j.cases) add(true, `Performance numbers: ${an.j.cases.total} case(s)`, ''); else add(false, 'Performance failed (status ' + an.status + ')', an.err || (an.txt || '').slice(0, 300));
+  add(true, 'Page version', 'self-check v1 · ' + new Date().toLocaleString());
+})();
+</script></body></html>
