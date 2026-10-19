@@ -466,7 +466,7 @@ $('privLink').href = '/privacy.html?t=' + encodeURIComponent(token || '');
       $('startBtn').style.display = 'none'; $('consent').parentElement.style.display = 'none'; return;
     }
     $('startBtn').disabled = !$('consent').checked;
-    if (d.businessNumber) $('waLink').href = 'https://wa.me/' + d.businessNumber; else $('waLink').removeAttribute('href');
+    if (d.businessNumber) $('waLink').href = 'https://wa.me/' + d.businessNumber; else { $('waLink').removeAttribute('href'); $('waLink').style.display = 'none'; }
   } catch (e) { introKey = 'wake'; paintText(); }
 })();
 

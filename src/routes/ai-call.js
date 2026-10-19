@@ -104,7 +104,11 @@ router.use('/:token', async (req, res, next) => {
 router.get('/:token/info', async (req, res) => {
   const c = await load(req.params.token);
   if (!c) return notFound(res);
-  const acct = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
+  // The case's own number first; otherwise any number the vendor has connected,
+  // so the customer's WhatsApp button never ends up dead.
+  const acct = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId)
+    || db.data.whatsappAccounts.find(a => a.vendorId === c.vendorId && a.displayPhoneNumber)
+    || null;
   const vendor = (db.data.users || []).find(u => u.id === c.vendorId);
   res.json({
     status: c.aiCall.status || 'not_started',
