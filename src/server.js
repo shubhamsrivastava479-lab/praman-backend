@@ -23,7 +23,21 @@ const scheduler = require('./services/scheduler');
 const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+app.disable('x-powered-by');
+// Sockets are same-origin; only an explicitly configured site may connect from elsewhere.
+const io = new Server(server, process.env.PUBLIC_BASE_URL ? { cors: { origin: process.env.PUBLIC_BASE_URL } } : {});
+
+// Safety headers on every answer.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(self), payment=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');   // private data is never kept by a browser or proxy
+  next();
+});
 
 app.use(require('compression')({ threshold: 1024, filter: (req, res) => /\/api\/ai-call\/.*\/(turn|photo)/.test(req.path) ? false : require('compression').filter(req, res) }));
 app.use(errlog.requestLogger);
@@ -67,7 +81,7 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 // Public ICE server config for WebRTC — combines the free STUN server with a
 // TURN server if one is configured in .env (needed for participants behind
 // restrictive corporate/mobile networks where direct peer-to-peer fails).
-app.get('/api/turn-config', (req, res) => {
+app.get('/api/turn-config', require('./services/security').rateLimit({ windowMs: 60_000, max: 30, name: 'turn' }), (req, res) => {
   const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
   if (process.env.TURN_URL) {
     iceServers.push({
@@ -84,6 +98,7 @@ require('./services/live-signaling').attach(io);
 // WebRTC signaling + live captioning (self-hosted, no Twilio/Agora needed)
 io.on('connection', socket => {
   socket.on('join-room', ({ roomId, role }) => {
+    if (typeof roomId !== 'string' || roomId.length < 8 || roomId.length > 80) return;   // not a real room id
     socket.join(roomId);
     socket.data.roomId = roomId;
     socket.data.role = role;
@@ -104,6 +119,12 @@ io.on('connection', socket => {
   });
 
   socket.on('audio-chunk', async ({ roomId, caseId, base64Audio, mimeType, speaker }) => {
+    // Only someone inside the room, a limited size and rate: otherwise anyone could spend the Gemini quota.
+    if (!roomId || socket.data.roomId !== roomId || typeof base64Audio !== 'string' || base64Audio.length > 2_500_000) return;
+    const now = Date.now();
+    socket.data.audioTimes = (socket.data.audioTimes || []).filter(t => now - t < 60_000);
+    if (socket.data.audioTimes.length >= 30) return;
+    socket.data.audioTimes.push(now);
     try {
       const result = await gemini.transcribeAndTranslateAudio(base64Audio, mimeType || 'audio/webm');
       io.to(roomId).emit('caption', { speaker, ...result, ts: Date.now() });

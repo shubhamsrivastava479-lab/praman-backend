@@ -60,6 +60,10 @@
   .ai-photos figcaption b{display:block;font-size:11.5px;color:#10151f;}
   .ai-photos a{font-size:11px;}
   .result-pass{color:#1f7a6c;} .result-bad{color:#b23a2c;} .result-mid{color:#8a5416;}
+  .fold-hide{display:none!important;}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .toolbar button{padding:9px 16px;font-size:13px;}
+  details.help{margin:8px 0;font-size:12.5px;color:#555;} details.help summary{cursor:pointer;color:#1f6fd1;}
   @media (max-width: 820px){
     .shell{grid-template-columns:1fr;}
     .sidebar{padding:16px;}
@@ -76,10 +80,10 @@
     <div style="font-size:11.5px;color:#aab;margin-bottom:14px;" id="vendorLabel"></div>
     <div class="ws-switch" id="wsSwitch"></div>
     <button class="navbtn active" id="navCases" onclick="showView('cases')">Cases</button>
-    <button class="navbtn" id="navWA" onclick="showView('whatsapp')">WhatsApp Connection</button>
+    <button class="navbtn" id="navWA" onclick="showView('whatsapp')">WhatsApp</button>
     <button class="navbtn" id="navTeam" onclick="showView('team')" style="display:none;">Team</button>
     <button class="navbtn" id="navPerf" onclick="showView('performance')">Performance</button>
-    <a class="navbtn" id="navSettings" href="/settings.html" style="display:none;text-decoration:none;box-sizing:border-box;">⚙️ Automation &amp; API</a>
+    <a class="navbtn" id="navSettings" href="/settings.html" style="display:none;text-decoration:none;box-sizing:border-box;">⚙️ Settings</a>
     <input id="caseSearch" placeholder="Search: case no., claim no., name, mobile" oninput="renderCaseList()" style="width:100%;margin-top:14px;box-sizing:border-box;background:#1a2130;border:1px solid #2b3446;color:#e8eaf0;">
     <div id="caseList" style="margin-top:10px;"></div>
     <div style="position:absolute;bottom:16px;left:16px;">
@@ -92,7 +96,11 @@
       <div id="flowStrip" style="display:none;"></div>
       <div class="ws-head" id="wsHead" style="display:none;"></div>
       <div class="card" id="noPlanBox" style="display:none;"><b>No service in your plan yet</b><div class="hint">Your firm's Praman plan does not include any verification or investigation service yet. Please contact Praman to activate the services you need.</div></div>
-      <div class="card" id="newCaseCard">
+      <div class="toolbar" id="caseToolbar">
+        <button onclick="toggleCard('newCaseCard')">➕ New case</button>
+        <button class="secondary" onclick="toggleCard('bulkCard')">📥 Bulk upload (Excel)</button>
+      </div>
+      <div class="card fold-hide" id="newCaseCard">
         <b id="newCaseTitle">New case</b>
         <div class="form-row" style="margin-top:10px;">
           <select id="serviceSelect" title="Service" onchange="applyFormFor(this.value)"></select>
@@ -118,14 +126,15 @@
           <input id="vehicleNo" placeholder="Vehicle registration no. (e.g. UP16AB1234)">
           <input id="district" placeholder="District / place of incident">
         </div>
-        <div class="hint ws-pivc-only"><b>Full automation (policy verification):</b> the customer gets a WhatsApp link, joins a video call whenever free, and an AI voice agent does the whole verification: tells the customer it is an AI-assisted call, confirms details, takes a face photo and eye-blink check, a full-body photo standing and sitting (each with date, time and lat/long), reads Aadhaar/PAN sent on WhatsApp and asks the verification questions. Term policies get extra questions (sum assured, other policies, family history, medical tests…). The customer can tap "Talk to a person" anytime.</div>
+        <details class="help"><summary>ℹ️ How these modes work</summary><div class="hint ws-pivc-only"><b>Full automation (policy verification):</b> the customer gets a WhatsApp link, joins a video call whenever free, and an AI voice agent does the whole verification: tells the customer it is an AI-assisted call, confirms details, takes a face photo and eye-blink check, a full-body photo standing and sitting (each with date, time and lat/long), reads Aadhaar/PAN sent on WhatsApp and asks the verification questions. Term policies get extra questions (sum assured, other policies, family history, medical tests…). The customer can tap "Talk to a person" anytime.</div>
         <div class="hint ws-motor-only"><b>Full automation (motor claim):</b> the AI voice agent confirms the claim and vehicle details, takes a face photo and eye-blink check, reads Aadhaar/PAN sent on WhatsApp, asks about the loss, police/FIR and witnesses, and asks the customer to search their WhatsApp (accident, theft, police, vehicle number) and send screenshots. Use <b>📹 Live video call</b> in the case to see the vehicle yourself.</div>
         <div class="hint">If policy/claim value is above ₹10,00,000, self-verification is disabled for that case — only a live executive call is allowed.</div>
+        </details>
         <button onclick="createCase()">Create case</button>
         <div class="hint" id="noWaHint" style="display:none;">You haven't connected a WhatsApp number yet — go to <b>WhatsApp Connection</b> in the sidebar first, otherwise evidence can't be auto-filed for this case.</div>
       </div>
 
-      <div class="card">
+      <div class="card fold-hide" id="bulkCard">
         <b id="bulkTitle">Bulk upload cases (Excel/CSV)</b>
         <p style="font-size:12px;color:#666;" id="bulkCols"></p>
         <div class="form-row">
@@ -233,7 +242,7 @@ const token = localStorage.getItem('praman_token');
 const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
 if (!token || !user) { location.href = '/login.html'; }
 if (user && user.role === 'insurer') location.replace('/insurer.html');
-if (user && user.role === 'viewer') document.head.insertAdjacentHTML('beforeend', '<style>#newCaseCard{display:none !important}</style>');
+if (user && user.role === 'viewer') document.head.insertAdjacentHTML('beforeend', '<style>#newCaseCard,#caseToolbar{display:none !important}</style>');
 
 function authHeaders(extra) { return Object.assign({ Authorization: 'Bearer ' + token }, extra || {}); }
 function logout() { localStorage.removeItem('praman_token'); localStorage.removeItem('praman_user'); location.href = '/login.html'; }
@@ -531,6 +540,7 @@ async function flowStop(id, stop){ if (await flowPost(`/cases/${id}/reminders`, 
 async function flowHold(id, on){ if (await flowPost(`/cases/${id}/legal-hold`, { on })) { await loadCases(); openCase(id); } }
 
 function renderCaseList(){
+  if (!window._foldDone && Array.isArray(allCases)) { window._foldDone = true; if (!allCases.length) { const e = document.getElementById('newCaseCard'); if (e) e.classList.remove('fold-hide'); } }
   const q = (document.getElementById('caseSearch').value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   // a follow-up filter (Overdue, Due soon…) looks across all services, like the numbers above it
   const inWs = flowFilter ? allCases.filter(flowMatch) : (ws === 'all' ? allCases : allCases.filter(c => c.service === ws));
@@ -797,7 +807,15 @@ async function savePivc(caseId){
   if (res.ok) { alert('Checklist saved.'); loadCases(); } else alert('Failed to save.');
 }
 
+function toggleCard(id){
+  const el = document.getElementById(id); if (!el) return;
+  const other = document.getElementById(id === 'newCaseCard' ? 'bulkCard' : 'newCaseCard');
+  if (other) other.classList.add('fold-hide');
+  el.classList.toggle('fold-hide');
+  if (!el.classList.contains('fold-hide')) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 async function openCase(id, scroll){
+  if (id !== currentCaseId || scroll) ['newCaseCard', 'bulkCard'].forEach(i => { const e = document.getElementById(i); if (e) e.classList.add('fold-hide'); });
   currentCaseId = id;
   const res = await fetch(API + '/api/cases/' + id, { headers: authHeaders() });
   const c = await res.json();

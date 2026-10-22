@@ -13,11 +13,33 @@ router.post('/signup', (req, res) => {
   res.status(410).json({ error: 'New vendors sign up with Google at /vendor-access.html' });
 });
 
+// Password guessing: 8 wrong tries from one address, or on one email, locks that address / email for 15 minutes.
+const loginFails = new Map();
+const loginKey = (kind, v) => kind + ':' + String(v || '').toLowerCase().slice(0, 120);
+function loginLocked(keys) {
+  const now = Date.now();
+  for (const k of keys) { const f = loginFails.get(k); if (f && f.until > now) return Math.ceil((f.until - now) / 60000); }
+  return 0;
+}
+function loginFail(keys) {
+  const now = Date.now();
+  for (const k of keys) {
+    const f = loginFails.get(k) || { n: 0, until: 0, first: now };
+    if (now - f.first > 15 * 60000) { f.n = 0; f.first = now; }
+    f.n++; if (f.n >= 8) { f.until = now + 15 * 60000; f.n = 0; f.first = now; }
+    loginFails.set(k, f);
+  }
+  if (loginFails.size > 5000) for (const [k, f] of loginFails) if (f.until < now && now - f.first > 15 * 60000) loginFails.delete(k);
+}
 router.post('/login', async (req, res) => {
-  const { email, password, code } = req.body;
+  const { email, password, code } = req.body || {};
+  const failKeys = [loginKey('ip', req.ip), loginKey('em', email)];
+  const wait = loginLocked(failKeys);
+  if (wait) return res.status(429).json({ error: 'Too many wrong attempts. Please wait ' + wait + ' minutes and try again.' });
   await db.read();
-  const user = db.data.users.find(u => u.email.toLowerCase() === (email || '').toLowerCase());
+  const user = db.data.users.find(u => String(u.email || '').toLowerCase() === String(email || '').toLowerCase());
   if (!user || !(await comparePassword(password || '', user.passwordHash))) {
+    loginFail(failKeys);
     audit.log('anonymous', 'login_failed', String(email || '').slice(0, 120), user && (user.parentVendorId || user.id));
     await db.write().catch(() => {});
     return res.status(401).json({ error: 'Invalid email or password' });
