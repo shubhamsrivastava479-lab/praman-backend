@@ -31,7 +31,15 @@ async function load(token) {
 // Translation and voice are remembered (same question, same language = no new Gemini cost), and
 // the Super Admin can switch the AI voice off: then the customer's phone reads the text aloud (free).
 const speechCache = require('../services/speech-cache');
-async function speak(text, language) {
+const speakInflight = new Map();
+function speak(text, language) { // same line asked twice at once (prefetch + real turn) = one Gemini job
+  const k = (language || '') + '|' + text;
+  if (speakInflight.has(k)) return speakInflight.get(k);
+  const p = speakInner(text, language).finally(() => speakInflight.delete(k));
+  speakInflight.set(k, p);
+  return p;
+}
+async function speakInner(text, language) {
   let displayText = text, problem = null;
   const lang = language && language !== 'English' ? language : '';
   try {
@@ -54,6 +62,23 @@ async function speak(text, language) {
   }
   return { displayText, audio, problem };
 }
+// After each answer, translate + voice the next few questions in the background, so the next turn
+// finds them ready (cache) instead of making the customer wait for Gemini.
+async function warmAhead(token) {
+  try {
+    const c = await load(token);
+    const a = c && c.aiCall;
+    if (!a || a.status !== 'in_progress' || !Array.isArray(a.queue)) return;
+    for (const st of a.queue.slice(a.i, a.i + 4)) {
+      if (st && st.text && st.type !== 'close') await speak(st.text, a.language);
+    }
+  } catch { /* best effort */ }
+}
+router.use((req, res, next) => {
+  const m = req.method === 'POST' && req.path.match(/^\/([^/]+)\/(start|turn|advance|photo|burst)$/);
+  if (m) res.on('finish', () => setTimeout(() => warmAhead(m[1]), 50));
+  next();
+});
 async function withVoice(turn, language, c) {
   const v = await speak(turn.say, language);
   // First time the AI voice or translation fails in a call, note it in the case history.

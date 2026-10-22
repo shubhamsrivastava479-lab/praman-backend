@@ -18,29 +18,32 @@ const RETRYABLE = new Set([404, 429, 500, 503, 504]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Calls one generateContent endpoint, trying each model in order.
-async function generate(models, body, label) {
+async function generate(models, body, label, opts = {}) {
   const apiKey = await getApiKey();
+  const perTry = opts.timeoutMs || 25000;            // one request
+  const deadline = Date.now() + (opts.budgetMs || 50000); // whole call, all models: never keep the customer waiting longer
   const list = models.filter(m => !(cooldown.get(m) > Date.now()));
   if (!list.length) list.push(...models); // all cooling down: try anyway
   let lastErr;
   for (const model of list) {
     for (let attempt = 0; attempt < 2; attempt++) {
+      if (Date.now() > deadline) { require('./usage').bump(label, (models[0] || ''), false); throw lastErr || new Error(`${label} timed out`); }
       let res;
       try {
         res = await fetch(`${BASE_URL}/${model}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(45000)
+          signal: AbortSignal.timeout(Math.max(3000, Math.min(perTry, deadline - Date.now())))
         });
-      } catch (e) { lastErr = new Error(`${label} network error (${model}): ${e.message}`); break; }
+      } catch (e) { lastErr = new Error(`${label} network error (${model}): ${e.message}`); cooldown.set(model, Date.now() + 30_000); break; } // slow/dead model: skip it for 30 s
       if (res.ok) { cooldown.delete(model); require('./usage').bump(label, model, true); return res.json(); }
       const errText = await res.text();
       lastErr = new Error(`${label} error ${res.status} (${model}): ${errText}`);
       if (!RETRYABLE.has(res.status)) throw lastErr; // bad key / bad request: no point trying others
       if (res.status === 429) { cooldown.set(model, Date.now() + 60_000); break; }
       if (res.status === 404) break;
-      if (attempt === 0) await sleep(800); // busy: one quick retry, then the next model
+      if (res.status === 503 || res.status === 500) { cooldown.set(model, Date.now() + 20_000); break; } // overloaded: next model now
     }
   }
   require('./usage').bump(label, (models[0] || ''), false);
@@ -86,7 +89,7 @@ async function generateSpeech(text, voiceName = 'Kore') {
       responseModalities: ['AUDIO'],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } }
     }
-  }, 'Gemini TTS');
+  }, 'Gemini TTS', { timeoutMs: 15000, budgetMs: 25000 });
   const part = data?.candidates?.[0]?.content?.parts?.[0];
   if (!part?.inlineData?.data) throw new Error('Gemini TTS returned no audio');
   return { base64Audio: part.inlineData.data, mimeType: part.inlineData.mimeType || 'audio/L16;rate=24000' };
