@@ -97,7 +97,8 @@ async function generateSpeech(text, voiceName = 'Kore') {
 
 async function transcribeAndTranslateAudio(base64Audio, mimeType = 'audio/ogg') {
   const prompt = `Listen to this audio clip. Respond ONLY with JSON in this exact shape:
-{"language": "<detected language name>", "original": "<transcription in the original language>", "english": "<English translation>", "clear": true}
+{"language": "<detected language name>", "original": "<transcription in the original language>", "english": "<English translation>", "clear": true, "otherVoiceHeard": false}
+Set "otherVoiceHeard" to true ONLY if a second person is clearly speaking or prompting the customer in the background (telling them what to say); ordinary background noise is false.
 Set "clear" to false, and leave "original" and "english" as empty strings, if the clip has no clear human speech (only silence, background noise, music, TV, or a voice too faint to understand). Never guess words that you cannot hear.`;
   const raw = await callGemini(
     [
@@ -259,7 +260,8 @@ Respond ONLY with JSON in exactly this shape (use "" when a field is not visible
  "fatherName":"<father's name if printed>",
  "address":"<full address if visible (usually Aadhaar back)>",
  "hasPhoto": true|false,
- "readable": true|false}`;
+ "readable": true|false,
+ "tamperSigns": "<only if you can SEE signs the document was edited or is not original: mismatched fonts or spacing in the name / number / date, pasted or blurred photo edges, uneven print quality, a photo of a screen or a photocopy; otherwise empty string. Do not guess.>"}`;
   const raw = await callGemini([{ text: prompt }, { inlineData: { mimeType, data: base64 } }], { jsonOutput: true });
   return parseJson(raw, { documentType: 'other', side: 'unknown', name: '', idNumber: '', dob: '', gender: '', fatherName: '', address: '', hasPhoto: false, readable: false });
 }
@@ -273,7 +275,7 @@ Respond ONLY with JSON:
 {"faceVisible": true|false,
  "singleFace": true|false,
  "eyesOpenFacingCamera": true|false,
- "possibleSpoof": "<note if this looks like a photo of a screen/printed photo, otherwise empty string>",
+ "possibleSpoof": "<note if this looks like a photo of a screen, a printed photo, or an edited / face-swapped image (warped edges, uneven lighting on the face, glare or moire lines); otherwise empty string>",
  "samePersonOpinion": "<likely_same|likely_different|uncertain|not_compared>"}`;
   const parts = [{ text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: base64Selfie } }];
   if (base64IdPhoto) parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64IdPhoto } });
@@ -315,10 +317,47 @@ Respond ONLY with JSON:
  "eyesOpenInSomeFrame": true|false,
  "closedFrameIndex": <0-based index of a frame with eyes clearly closed, or -1>,
  "openFrameIndex": <0-based index of a frame with eyes clearly open, or -1>,
- "possibleSpoof": "<note if this looks like a static photo, a screen, or a printed picture; otherwise empty string>"}`;
+ "possibleSpoof": "<note if this looks like a static photo, a screen, a printed picture, a replayed video, or a face-swap / deepfake (blurred or warped face edges, flickering skin, eyes or mouth not moving naturally, screen glare or moire lines); otherwise empty string>"}`;
   const parts = [{ text: prompt }, ...framesB64.map(d => ({ inlineData: { mimeType: 'image/jpeg', data: d } }))];
   const raw = await callGemini(parts, { jsonOutput: true });
   return parseJson(raw, { faceVisible: false, sameFaceAllFrames: false, eyesClosedInSomeFrame: false, eyesOpenInSomeFrame: false, closedFrameIndex: -1, openFrameIndex: -1, possibleSpoof: 'Could not analyze frames' });
+}
+
+// Random live challenge: a pre-recorded or replayed video cannot follow an unpredictable instruction.
+const CHALLENGES = {
+  turn_left: 'turn their head slowly to one side and back to the front (a clear sideways head turn, either direction counts because the camera may be mirrored)',
+  turn_right: 'turn their head slowly to one side and back to the front (a clear sideways head turn, either direction counts because the camera may be mirrored)',
+  look_up: 'tilt their head up and look at the ceiling, then back to the camera',
+  nod: 'nod their head up and down two times'
+};
+async function checkChallenge(framesB64, challenge) {
+  const what = CHALLENGES[challenge] || CHALLENGES.nod;
+  const prompt = `These ${framesB64.length} images are consecutive frames (about 250 ms apart) from a live front camera in an insurance verification call. The person was asked to ${what}.
+Respond ONLY with JSON:
+{"faceVisible": true|false,
+ "sameFaceAllFrames": true|false,
+ "actionPerformed": true|false,
+ "possibleSpoof": "<note if this looks like a static photo, a screen, a replayed video or a face-swap / deepfake (warped face edges when the head turns, flicker, glare); otherwise empty string>"}
+Set actionPerformed to true only if the frames clearly show the requested head movement.`;
+  const parts = [{ text: prompt }, ...framesB64.map(d => ({ inlineData: { mimeType: 'image/jpeg', data: d } }))];
+  const raw = await callGemini(parts, { jsonOutput: true });
+  return parseJson(raw, { faceVisible: false, sameFaceAllFrames: false, actionPerformed: false, possibleSpoof: 'Could not analyze frames' });
+}
+
+// Reads all answers of a finished call and lists contradictions (between answers, or with the record).
+async function checkConsistency({ caseType, caseInfo, answers, docs }) {
+  const lines = (answers || []).filter(a => a.english || a.value).map(a => `- [${a.key}] Q: ${a.question}\n  A: ${(a.english || a.value || '').slice(0, 300)}`).join('\n');
+  const prompt = `You review a finished insurance verification call (${caseType}). Find CONTRADICTIONS only: places where the customer's own answers disagree with each other, with the case record, or with the identity document details. Ignore vague, short or missing answers, and ignore recognition errors that are plausibly just mis-heard.
+CASE RECORD: ${JSON.stringify(caseInfo)}
+ID DOCUMENT DETAILS (from the cards): ${JSON.stringify(docs || {})}
+ANSWERS:
+${lines}
+
+Respond ONLY with JSON: {"issues":[{"issue":"<one plain sentence naming both conflicting facts>","severity":"low|medium|high"}]}
+Return {"issues":[]} if there is no clear contradiction. Do not invent issues.`;
+  const raw = await callGemini([{ text: prompt }], { jsonOutput: true, light: true });
+  const out = parseJson(raw, { issues: [] });
+  return (Array.isArray(out.issues) ? out.issues : []).filter(x => x && x.issue).slice(0, 6);
 }
 
 // Interprets one spoken answer (already transcribed to English).
@@ -383,4 +422,5 @@ Use null for "consistent" when there is too little to judge (e.g. no relevant me
   return parseJson(raw, { assessment: '', firstMention: { date: '', chat: '' }, peopleTold: [], consistent: null, concerns: [] });
 }
 
-module.exports = {  translateStrings, readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness };
+module.exports = {
+  checkChallenge, checkConsistency,  translateStrings, readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness };

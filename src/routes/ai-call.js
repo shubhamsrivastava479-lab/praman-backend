@@ -195,7 +195,7 @@ router.post('/:token/turn', upload.single('audio'), async (req, res) => {
       try {
         const t = await gemini.transcribeAndTranslateAudio(req.file.buffer.toString('base64'), 'audio/wav');
         const english = String(t.english || '').trim();
-        if (english && t.clear !== false) input = { english, original: t.original, language: t.language };
+        if (english && t.clear !== false) input = { english, original: t.original, language: t.language, otherVoice: t.otherVoiceHeard === true };
         else noisy = true; // only noise / too faint: treated as "not heard", never as an answer
       } catch (e) {
         sttError = shortErr(e);
@@ -221,6 +221,7 @@ router.post('/:token/turn', upload.single('audio'), async (req, res) => {
 
     await db.read();
     const c = db.data.cases.find(x => x.id === c0.id);
+    if (input.otherVoice && c && c.aiCall) c.aiCall.otherVoice = (c.aiCall.otherVoice || 0) + 1;
     let turn;
     if (wrongStage(c, stage)) turn = engine.peekTurn(c);
     else {

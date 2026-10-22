@@ -643,7 +643,7 @@ function showTurn(t){
 
 function showGuide(shot){
   ['gFace','gStand','gSit'].forEach(id => $(id).classList.remove('show','blinking'));
-  if (shot === 'face' || shot === 'blink') $('gFace').classList.add('show');
+  if (shot === 'face' || shot === 'blink' || shot === 'challenge') $('gFace').classList.add('show');
   if (shot === 'stand') $('gStand').classList.add('show');
   if (shot === 'sit') $('gSit').classList.add('show');
   const body = shot === 'stand' || shot === 'sit';

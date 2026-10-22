@@ -118,7 +118,8 @@ const PIVC_QUESTIONS = [
   ['healthDisclosure', 'disclosed', 'Were all these health details correctly written in your proposal form?'],
   ['incomeOccupation', 'occupation', 'What is your occupation?'],
   ['incomeOccupation', 'income', 'What is your approximate annual income?'],
-  ['nominee', 'nominee', 'Who is the nominee in your policy, and what is their relationship with you?']
+  ['nominee', 'nominee', 'Who is the nominee in your policy, and what is their relationship with you?'],
+  ['identity', 'age', 'To confirm, how old are you, in years?']
 ];
 // Extra questions for TERM plans: large cover, low premium, so mis-selling and
 // non-disclosure of health / income / other policies are the main risks.
@@ -155,6 +156,14 @@ function chatKeywords(c) {
   return k;
 }
 
+const CHALLENGE_LIST = [
+  { key: 'turn_left', text: 'Now, for security, please turn your head slowly to the left, and then look back at the camera.' },
+  { key: 'turn_right', text: 'Now, for security, please turn your head slowly to the right, and then look back at the camera.' },
+  { key: 'look_up', text: 'Now, for security, please tilt your head up and look at the ceiling, and then look back at the camera.' },
+  { key: 'nod', text: 'Now, for security, please nod your head up and down two times, looking at the camera.' }
+];
+const pickChallenge = () => CHALLENGE_LIST[require('crypto').randomInt(0, CHALLENGE_LIST.length)];
+
 function buildQueue(c, cfg = {}) {
   const q = [];
   q.push({ id: 'name', type: 'ask', kind: 'name', key: 'spokenName', section: 'identity', text: 'Please tell me your full name.' });
@@ -180,6 +189,11 @@ function buildQueue(c, cfg = {}) {
     id: 'blink', type: 'burst', shot: 'blink', countdown: 2, section: 'identity',
     text: 'Thank you. Now keep looking at the camera, and slowly close and open your eyes two times.'
   });
+  // Random live checks: a recorded or replayed video cannot follow an unpredictable instruction.
+  const chosen = pickChallenge();
+  q.push({ id: 'challenge', type: 'burst', shot: 'challenge', challenge: chosen.key, countdown: 3, section: 'identity', text: chosen.text });
+  const code = Array.from({ length: 4 }, () => String(require('crypto').randomInt(1, 10))).join('');
+  q.push({ id: 'live_code', type: 'ask', kind: 'otp', key: 'live_code', code, section: 'identity', text: `For security, please repeat these four numbers after me: ${code.split('').join(', ')}.` });
   if (isPolicy(c)) {
     q.push({
       id: 'body_stand', type: 'photo', shot: 'stand', countdown: 10, section: 'identity',
@@ -241,7 +255,7 @@ const EXPECT = { ask: 'voice', confirm: 'voice', consent: 'voice', otp: 'voice',
 function phaseOf(step) {
   if (!step) return 'done';
   if (step.type === 'close') return 'done';
-  if (step.shot === 'face' || step.shot === 'blink') return 'face';
+  if (step.shot === 'face' || step.shot === 'blink' || step.shot === 'challenge' || step.id === 'live_code') return 'face';
   if (step.shot === 'stand' || step.shot === 'sit') return 'body';
   if (step.type === 'docs' || step.type === 'otp') return 'documents';
   if (step.section === 'chatHistory') return 'chats';
@@ -370,6 +384,12 @@ async function prepareInner(c, input) {
     }
     s.selfieB64 = input.photoB64 && input.photoB64.length < 2_000_000 ? input.photoB64 : s.selfieB64;
     prep.face = await gemini.checkFacePhoto(input.photoB64, null);
+    return prep;
+  }
+
+  if (step.type === 'burst' && step.shot === 'challenge') {
+    const frames = (input.framesB64 || []).filter(Boolean).slice(0, 16);
+    prep.challenge = frames.length >= 4 ? await gemini.checkChallenge(frames, step.challenge) : { faceVisible: false, actionPerformed: false, possibleSpoof: '' };
     return prep;
   }
 
@@ -546,8 +566,8 @@ function apply(c, input, prep) {
 
   // ---- AI photo check could not run: keep the photo for a person to review ----
   if (prep.aiDown && (step.type === 'photo' || step.type === 'burst')) {
-    const what = step.type === 'burst' ? 'Eye blink liveness check' : step.shot === 'stand' ? 'Full body photo — standing' : step.shot === 'sit' ? 'Full body photo — sitting' : 'Live face photo';
-    const key = step.type === 'burst' ? 'blink' : step.shot === 'stand' || step.shot === 'sit' ? 'body_' + step.shot : 'face_photo';
+    const what = step.shot === 'challenge' ? 'Random live action check' : step.type === 'burst' ? 'Eye blink liveness check' : step.shot === 'stand' ? 'Full body photo — standing' : step.shot === 'sit' ? 'Full body photo — sitting' : 'Live face photo';
+    const key = step.shot === 'challenge' ? 'challenge' : step.type === 'burst' ? 'blink' : step.shot === 'stand' || step.shot === 'sit' ? 'body_' + step.shot : 'face_photo';
     setCheck(a, key, what, 'unknown', 'Photo saved, but the AI check could not run — please review the photo manually');
     const note = 'Some AI photo checks could not run — review the photos manually';
     if (!a.flags.includes(note)) a.flags.push(note);
@@ -575,6 +595,25 @@ function apply(c, input, prep) {
     a.photos.face = !!ok;
     advanceStep(a);
     return turnFor(c, ok ? 'Thank you, I have your photo.' : 'Okay, we will continue.');
+  }
+
+  // ---- random live action (turn head / look up / nod) ----
+  if (step.type === 'burst' && step.shot === 'challenge') {
+    const ch = prep.challenge || {};
+    const ok = ch.faceVisible && ch.sameFaceAllFrames !== false && ch.actionPerformed && !ch.possibleSpoof;
+    if (!ok) {
+      const retry = retryOrSkip(a, step, `I could not see that clearly. ${step.text.replace(/^Now, for security, please/, 'Please')}`, 1);
+      if (retry) return turnFor(c, '', retry);
+      // A failed head movement alone is only "partial" (bad light, small phone screen); a spoof note is a real failure.
+      setCheck(a, 'challenge', 'Random live action check', ch.possibleSpoof ? 'fail' : 'partial', ch.possibleSpoof || 'The requested head movement was not clearly seen');
+      a.flags.push(ch.possibleSpoof ? 'Random live action check: video may be a recording or edited — ' + ch.possibleSpoof : 'Random live action check could not be confirmed');
+    } else {
+      setCheck(a, 'challenge', 'Random live action check', 'pass', 'Requested head movement seen in live frames');
+    }
+    a.photos.challenge = !!ok;
+    record(c, ok ? 'Random live action check passed' : 'Random live action check not confirmed');
+    advanceStep(a);
+    return turnFor(c, ok ? 'Thank you.' : 'Okay, we will continue.');
   }
 
   // ---- eye blink liveness ----
@@ -792,6 +831,10 @@ function applyIdMedia(c, ex, buffer, meta = {}) {
   if (!ex || !ex.readable) { a.docs.unreadable = (a.docs.unreadable || 0) + 1; record(c, 'A WhatsApp photo could not be read by AI', 'ai_agent'); return 'unreadable'; }
 
   const num = String(ex.idNumber || '').replace(/\s/g, '').toUpperCase();
+  if (ex.tamperSigns && String(ex.tamperSigns).trim().length > 3 && ['aadhaar', 'pan'].includes(ex.documentType)) {
+    const nm = ex.documentType === 'pan' ? 'PAN' : 'Aadhaar';
+    setCheck(a, 'id_tamper_' + ex.documentType, `${nm} card may be edited or not original`, 'partial', String(ex.tamperSigns).slice(0, 200));
+  }
   if (ex.documentType === 'aadhaar') {
     const d = a.docs.aadhaar;
     const isFront = ex.side === 'front' || (ex.side === 'unknown' && !!num);
@@ -830,16 +873,24 @@ async function prepareFinish(c) {
   const a = c.aiCall;
   runDerivedChecks(c);
   const caseInfo = { claimNo: c.claimNo, insuredName: c.insuredName, policyNo: c.policyNo, vehicleNo: c.vehicleNo, district: c.district, policyValue: c.policyValue };
-  try {
-    return await gemini.summarizeAiCall({ caseType: typeLabel(c), caseInfo, answers: a.answers, checks: a.checks, flags: a.flags });
-  } catch (e) {
-    return { summary: '', sections: {}, concerns: [] };
-  }
+  const docs = { aadhaar: { name: a.docs.aadhaar.name, dob: a.docs.aadhaar.dob, gender: a.docs.aadhaar.gender, address: a.docs.aadhaar.address }, pan: { name: a.docs.pan.name, dob: a.docs.pan.dob } };
+  const [sum, cons] = await Promise.allSettled([
+    gemini.summarizeAiCall({ caseType: typeLabel(c), caseInfo, answers: a.answers, checks: a.checks, flags: a.flags }),
+    (a.answers || []).length >= 4 ? gemini.checkConsistency({ caseType: typeLabel(c), caseInfo, answers: a.answers, docs }) : Promise.resolve([])
+  ]);
+  const out = sum.status === 'fulfilled' ? sum.value : { summary: '', sections: {}, concerns: [] };
+  out.consistency = cons.status === 'fulfilled' && Array.isArray(cons.value) ? cons.value : [];
+  return out;
 }
 
 function runDerivedChecks(c) {
   const a = c.aiCall;
   signals.answerChecks(c, (id, label, result, detail) => setCheck(a, id, label, result, detail), f => { if (!a.flags.includes(f)) a.flags.push(f); });
+  const lc = a.answers.find(x => x.key === 'live_code'), lcStep = (a.queue || []).find(x => x.id === 'live_code');
+  if (lc && lcStep && lcStep.code && lc.intent !== 'no_answer') {
+    const said = String(lc.value || lc.english || '').replace(/\D/g, '');
+    setCheck(a, 'live_code', 'Random spoken code repeated', said.includes(lcStep.code) ? 'pass' : 'partial', said ? `Customer said: ${said}` : 'No digits heard');
+  }
   const dobAnswer = a.answers.find(x => x.key === 'dob');
   const aadDob = a.docs.aadhaar.dob;
   if (dobAnswer && (dobAnswer.value || dobAnswer.english) && aadDob) {
@@ -865,6 +916,12 @@ function applyFinish(c, summary, opts = {}) {
   }
   for (const p of partial) a.flags.push(`${p.label}: partial match${p.detail ? ' (' + p.detail + ')' : ''}`);
 
+  for (const x of ((summary && summary.consistency) || [])) {
+    const f = `Possible contradiction: ${x.issue}`;
+    if (!a.flags.includes(f)) a.flags.push(f);
+  }
+  if (((summary && summary.consistency) || []).some(x => x.severity === 'high')) setCheck(a, 'consistency', 'Answers consistent with each other and the record', 'partial', summary.consistency.map(x => x.issue).join('; ').slice(0, 300));
+  if ((a.otherVoice || 0) >= 2) { const f = `Another person's voice was heard in the background in ${a.otherVoice} answers — the customer may have been prompted`; if (!a.flags.includes(f)) a.flags.push(f); }
   if (!summary || !summary.summary) { const n = 'AI summary could not be written — please read the answers and photos yourself'; if (!a.flags.includes(n)) a.flags.push(n); }
   // Other cases of this firm with the same identity details / device, and the audio quality.
   a.idKeysSaved = signals.idKeys(a);

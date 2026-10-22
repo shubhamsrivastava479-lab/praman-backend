@@ -45,6 +45,14 @@ function answerChecks(c, set, flag) {
     const o = addressOverlap(spokenAddr, printed);
     if (o != null) set('address_spoken_aadhaar', 'Address stated vs Aadhaar address', o >= 0.5 ? 'match' : 'partial', o >= 0.5 ? '' : 'Little of the stated address appears on the Aadhaar (the customer may have moved)');
   }
+  // The age said at the end must fit the date of birth said earlier (or printed on the Aadhaar).
+  const ageSaid = ans('age') && String((ans('age').value || ans('age').english) || '').match(/\b(\d{1,3})\b/);
+  const dobSrc = (a.docs && a.docs.aadhaar && a.docs.aadhaar.dob) || (ans('dob') && (ans('dob').value || ans('dob').english));
+  const nd = dobSrc && normDob(dobSrc);
+  if (ageSaid && nd && nd.y) {
+    const yrs = new Date().getFullYear() - Number(nd.y), said = Number(ageSaid[1]);
+    if (said >= 5 && said <= 110 && Math.abs(yrs - said) > 1) set('age_vs_dob', 'Age stated vs date of birth', 'partial', `Customer said ${said} years, the date of birth gives about ${yrs}`);
+  }
   const income = ans('income') && parseAmount(ans('income').value || ans('income').english);
   const cover = parseAmount(c.policyValue);
   if (income && cover && c.caseType === 'policy_verification') {
