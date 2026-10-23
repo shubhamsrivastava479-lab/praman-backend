@@ -3,6 +3,7 @@ package com.praman.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,6 +12,7 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -48,14 +50,17 @@ class MainActivity : Activity() {
         return u != null && u.scheme == "https" && u.host == base.host
     }
 
-    /** Accepts a full call link or just the code; anything else is refused. */
+    /** Accepts a full call link, a whole WhatsApp message that contains the link, or just the code. */
     private fun toCallUrl(text: String): String? {
         val t = text.trim()
         if (t.isEmpty()) return null
-        if (Regex("^[0-9a-fA-F]{32}$").matches(t)) return "$BASE/live-join.html?t=$t"
-        val u = try { Uri.parse(t) } catch (e: Exception) { return null }
-        if (!trusted(u) || u.path?.startsWith("/live-join.html") != true) return null
-        return t
+        Regex("https?://[^\\s]+").findAll(t).forEach { m ->
+            val cand = m.value.trimEnd('.', ',', ')', ']', '>', '"', '\'')
+            val u = try { Uri.parse(cand) } catch (e: Exception) { null }
+            if (trusted(u) && u?.path?.startsWith("/live-join.html") == true && !u?.getQueryParameter("t").isNullOrEmpty()) return cand
+        }
+        Regex("\\b[0-9a-fA-F]{32}\\b").find(t)?.let { return "$BASE/live-join.html?t=${it.value}" }
+        return null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,7 +110,7 @@ class MainActivity : Activity() {
             text = "Join / जुड़ें"
             setOnClickListener {
                 val u = toCallUrl(input.text.toString())
-                if (u == null) err.text = "This is not a valid Praman call link. / यह सही लिंक नहीं है।" else openCall(u)
+                if (u == null) err.text = "This is not a Praman video-call link. It must contain live-join.html?t=… / यह वीडियो कॉल का लिंक नहीं है।" else openCall(u)
             }
         }
         root.addView(title); root.addView(hint); root.addView(input); root.addView(err); root.addView(go)
@@ -183,6 +188,17 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc) else startService(svc)
         } else {
             web?.post { web?.evaluateJavascript("window.__pramanScreenStopped&&window.__pramanScreenStopped()", null) }
+        }
+    }
+
+    // While the screen is being shared and the customer goes to WhatsApp, keep the call page alive in a small
+    // floating window. A page that is fully in the background stops drawing, and the officer would see a blank screen.
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (ScreenCaptureService.running && web != null && Build.VERSION.SDK_INT >= 26) {
+            try {
+                enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16)).build())
+            } catch (e: Exception) { /* not available on this phone */ }
         }
     }
 
