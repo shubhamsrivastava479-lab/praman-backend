@@ -9,12 +9,16 @@
 //               GET  /api/live/join/:token/ice
 //               POST /api/live/join/:token/joined     -> consent, location, device
 const express = require('express');
+const fsApk = require('fs');
+const pathApk = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
 const { db, uid } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const storage = require('../services/storage');
 const wa = require('../services/whatsapp');
+const plans = require('../services/plans');
+const followup = require('../services/followup');
 const { getIceServers } = require('../services/ice');
 const { caseFileKey } = require('../services/ids');
 const { rateLimit } = require('../services/security');
@@ -25,6 +29,10 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 
 const now = () => new Date().toISOString();
 const custody = (caseId, event, actor) => db.data.custody.push({ id: uid('cust'), caseId, event, actor, timestamp: now() });
 
+// The Android app (screen sharing from a phone) is offered only once its file has been put in public/downloads.
+function appUrlFor(req) {
+  return fsApk.existsSync(pathApk.join(__dirname, '..', '..', 'public', 'downloads', 'praman-call.apk')) ? `${baseUrl(req)}/downloads/praman-call.apk` : null;
+}
 function baseUrl(req) {
   const p = process.env.PUBLIC_BASE_URL;
   if (p && !/your-deployed/i.test(p)) return p.replace(/\/$/, '');
@@ -48,6 +56,7 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
     custody(c.id, 'Live video call link created', req.user.email || 'agent');
   }
   const joinUrl = `${baseUrl(req)}/live-join.html?t=${c.liveCall.token}`;
+  const appUrl = appUrlFor(req);
   let sent = false, sendError = null;
   if (req.body.sendWhatsApp) {
     const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
@@ -55,20 +64,30 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
     else {
       try {
         await wa.sendTextMessage(c.whatsappNumber,
-          `नमस्ते${c.insuredName ? ' ' + c.insuredName : ''}। आपके केस (${c.claimNo}) के लिए हमारे जाँच अधिकारी आपसे वीडियो कॉल पर बात करना चाहते हैं। जुड़ने के लिए यह लिंक खोलें:\n${joinUrl}\n\nYour investigator would like to speak with you on a video call for case ${c.claimNo}. Open this link to join.`,
+          `नमस्ते${c.insuredName ? ' ' + c.insuredName : ''}। आपके केस (${c.claimNo}) के लिए हमारे जाँच अधिकारी आपसे वीडियो कॉल पर बात करना चाहते हैं। जुड़ने के लिए यह लिंक खोलें:\n${joinUrl}\n\nYour investigator would like to speak with you on a video call for case ${c.claimNo}. Open this link to join.${appUrl ? `\n\nअगर अधिकारी को आपकी फ़ोन की स्क्रीन देखनी हो, तो पहले यह Android ऐप इंस्टॉल करें (और लिंक इसी ऐप में खोलें):\n${appUrl}\n\nIf the investigator needs to see your phone screen, install this Android app first and open the link in it:\n${appUrl}` : ''}`,
           account);
         sent = true;
         c.lastContactAt = now();
         custody(c.id, 'Live video call link sent to the customer on WhatsApp', req.user.email || 'agent');
       } catch (e) {
-        sendError = /24|window|re-engage|131047/i.test(e.message)
-          ? 'WhatsApp allows a normal message only within 24 hours of the customer\'s last message. Copy the link and send it from your phone, or ask the customer to message you first.'
-          : e.message;
+        if (/24|window|re-engage|131047/i.test(e.message)) {
+          // Outside the 24-hour window only an approved template works: send the firm's link template with the live link.
+          try {
+            const firm = plans.firmOf(db.data, req.user);
+            const tpl = req.body.templateName || followup.settingsOf(firm).reminderTemplate || 'claim_investigation_intake';
+            await wa.sendTemplateMessage(c.whatsappNumber, tpl, account, 'en', [{ type: 'body', parameters: [{ type: 'text', text: joinUrl }] }]);
+            sent = true;
+            c.lastContactAt = now();
+            custody(c.id, `Live video call link sent to the customer on WhatsApp (template "${tpl}")`, req.user.email || 'agent');
+          } catch (e2) {
+            sendError = 'Customer ne 24 ghante mein message nahi kiya, isliye template bheja gaya, par wo bhi fail hua: ' + e2.message;
+          }
+        } else sendError = e.message;
       }
     }
   }
   await db.write();
-  res.json({ token: c.liveCall.token, joinUrl, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo, caseRef: c.caseRef || '', language: c.liveCall.language || null });
+  res.json({ token: c.liveCall.token, joinUrl, appUrl, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo, caseRef: c.caseRef || '', language: c.liveCall.language || null });
 });
 
 router.get('/case/:caseId/ice', requireAuth, async (req, res) => {
