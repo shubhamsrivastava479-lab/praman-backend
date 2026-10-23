@@ -3,6 +3,7 @@ package com.praman.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,6 +12,7 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -186,6 +188,17 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc) else startService(svc)
         } else {
             web?.post { web?.evaluateJavascript("window.__pramanScreenStopped&&window.__pramanScreenStopped()", null) }
+        }
+    }
+
+    // While the screen is being shared and the customer goes to WhatsApp, keep the call page alive in a small
+    // floating window. A page that is fully in the background stops drawing, and the officer would see a blank screen.
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (ScreenCaptureService.running && web != null && Build.VERSION.SDK_INT >= 26) {
+            try {
+                enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(9, 16)).build())
+            } catch (e: Exception) { /* not available on this phone */ }
         }
     }
 
