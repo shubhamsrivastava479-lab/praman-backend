@@ -845,7 +845,7 @@ async function openCase(id, scroll){
       </div>
       <div class="form-row" style="margin-top:10px;">
         <button class="link" onclick="window.open('/live.html?case=${encodeURIComponent(c.id)}','_blank')" title="Two-way video call with the customer: back camera, photos with location, recording">📹 Live video call</button>
-        ${isPivc ? '' : `<button class="link" style="background:#1f7a6c;" onclick="openScreenCheck('${c.id}')" title="Guided check: video call, customer shares screen, you record it and upload it here">🖥️ Screen-share check${c.screenCheck ? ' ✓' : ''}</button>`}
+        <button class="link" style="background:#1f7a6c;" onclick="openScreenCheck('${c.id}')" title="Guided check: WhatsApp video call, customer taps Share screen, you record it on your laptop and upload it here">🖥️ Screen-share check${c.screenCheck ? ' ✓' : ''}</button>
         <button class="secondary" onclick="openRecUpload('${c.id}')" title="Upload a WhatsApp video call (with screen share) that you recorded on your laptop">⬆ Upload call recording</button>
         <button onclick="sendIntake('${c.id}')">Send WhatsApp intake message</button>
         ${isPivc ? '' : `<button class="secondary" onclick="requestHistory('${c.id}')" title="Ask the customer to search WhatsApp for accident / theft / police and send screenshots">Ask for WhatsApp search screenshots</button>`}
@@ -1101,6 +1101,17 @@ loadWhatsappAccounts();
     <b>1. Call the customer</b>
     <div class="form-row" style="margin:6px 0;"><button class="link" id="ssWa" style="background:#25a35a;">Open WhatsApp chat</button><button class="secondary" onclick="window.open('https://meet.google.com/new','_blank')">New Google Meet</button><button class="secondary" onclick="ssCopyInvite()">Copy invite message</button></div>
     <div style="color:#666;">Start the <b>screen recording on your laptop first</b> (OBS: MP4, 720p), then place the video call. Ask the customer to tap <b>Share screen</b>.</div>
+    <details class="help"><summary>ℹ️ Step by step (WhatsApp video call with screen share)</summary>
+      <ol style="margin:6px 0 0 18px;padding:0;">
+        <li>Laptop: open <b>WhatsApp Desktop</b> (your own number) and <b>OBS</b>. In OBS add "Display Capture" and set Settings → Output → Recording Format = <b>mp4</b>.</li>
+        <li>Press <b>Start Recording</b> in OBS, then video-call the customer on WhatsApp.</li>
+        <li>Say the consent line below and wait for a clear "yes".</li>
+        <li>Tell the customer: tap the <b>screen-share icon</b> (the phone/arrow icon at the bottom of the call) and then <b>Start now</b>.</li>
+        <li>Ask them to open each item below one by one; mark Shown / Refused here.</li>
+        <li>End the call, press <b>Stop Recording</b> in OBS, and upload the file in step 4.</li>
+      </ol>
+      <div style="margin-top:6px;">On Android and iPhone the WhatsApp app itself can share the screen. A phone browser cannot, so do not send the customer a web link for this.</div>
+    </details>
     <b style="display:block;margin-top:10px;">2. Say this on the call (it is recorded)</b>
     <div id="ssScript" style="background:#f4f6f8;border-radius:8px;padding:8px 10px;margin:6px 0;"></div>
     <b style="display:block;margin-top:10px;">3. Ask the customer to show</b>
@@ -1115,7 +1126,15 @@ loadWhatsappAccounts();
   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="secondary" onclick="document.getElementById('ssDlg').close()">Cancel</button><button id="ssGo" onclick="uploadScreenCheck()">Save to case</button></div>
 </dialog>
 <script>
-const SS_ITEMS = [
+const SS_ITEMS_POLICY = [
+  ['agent_chats', 'WhatsApp chats with the agent / sales person who sold the policy'],
+  ['payment_proof', 'First premium payment receipt or bank / UPI message'],
+  ['policy_docs', 'Policy document, proposal form copy or welcome email'],
+  ['id_originals', 'Aadhaar and PAN on the phone (or the physical cards shown to the camera)'],
+  ['health_records', 'Medical or test reports mentioned in the health answers'],
+  ['promises', 'Any message promising guaranteed returns, bonus or cash payment']
+];
+const SS_ITEMS_CLAIM = [
   ['whatsapp_chats', 'WhatsApp chats with the garage, surveyor or other party (search: accident, FIR, police)'],
   ['fir', 'Police complaint / FIR / receipt'],
   ['photos', 'Accident photos and videos in the gallery (date and place visible)'],
@@ -1128,8 +1147,8 @@ function openScreenCheck(caseId) {
   ssCase = allCases.find(x => x.id === caseId) || { id: caseId };
   const name = ssCase.insuredName || 'the customer';
   document.getElementById('ssInfo').textContent = `${ssCase.caseRef || ''} · ${name}${ssCase.whatsappNumber ? ' · ' + ssCase.whatsappNumber : ''}`;
-  document.getElementById('ssScript').textContent = `"This is ${user.vendorName || 'our team'} calling about claim ${ssCase.claimNo || ''}. This call is being recorded for claim verification. Do you agree to the recording and to showing me a few things on your phone screen?"  (wait for a clear "yes")`;
-  document.getElementById('ssItems').innerHTML = SS_ITEMS.map(([k, l]) => `<div style="display:flex;gap:8px;align-items:center;margin:4px 0;"><select data-ss="${k}" style="flex:none;width:130px;"><option value="shown">Shown</option><option value="refused">Refused</option><option value="na" selected>Not applicable</option></select><span>${l}</span></div>`).join('');
+  document.getElementById('ssScript').textContent = `"This is ${user.vendorName || 'our team'} calling about ${ssCase.caseType === 'policy_verification' ? 'your policy' : 'claim'} ${ssCase.claimNo || ''}. This call is being recorded for ${ssCase.caseType === 'policy_verification' ? 'policy verification' : 'claim verification'}. Do you agree to the recording and to showing me a few things on your phone screen?"  (wait for a clear "yes")`;
+  document.getElementById('ssItems').innerHTML = (ssCase.caseType === 'policy_verification' ? SS_ITEMS_POLICY : SS_ITEMS_CLAIM).map(([k, l]) => `<div style="display:flex;gap:8px;align-items:center;margin:4px 0;"><select data-ss="${k}" style="flex:none;width:130px;"><option value="shown">Shown</option><option value="refused">Refused</option><option value="na" selected>Not applicable</option></select><span>${l}</span></div>`).join('');
   ['ssDur', 'ssNotes', 'ssFile'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('ssConsent').checked = false; document.getElementById('ssProg').textContent = ''; document.getElementById('ssGo').disabled = false;
   document.getElementById('ssWa').onclick = () => {
@@ -1140,7 +1159,7 @@ function openScreenCheck(caseId) {
   document.getElementById('ssDlg').showModal();
 }
 function ssInvite() {
-  return `Hello ${ssCase.insuredName || ''}, this is ${user.vendorName || 'our team'} regarding your claim ${ssCase.claimNo || ''}. We need a short video call (about 10 minutes) where you share your phone screen to show a few documents and chats. Please keep your phone charged and be ready. Thank you.`;
+  return `Hello ${ssCase.insuredName || ''}, this is ${user.vendorName || 'our team'} regarding your ${ssCase.caseType === 'policy_verification' ? 'policy' : 'claim'} ${ssCase.claimNo || ''}. We need a short WhatsApp video call (about 10 minutes). During the call, tap "Share screen" so we can see a few documents and chats on your phone. The call will be recorded with your permission. Please keep your phone charged and be ready. Thank you.`;
 }
 function ssCopyInvite() { navigator.clipboard.writeText(ssInvite()); document.getElementById('ssProg').textContent = 'Invite message copied. Paste it in WhatsApp.'; }
 function uploadScreenCheck() {
