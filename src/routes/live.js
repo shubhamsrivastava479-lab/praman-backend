@@ -130,7 +130,14 @@ const SCREEN_ITEMS = {
   photos: 'Accident photos and videos in the gallery (date and place visible)',
   calls: 'Call log around the time of the incident',
   vehicle_docs: 'RC, driving licence and policy on the phone',
-  bills: 'Repair estimate, bills or messages about the claim'
+  bills: 'Repair estimate, bills or messages about the claim',
+  // policy verification (PIVC / term)
+  agent_chats: 'WhatsApp chats with the agent or sales person who sold the policy',
+  payment_proof: 'Premium payment receipt / bank or UPI message for the first premium',
+  policy_docs: 'Policy document, proposal form copy or welcome email on the phone',
+  id_originals: 'Aadhaar and PAN seen on the phone (or the physical cards held to the camera)',
+  health_records: 'Medical reports, prescriptions or test reports mentioned in the health answers',
+  promises: 'Any message promising guaranteed returns, bonus or cash payment'
 };
 const SCREEN_STATUS = { shown: 'Shown', refused: 'Customer refused', na: 'Not applicable' };
 const CALL_TYPES = { google_meet: 'Google Meet video call', whatsapp_video: 'WhatsApp video call', whatsapp_audio: 'WhatsApp voice call', phone: 'Phone call', other: 'Other call' };

@@ -148,7 +148,8 @@ $('joinBtn').addEventListener('click', join);
       $('intro').textContent = T.badLink || 'This link is not valid.'; $('joinBtn').style.display = 'none'; return;
     }
     info = d;
-    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) $('shareBtn').style.display = '';
+    if (window.PramanAndroid || (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent))) $('shareBtn').style.display = '';
+    else offerApp();
     await setLanguage(d.language || saved || 'Hindi');
   } catch { $('intro').textContent = 'सर्वर से जुड़ नहीं पा रहे — 30 सेकंड बाद पेज रीफ़्रेश करें। / Cannot reach the server — refresh after 30 seconds.'; }
 })();
@@ -274,10 +275,48 @@ $('micBtn').addEventListener('click', () => {
   $('micBtn').classList.toggle('off', !micOn);
 });
 
+// ---- Praman Call Android app: it captures the screen natively and sends small pictures (about 4 a second);
+// here they are drawn on a canvas, and the canvas becomes the video track that replaces the camera. ----
+function androidScreenStream() {
+  return new Promise((resolve, reject) => {
+    const cv = document.createElement('canvas'), ctx = cv.getContext('2d'), img = new Image();
+    let stream = null, answered = false;
+    window.__pramanFrame = b64 => {
+      img.onload = () => {
+        if (!stream) { cv.width = img.width; cv.height = img.height; ctx.drawImage(img, 0, 0); stream = cv.captureStream(5); answered = true; resolve(stream); return; }
+        ctx.drawImage(img, 0, 0);
+      };
+      img.src = 'data:image/jpeg;base64,' + b64;
+    };
+    window.__pramanScreenStopped = () => {
+      if (!answered) { answered = true; reject(new Error('not allowed')); return; }
+      const t = stream && stream.getVideoTracks()[0];
+      if (t) { t.stop(); if (t.onended) t.onended(); }
+    };
+    try { window.PramanAndroid.startScreen(); } catch (e) { reject(e); }
+    setTimeout(() => { if (!answered) { answered = true; reject(new Error('timeout')); } }, 60000);
+  });
+}
+function offerApp() {
+  // A phone browser cannot share its screen. If the Android app is on the server, offer it.
+  if (!/Android/i.test(navigator.userAgent)) return;
+  fetch('/downloads/praman-call.apk', { method: 'HEAD' }).then(r => {
+    if (!r.ok) return;
+    const b = document.createElement('div');
+    b.style.cssText = 'margin:12px 0;padding:10px 12px;border-radius:8px;background:#fff4dc;font-size:13px;line-height:1.5;';
+    b.innerHTML = 'अगर अधिकारी आपकी स्क्रीन देखना चाहें, तो पहले यह ऐप इंस्टॉल करें: <a href="/downloads/praman-call.apk" download>Praman Call (Android)</a>. <br>If the officer needs to see your screen, install this app first.';
+    const host = $('intro') && $('intro').parentNode; if (host) host.insertBefore(b, $('intro').nextSibling);
+  }).catch(() => {});
+}
 $('shareBtn').addEventListener('click', async () => {
   if (screenTrack) { stopShare(); return; }
   try {
-    const s = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    if (window.PramanAndroid && !window.__shareOk) {
+      askUser('आपकी फ़ोन स्क्रीन अधिकारी को दिखेगी और रिकॉर्ड होगी। आगे बढ़ें? / Your phone screen will be shown to the officer and recorded. Continue?', () => { window.__shareOk = true; $('shareBtn').click(); });
+      return;
+    }
+    window.__shareOk = false;
+    const s = window.PramanAndroid ? await androidScreenStream() : await navigator.mediaDevices.getDisplayMedia({ video: true });
     screenTrack = s.getVideoTracks()[0];
     screenTrack.onended = stopShare;
     await replaceVideo(screenTrack);
@@ -287,6 +326,7 @@ $('shareBtn').addEventListener('click', async () => {
 async function stopShare() {
   if (!screenTrack) return;
   screenTrack.stop(); screenTrack = null;
+  try { window.PramanAndroid && window.PramanAndroid.stopScreen(); } catch {}
   await replaceVideo(camTrack); $('shareBtn').classList.remove('off'); sendState();
 }
 
