@@ -132,8 +132,6 @@ function buildQueue(c, cfg = {}) {
   if (c.policyNo && c.policyNo !== c.claimNo) confirms.push({ key: 'policyNo', label: 'policy number', value: c.policyNo, spell: true });
   if (c.vehicleNo) confirms.push({ key: 'vehicleNo', label: 'vehicle number', value: c.vehicleNo, spell: true });
   if (c.district) confirms.push({ key: 'district', label: 'district', value: c.district });
-  if (svc === 'health_claim' && det.hospitalName) confirms.push({ key: 'hospitalName', label: 'hospital name', value: det.hospitalName });
-  if (svc === 'bgv_employee' && (det.clientName || det.insurerName)) confirms.push({ key: 'clientName', label: 'new employer', value: det.clientName || det.insurerName });
   for (const f of confirms) {
     q.push({
       id: 'confirm_' + f.key, type: 'confirm', key: f.key, label: f.label, value: f.value, section: 'identity',
@@ -175,6 +173,18 @@ function buildQueue(c, cfg = {}) {
 
   const bank = prof.questions();
   for (const [section, key, text] of bank) q.push({ id: 'q_' + key, type: 'ask', kind: 'free', key, section, text });
+  // Every detail the insurer sent is asked from the customer (without saying it) and compared.
+  // Attached to the question that already asks for it, or added as its own question.
+  for (const m of profiles.matchSpecs(svc, c)) {
+    const spec = { field: m.field, label: m.label, type: m.type, area: m.area, expected: m.expected };
+    let st = q.find(x => x.key === m.key && x.type === 'ask');
+    if (!st && m.text) {
+      st = { id: 'q_' + m.key, type: 'ask', kind: 'free', key: m.key, section: m.section || 'identity', text: m.text };
+      const at = q.map(x => x.section).lastIndexOf(st.section);
+      q.splice(at >= 0 ? at + 1 : q.length, 0, st);
+    }
+    if (st) (st.match = st.match || []).push(spec);
+  }
 
   // Claim cases: WhatsApp history check. The customer searches their own
   // WhatsApp and sends screenshots of the search results (phone browsers
@@ -359,10 +369,12 @@ async function prepareInner(c, input) {
 
   if (step.type === 'ask' || step.type === 'confirm') {
     if (input.empty) { prep.judge = { intent: 'unclear', value: '', clear: false, followUp: '', concern: '' }; return prep; }
-    prep.judge = await gemini.judgeAnswer({
-      kind: step.type === 'confirm' ? 'confirm' : step.kind, question: step.text,
-      answerEnglish: input.english, expected: step.type === 'confirm' ? step.value : undefined
-    });
+    const [judge, values] = await Promise.all([
+      gemini.judgeAnswer({ kind: step.type === 'confirm' ? 'confirm' : step.kind, question: step.text, answerEnglish: input.english, expected: step.type === 'confirm' ? step.value : undefined }),
+      step.match && step.match.length ? gemini.extractValues({ question: step.text, answerEnglish: input.english, fields: step.match }).catch(() => null) : null
+    ]);
+    prep.judge = judge;
+    if (values) prep.values = values.fields || {};
     return prep;
   }
 
@@ -442,6 +454,21 @@ function saveAnswer(c, step, input, extra = {}) {
   transcript(c, 'Customer', input.original, input.english, input.language);
 }
 
+// Compare what the customer said with what the insurer sent (service-profiles.compareValue).
+// The AI only turns the spoken answer into a plain value; dates, amounts and numbers are
+// compared exactly in code. Each field becomes a check 'rec_<field>' shown in the report.
+function applyMatches(c, step, prep) {
+  const a = c.aiCall, vals = prep.values;
+  for (const m of step.match) {
+    const v = vals ? vals[m.field] || {} : null;
+    const r = vals ? profiles.compareValue(m, v.said, v.sameAsRecord) : { result: 'unknown', detail: `AI could not read the answer; record: ${m.expected}` };
+    setCheck(a, 'rec_' + m.field, `${m.label}: customer vs record`, r.result, r.detail);
+    const k = a.checks.find(x => x.id === 'rec_' + m.field); if (k) { k.area = m.area; k.source = 'ai_read'; k.expected = m.expected; k.said = v && v.said ? String(v.said) : ''; k.type = m.type; }
+    if (r.result === 'mismatch') { const f = `${m.label} does not match the record (${r.detail})`; if (!a.flags.includes(f)) a.flags.push(f); }
+    record(c, `Record check, ${m.label}: ${r.result} (${r.detail})`);
+  }
+}
+
 function apply(c, input, prep) {
   const a = c.aiCall;
   const step = a.queue[a.i];
@@ -505,11 +532,13 @@ function apply(c, input, prep) {
       const retry = retryOrSkip(a, step, 'Sorry, I could not hear you. ' + step.text);
       if (retry) return turnFor(c, '', retry);
       saveAnswer(c, step, input, { intent: 'no_answer' });
+      if (step.match) applyMatches(c, step, { values: {} });
       a.flags.push(`No answer to: ${step.text}`);
       advanceStep(a);
       return turnFor(c, 'Okay, let us continue.');
     }
     saveAnswer(c, step, input, { value: j.value || '', concern: j.concern || '' });
+    if (step.match) applyMatches(c, step, prep);
     if (step.kind === 'capture') {
       setCheck(a, 'confirm_' + step.key.replace('correct_', ''), 'Corrected detail', 'mismatch', `Customer gave: ${j.value || input.english}`);
       a.flags.push(`Customer corrected a record detail: ${j.value || input.english}`);

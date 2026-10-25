@@ -94,3 +94,42 @@ test('fraud dashboard counts cases by worst rule result and by hospital', () => 
   assert.equal(s.hospitals[0].cases, 2);           // "City Care" and "citycare" are the same name
   assert.equal(s.hospitals[0].discrepancy, 1);
 });
+
+test('insurer details are asked without saying them, and compared exactly', () => {
+  const engine = require('../src/services/ai-call-engine');
+  const { compareValue } = require('../src/services/service-profiles');
+  const c = { service: 'health_claim', caseType: 'claim_investigation', claimNo: 'H1', insuredName: 'A',
+    details: { hospitalName: 'City Care Hospital', admissionDate: '2026-10-02', dischargeDate: '2026-10-06', claimAmount: '185000', city: 'Lucknow' } };
+  const q = engine.buildQueue(c);
+  const hosp = q.find(s => s.id === 'q_hospital');
+  assert.deepEqual(hosp.match.map(m => m.field), ['hospitalName']);
+  assert.deepEqual(q.find(s => s.id === 'q_admit_dates').match.map(m => m.field), ['admissionDate', 'dischargeDate']);
+  const amt = q.find(s => s.id === 'q_m_claim_amount');
+  assert.ok(amt && !/185000|1,85,000/.test(amt.text));                    // the value is never read out
+  assert.ok(q.some(s => s.id === 'q_m_city'));
+  assert.ok(!q.some(s => s.id === 'confirm_hospitalName'));                 // no yes/no confirm that gives it away
+  const spec = f => ({ ...amt.match[0], ...f });
+  assert.equal(compareValue(spec({}), '185000').result, 'match');
+  assert.equal(compareValue(spec({}), '170000').result, 'partial');        // 8% different
+  assert.equal(compareValue(spec({}), '90000').result, 'mismatch');
+  assert.equal(compareValue(spec({}), '').result, 'unknown');
+  const d = { label: 'Admission date', type: 'date', expected: '2026-10-02' };
+  assert.equal(compareValue(d, '2026-10-02').result, 'match');
+  assert.equal(compareValue(d, '2026-10-09').result, 'mismatch');
+  const t = { label: 'Hospital name', type: 'text', expected: 'City Care Hospital' };
+  assert.equal(compareValue(t, 'city care').result, 'match');
+  assert.equal(compareValue(t, 'Sunrise Nursing Home', false).result, 'mismatch');
+  assert.equal(compareValue(t, 'CCH Lucknow', true).result, 'partial');   // AI says same: only partial
+});
+
+test('a mismatch from the call becomes a check and a flag', async () => {
+  const engine = require('../src/services/ai-call-engine');
+  const c = { id: 'm1', service: 'health_claim', caseType: 'claim_investigation', claimNo: 'H2', insuredName: 'A', details: { claimAmount: '185000' } };
+  c.aiCall = { status: 'in_progress', queue: engine.buildQueue(c), answers: [], checks: [], flags: [], captured: {}, docs: { aadhaar: {}, pan: {} } };
+  c.aiCall.i = c.aiCall.queue.findIndex(s => s.id === 'q_m_claim_amount');
+  db.data.cases.push(c);
+  engine.apply(c, { english: 'About ninety thousand rupees' }, { judge: { intent: 'answered', value: '90000', clear: true }, values: { claimAmount: { said: '90000' } } });
+  const k = c.aiCall.checks.find(x => x.id === 'rec_claimAmount');
+  assert.equal(k.result, 'mismatch'); assert.equal(k.said, '90000'); assert.equal(k.expected, '185000');
+  assert.ok(c.aiCall.flags.some(f => /Claim amount does not match/.test(f)));
+});

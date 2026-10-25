@@ -36,7 +36,7 @@ function glance(R, rv) {
   const fallback = tiles.find(t => t.key === 'identity');
   for (const k of R.checks || []) {
     const st = RES_STATE[k.result]; if (!st) continue;
-    const t = tiles.find(x => x.rule.checks && x.rule.checks.test(k.id || '')) || (/^(consistency|age_|answer)/.test(k.id || '') ? null : fallback);
+    const t = (k.area && tiles.find(x => x.key === k.area)) || tiles.find(x => x.rule.checks && x.rule.checks.test(k.id || '')) || (/^(consistency|age_|answer)/.test(k.id || '') ? null : fallback);
     const target = t || tiles.find(x => x.rule.sections && x.rule.sections.length) || fallback;
     target.n++; bump(target, st, (/_api$/.test(k.id || '') ? 'Official: ' : 'AI: ') + (k.detail ? `${k.label} - ${k.detail}` : k.label));
   }
@@ -235,6 +235,16 @@ function render(R, opts = {}) {
       R.triggers.forEach(t => row([t.label, STATE_WORD[t.state] === 'Not checked' ? 'No data' : STATE_WORD[t.state], t.detail || ''], [170, 70, W - 240]));
     }
     {
+      const rec = (R.checks || []).filter(k => /^rec_/.test(k.id || ''));
+      if (rec.length) {
+        H('Insurer details vs what the customer said');
+        P('Each detail was asked on the call without telling the customer the value on record. The AI wrote down the answer; dates, amounts and numbers are compared by exact rules.', { size: 8.5, color: MUTE });
+        row(['Detail', 'On record', 'Customer said', 'Result'], [130, 135, 160, W - 425], { head: true });
+        const show = (k, v) => v && k.type === 'amount' ? profiles.money(v) : v;
+        rec.forEach(k => row([k.label.replace(/: customer vs record$/, ''), show(k, k.expected) || '', show(k, k.said) || '(not said)', RESULT[k.result] || k.result], [130, 135, 160, W - 425]));
+      }
+    }
+    {
       const worst = G.count.focus ? 'focus' : G.count.check ? 'check' : 'clear';
       const steps = G.prof.next[worst] || [];
       if (steps.length) {
@@ -259,9 +269,9 @@ function render(R, opts = {}) {
     }
     if ((R.checks || []).length) {
       H('Automatic checks');
-      P('Checks made during the call. "Official" = matched with a government record. "AI" = an AI finding that a person should confirm.', { size: 8.5, color: MUTE });
+      P('Checks made during the call. "Official" = matched with a government record. "AI + rule" = the AI wrote down what the customer said, the comparison with the record is an exact rule. "AI" = an AI finding that a person should confirm.', { size: 8.5, color: MUTE });
       row(['Check', 'Result', 'Source', 'Detail'], [175, 62, 58, W - 295], { head: true });
-      R.checks.forEach(k => row([k.label, RESULT[k.result] || k.result, /_api$/.test(k.id || '') ? 'Official' : 'AI', k.detail || ''], [175, 62, 58, W - 295]));
+      R.checks.forEach(k => row([k.label, RESULT[k.result] || k.result, /_api$/.test(k.id || '') ? 'Official' : /^rec_/.test(k.id || '') ? 'AI + rule' : 'AI', k.detail || ''], [175, 62, 58, W - 295]));
     }
     const docsLines = [];
     const a = R.documents.aadhaar || {}, p = R.documents.pan || {};

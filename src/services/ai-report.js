@@ -115,7 +115,7 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
       aadhaar: pick(docs.aadhaar, ['name', 'dob', 'gender', 'masked', 'address']),
       pan: pick(docs.pan, ['name', 'dob', 'fatherName', 'masked'])
     },
-    checks: (a.checks || []).map(k => ({ id: k.id, label: k.label, result: k.result, detail: k.detail || '' })),
+    checks: (a.checks || []).map(k => ({ id: k.id, label: k.label, result: k.result, detail: k.detail || '', ...(k.area ? { area: k.area } : {}), ...(/^rec_/.test(k.id || '') ? { expected: k.expected || '', said: k.said || '', type: k.type || '' } : {}) })),
     crossCase: (a.crossCase || []).map(x => x.text || String(x)),
     triggers: (() => {
       const data = require('../db').db.data, rules = require('./record-rules');

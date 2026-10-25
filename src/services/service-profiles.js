@@ -346,4 +346,110 @@ function triggers(svc, c) {
   return out;
 }
 
-module.exports = { PROFILES, profileOf, SECTION_LABELS, triggers, toDate, ageOn, money, amount, days };
+// ---------- matching what the insurer sent with what the customer says ----------
+// Each spec: field (key in case.details, or a case field like policyValue), label, type
+// (date | amount | year | number | text), area (page-1 box), and the question that asks for it.
+// The question NEVER says the value on record: the customer has to say it themselves.
+// If a question of the service already asks for it (key), the field is attached to that question;
+// otherwise the extra question is added (only when the record has a value for the field).
+const M = (field, label, type, area, key, text, section) => ({ field, label, type, area, key, text, section });
+const COMMON_MATCH = [
+  M('city', 'City', 'text', 'identity', 'm_city', 'In which city do you live?', 'identity'),
+  M('pincode', 'PIN code', 'number', 'identity', 'm_pincode', 'What is the PIN code of your area?', 'identity')
+];
+const MATCH = {
+  health_claim: [
+    M('dob', 'Date of birth', 'date', 'identity', 'm_dob', 'Please tell me the patient\'s date of birth.', 'identity'),
+    M('hospitalName', 'Hospital name', 'text', 'stay', 'hospital'),
+    M('admissionDate', 'Admission date', 'date', 'stay', 'admit_dates'),
+    M('dischargeDate', 'Discharge date', 'date', 'stay', 'admit_dates'),
+    M('diagnosis', 'Diagnosis', 'text', 'stay', 'm_diagnosis', 'What illness did the doctor say the patient had?', 'hospitalStay'),
+    M('claimType', 'Claim type (cashless / reimbursement)', 'text', 'treatment', 'm_claim_type', 'Was this claim cashless at the hospital, or are you claiming the money back after paying?', 'treatment'),
+    M('claimAmount', 'Claim amount', 'amount', 'treatment', 'm_claim_amount', 'How much money have you claimed from the insurance company?', 'treatment')
+  ],
+  motor_claim: [
+    M('dob', 'Date of birth', 'date', 'identity', 'm_dob', 'Please tell me your date of birth.', 'identity'),
+    M('incidentDate', 'Incident date', 'date', 'incident', 'when'),
+    M('incidentPlace', 'Incident place', 'text', 'incident', 'where'),
+    M('vehicleMake', 'Vehicle make and model', 'text', 'vehicle', 'm_vehicle_make', 'Which company and model is the vehicle?', 'vehicle'),
+    M('garageName', 'Garage', 'text', 'vehicle', 'repair'),
+    M('claimType', 'Claim type', 'text', 'incident', 'm_claim_type', 'Is this claim for an accident, theft, or something else?', 'lossDetails'),
+    M('claimAmount', 'Claim amount', 'amount', 'vehicle', 'm_claim_amount', 'How much money have you claimed, or what is the repair estimate?', 'vehicle')
+  ],
+  pivc_life: [
+    M('dob', 'Date of birth', 'date', 'identity', 'dob'),
+    M('productName', 'Plan name', 'text', 'product', 'm_plan', 'What is the name of the plan you have bought?', 'policyDetails'),
+    M('policyValue', 'Sum assured', 'amount', 'product', 'm_sum_assured', 'What is the sum assured, that is the cover amount, of this policy?', 'policyDetails'),
+    M('premium', 'Premium', 'amount', 'product', 'premium'),
+    M('premiumFrequency', 'Premium frequency', 'text', 'product', 'premium'),
+    M('agentName', 'Agent name', 'text', 'sales', 'm_agent', 'What is the name of the agent or advisor who sold you this policy?', 'policyDetails'),
+    M('annualIncome', 'Yearly income', 'amount', 'income', 'income'),
+    M('nomineeName', 'Nominee name', 'text', 'nominee', 'nominee')
+  ],
+  pivc_health: [
+    M('dob', 'Date of birth', 'date', 'identity', 'dob'),
+    M('productName', 'Plan name', 'text', 'product', 'm_plan', 'What is the name of the health plan you have bought?', 'policyDetails'),
+    M('policyValue', 'Sum insured', 'amount', 'product', 'sum_insured'),
+    M('premium', 'Premium', 'amount', 'product', 'premium'),
+    M('premiumFrequency', 'Premium frequency', 'text', 'product', 'premium'),
+    M('agentName', 'Agent name', 'text', 'sales', 'm_agent', 'What is the name of the agent or advisor who sold you this policy?', 'policyDetails'),
+    M('nomineeName', 'Nominee name', 'text', 'others', 'm_nominee', 'Who is the nominee in this policy?', 'otherPolicies')
+  ],
+  bgv_employee: [
+    M('dob', 'Date of birth', 'date', 'identity', 'dob'),
+    M('clientName', 'Company offering the job', 'text', 'employment', 'm_client', 'Which company has offered you this job?', 'employment'),
+    M('position', 'Position offered', 'text', 'employment', 'm_position', 'For which position or role have you been selected?', 'employment'),
+    M('passingYear', 'Passing year', 'year', 'education', 'qualification'),
+    M('employer1Name', 'Latest employer', 'text', 'employment', 'current_employer'),
+    M('employer1From', 'Latest job start', 'date', 'employment', 'emp_dates'),
+    M('employer1To', 'Latest job end', 'date', 'employment', 'emp_dates'),
+    M('employer2Name', 'Previous employer', 'text', 'employment', 'previous_employer')
+  ]
+};
+MATCH.pivc_term = MATCH.pivc_life.map(x => x.field === 'policyValue' ? { ...x, key: 'sum_assured', text: undefined, section: undefined } : x);
+
+// Value on record for a spec (Excel details, or the case's own fields).
+const recordValue = (c, f) => {
+  const d = c.details || {};
+  if (f === 'policyValue') return c.policyValue ? String(c.policyValue) : '';
+  if (f === 'clientName') return d.clientName || '';
+  return d[f] == null ? '' : String(d[f]).trim();
+};
+const matchSpecs = (svc, c) => [...(MATCH[svc] || []), ...COMMON_MATCH]
+  .filter(m => recordValue(c, m.field))
+  .map(m => ({ ...m, expected: recordValue(c, m.field) }));
+
+// Exact comparison of what the customer said (already turned into a plain value) with the record.
+// Returns { result: match | partial | mismatch | unknown, detail }.
+function compareValue(spec, said, aiSame) {
+  const rec = spec.expected;
+  if (said == null || String(said).trim() === '') return { result: 'unknown', detail: `No clear ${spec.label.toLowerCase()} in the answer; record: ${rec}` };
+  const both = `said: ${said}; record: ${rec}`;
+  if (spec.type === 'date') {
+    const a = toDate(said), b = toDate(rec);
+    if (!a || !b) return { result: 'unknown', detail: `Could not read a date (${both})` };
+    const monthOnly = /^\d{4}-\d{1,2}$/.test(String(said).trim()) || /^\d{4}-\d{1,2}$/.test(rec) || /^[A-Za-z]{3,9}[\s,-]+\d{4}$/.test(rec);
+    if (monthOnly) return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() ? { result: 'match', detail: `Same month (${both})` } : { result: 'mismatch', detail: `Different month (${both})` };
+    const n = Math.abs(days(a, b));
+    return n === 0 ? { result: 'match', detail: `Same date (${both})` } : n <= 2 ? { result: 'partial', detail: `${n} day${n > 1 ? 's' : ''} apart (${both})` } : { result: 'mismatch', detail: `${n} days apart (${both})` };
+  }
+  if (spec.type === 'amount' || spec.type === 'number' || spec.type === 'year') {
+    const a = amount(said), b = amount(rec);
+    if (!a || !b) return { result: 'unknown', detail: `Could not read a number (${both})` };
+    if (spec.type === 'number') return a === b ? { result: 'match', detail: both } : { result: 'mismatch', detail: both };
+    if (spec.type === 'year') { const g = Math.abs(a - b); return g === 0 ? { result: 'match', detail: both } : g === 1 ? { result: 'partial', detail: `1 year apart (${both})` } : { result: 'mismatch', detail: `${g} years apart (${both})` }; }
+    const pct = Math.abs(a - b) / b * 100;
+    const fmt = x => 'Rs. ' + x.toLocaleString('en-IN');
+    const txt = `said: ${fmt(a)}; record: ${fmt(b)}`;
+    return pct <= 1 ? { result: 'match', detail: txt } : pct <= 10 ? { result: 'partial', detail: `${pct.toFixed(0)}% different (${txt})` } : { result: 'mismatch', detail: `${pct.toFixed(0)}% different (${txt})` };
+  }
+  // text: exact after removing spaces / dots / case, or one contains the other; otherwise the AI's view
+  const n = v => String(v).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const A = n(said), B = n(rec);
+  if (A && B && (A === B || (Math.min(A.length, B.length) >= 4 && (A.includes(B) || B.includes(A))))) return { result: 'match', detail: both };
+  if (aiSame === true) return { result: 'partial', detail: `Different words, the AI thinks it is the same (${both})` };
+  if (aiSame === false) return { result: 'mismatch', detail: both };
+  return { result: 'unknown', detail: `Could not compare (${both})` };
+}
+
+module.exports = { PROFILES, profileOf, SECTION_LABELS, triggers, toDate, ageOn, money, amount, days, matchSpecs, compareValue, MATCH };

@@ -381,6 +381,25 @@ For other kinds intent can be "unclear" only when nothing useful was said.`;
   return parseJson(raw, { intent: 'unclear', value: '', clear: false, followUp: '', concern: '' });
 }
 
+// Pulls the values a customer stated out of one answer, as plain values for an exact comparison
+// in code. Dates and numbers: the record is NOT shown to the AI, so it cannot lean towards it.
+// Text (names, places): the record is shown only to ask whether both name the same thing.
+async function extractValues({ question, answerEnglish, fields }) {
+  const list = fields.map(f => `- ${f.field} (${f.type}${f.type === 'text' ? `; record says "${f.expected}"` : ''}): ${f.label}`).join('\n');
+  const prompt = `A customer answered a question on an insurance verification call (transcribed and translated to English, may contain recognition errors).
+QUESTION: ${question}
+ANSWER: "${answerEnglish}"
+
+For each field below, write only what the CUSTOMER said. Never fill in a value they did not say.
+${list}
+
+Formats: date -> YYYY-MM-DD (YYYY-MM if they gave only month and year; use the current year ${new Date().getFullYear()} only if they clearly meant this year); amount -> digits only in rupees ("1.8 lakh" -> 180000, "50 hazaar" -> 50000); year -> 4 digits; number -> digits only; text -> their words, short.
+For text fields also say if what they said names the SAME thing as the record (spelling, short forms and local names count as the same; a different hospital, company, person or place is not).
+Respond ONLY with JSON: {"fields":{"<field>":{"said":"<value or empty>","sameAsRecord":true|false|null}}}`;
+  const raw = await callGemini([{ text: prompt }], { jsonOutput: true, light: true });
+  return parseJson(raw, { fields: {} });
+}
+
 // Final structured summary of an AI-run verification call.
 async function summarizeAiCall({ caseType, caseInfo, answers, checks, flags }) {
   const prompt = `You are summarising a fully automated AI verification call for an insurance company reviewer.
@@ -423,4 +442,4 @@ Use null for "consistent" when there is too little to judge (e.g. no relevant me
 }
 
 module.exports = {
-  checkChallenge, checkConsistency,  translateStrings, readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness };
+  checkChallenge, checkConsistency, extractValues, translateStrings, readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness };
