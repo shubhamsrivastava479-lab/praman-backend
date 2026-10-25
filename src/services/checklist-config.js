@@ -32,7 +32,7 @@ const forCase = (firm, c) => forService(firm, plans.serviceOfCase(c));
 function catalog(serviceKey, firm) {
   const engine = require('./ai-call-engine');
   const s = plans.SERVICES[serviceKey];
-  const probe = { caseType: s.caseType, policyType: s.policyType, claimNo: 'X', policyNo: 'Y', insuredName: 'X', vehicleNo: s.caseType === 'policy_verification' ? '' : 'X', district: 'X' };
+  const probe = { service: serviceKey, caseType: s.caseType, policyType: s.policyType, claimNo: 'X', policyNo: 'Y', insuredName: 'X', vehicleNo: serviceKey === 'motor_claim' ? 'X' : '', district: 'X' };
   const cfg = forService(firm, serviceKey);
   const items = engine.buildQueue(probe, { skip: [], extra: [] }).filter(x => x.type !== 'close').map(x => ({
     id: x.id, section: x.section || '', type: x.type, core: CORE(x.id),

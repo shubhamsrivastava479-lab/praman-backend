@@ -139,6 +139,7 @@ router.get('/:token/info', async (req, res) => {
     status: c.aiCall.status || 'not_started',
     caseTypeLabel: engine.typeLabel(c),
     isPolicy: c.caseType === 'policy_verification',
+    service: require('../services/plans').serviceOfCase(c),
     policyType: c.policyType || null,
     firm: vendor && vendor.vendorName ? vendor.vendorName : '',
     caseRef: '••••' + String(c.claimNo).slice(-4),

@@ -211,7 +211,7 @@ function render(){
       <tr><td>Case no.</td><td class="v">${esc(c.caseRef || '—')}</td></tr>
       <tr><td>Insured name</td><td class="v">${esc(c.insuredName || '—')}</td></tr>
       <tr><td>${m.isPolicy ? 'Policy / proposal no.' : 'Claim no.'}</td><td class="v">${esc(c.claimNo)}</td></tr>
-      ${m.isPolicy ? `<tr><td>Product</td><td class="v">${m.policyType === 'term' ? 'Term insurance' : 'Life insurance'}${c.policyValue ? ' · ₹' + Number(c.policyValue).toLocaleString('en-IN') : ''}</td></tr>` : ''}
+      ${m.isPolicy ? `<tr><td>Product</td><td class="v">${m.policyType === 'term' ? 'Term insurance' : m.policyType === 'health' ? 'Health insurance' : 'Life insurance'}${c.policyValue ? ' · ₹' + Number(c.policyValue).toLocaleString('en-IN') : ''}</td></tr>` : ''}
       <tr><td>Verification call</td><td class="v">${dt(call.startedAt)}${call.durationMin ? ' · ' + call.durationMin + ' min' : ''}${call.language ? ' · ' + esc(call.language) : ''}</td></tr>
       <tr><td>Location at call start</td><td class="v">${llP(call.startLocation)}</td></tr>
       <tr><td>Red flags raised</td><td class="v">${res.flags.length}</td></tr>
@@ -228,7 +228,7 @@ function render(){
     ['Insured name', esc(c.insuredName || '—')],
     [m.isPolicy ? 'Policy / proposal no.' : 'Claim no.', esc(c.claimNo)],
     c.policyNo && c.policyNo !== c.claimNo ? ['Policy no.', esc(c.policyNo)] : null,
-    m.isPolicy ? ['Product', m.policyType === 'term' ? 'Term insurance' : 'Life insurance'] : null,
+    m.isPolicy ? ['Product', m.policyType === 'term' ? 'Term insurance' : m.policyType === 'health' ? 'Health insurance' : 'Life insurance'] : null,
     c.vehicleNo ? ['Vehicle no.', esc(c.vehicleNo)] : null,
     c.policyValue ? ['Sum assured / claim value', '₹' + Number(c.policyValue).toLocaleString('en-IN')] : null,
     c.district ? ['District', esc(c.district)] : null,

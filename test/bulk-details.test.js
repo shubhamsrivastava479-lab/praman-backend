@@ -47,8 +47,35 @@ test('first page groups checks into areas and marks where to focus', async () =>
   const R = buildAiReport(c, { firm: 'F' });
   const g = pdf.glance(R, null);
   const st = k => g.tiles.find(t => t.key === k).state;
-  assert.equal(st('identity'), 'clear'); assert.equal(st('face'), 'focus'); assert.equal(st('documents'), 'check'); assert.equal(st('chats'), 'none');
+  assert.equal(st('identity'), 'clear'); assert.equal(st('face'), 'focus'); assert.equal(st('docs'), 'check'); assert.equal(st('police'), 'none');
   assert.match(g.tiles.find(t => t.key === 'face').note, /Eyes never closed/);
   const buf = await pdf.render(R, {});
   assert.equal(buf.slice(0, 4).toString(), '%PDF');
+});
+
+test('new services: own questions, BGV has no WhatsApp search, names map to the right service', () => {
+  const engine = require('../src/services/ai-call-engine');
+  const plans = require('../src/services/plans');
+  const q = svc => engine.buildQueue({ service: svc, caseType: plans.SERVICES[svc].caseType, policyType: plans.SERVICES[svc].policyType, claimNo: 'X1', insuredName: 'A' }).map(s => s.id);
+  assert.ok(q('health_claim').includes('q_admit_dates') && q('health_claim').includes('chats'));
+  assert.ok(q('pivc_health').includes('q_waiting') && q('pivc_health').includes('body_stand'));
+  assert.ok(q('bgv_employee').includes('q_qualification') && !q('bgv_employee').includes('chats') && !q('bgv_employee').includes('body_stand'));
+  assert.ok(q('motor_claim').includes('q_licence'));
+  assert.equal(plans.serviceFor({ caseType: 'Health claim' }), 'health_claim');
+  assert.equal(plans.serviceFor({ caseType: 'PIVC Health' }), 'pivc_health');
+  assert.equal(plans.serviceFor({ caseType: 'Employee BGV' }), 'bgv_employee');
+  assert.equal(plans.serviceFor({ caseType: 'PIVC Term' }), 'pivc_term');
+  assert.equal(plans.serviceFor({ caseType: 'Motor claim' }), 'motor_claim');
+});
+
+test('health claim triggers: early claim, same-day stay, possible pre-existing illness', () => {
+  const { triggers } = require('../src/services/service-profiles');
+  const t = triggers('health_claim', { details: { policyStartDate: '2026-09-01', admissionDate: '2026-09-20', dischargeDate: '20/09/2026', diagnosis: 'Hernia repair', claimAmount: '1,20,000' } });
+  const by = l => t.find(x => x.label === l);
+  assert.equal(by('Claim soon after the policy started').state, 'focus');
+  assert.equal(by('Length of hospital stay').state, 'check');
+  assert.equal(by('Possible pre-existing illness').state, 'check');
+  assert.equal(by('Claim amount').state, 'check');
+  const life = triggers('pivc_life', { details: { dob: '1950-01-01' }, policyValue: 2000000 });
+  assert.equal(life.find(x => x.label === 'Senior citizen proposer').state, 'check');
 });

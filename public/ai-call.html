@@ -354,7 +354,7 @@ const T = {
     p_details:'आपकी जानकारी', p_face:'चेहरा और पलक', p_body:'पूरे शरीर की फ़ोटो', p_documents:'आधार और पैन', p_questions:'कुछ सवाल', p_done:'पूरा',
     st1:'AI से बात', st1d:'नाम और केस की जानकारी कन्फ़र्म करें', st2:'चेहरे की फ़ोटो और पलक झपकाना', st2d:'फ़ोन चेहरे के सामने रखें',
     st3:'पूरे शरीर की फ़ोटो', st3d:'एक बार खड़े होकर, एक बार कुर्सी पर बैठकर', st4:'आधार और पैन WhatsApp पर भेजें', st4d:'आधार के आगे-पीछे और पैन की साफ़ फ़ोटो',
-    st5:'कुछ सवाल', st5d:'पॉलिसी, सेहत, काम और नॉमिनी के बारे में', st5c:'कुछ सवाल', st5cd:'हादसा कब, कहाँ और कैसे हुआ',
+    st5:'कुछ सवाल', st5d:'पॉलिसी, सेहत, काम और नॉमिनी के बारे में', st5c:'कुछ सवाल', st5cd:'हादसा कब, कहाँ और कैसे हुआ', st5hd:'अस्पताल में भर्ती, इलाज, बिल और पुरानी बीमारी', st5bd:'आपका पता, पढ़ाई और नौकरी का इतिहास', st6hd:'hospital, admit, bill जैसे शब्द सर्च करके स्क्रीनशॉट भेजें',
     st6:'WhatsApp सर्च के स्क्रीनशॉट (आपकी मर्ज़ी से)', st6d:'accident, theft, police जैसे शब्द सर्च करके स्क्रीनशॉट भेजें',
     p_chats:'WhatsApp सर्च', chatDone:'✓ मैंने सारे स्क्रीनशॉट भेज दिए', chatSkip:'कुछ नहीं मिला / नहीं भेजना', searchThese:'WhatsApp में ये शब्द सर्च करें:', shotsGot:'स्क्रीनशॉट मिले', openWaChat:'WhatsApp खोलें',
     r_aadhaar:'आधार कार्ड', r_pan:'पैन कार्ड', r_chair:'एक कुर्सी', r_light:'अच्छी रोशनी', r_quiet:'शांत जगह', r_time:'10–15 मिनट',
@@ -383,7 +383,7 @@ const T = {
     p_details:'Your details', p_face:'Face and blink', p_body:'Full body photo', p_documents:'Aadhaar and PAN', p_questions:'A few questions', p_done:'Done',
     st1:'Talk with the AI', st1d:'Confirm your name and case details', st2:'Face photo and eye blink', st2d:'Hold the phone in front of your face',
     st3:'Full body photo', st3d:'Once standing, once sitting on a chair', st4:'Send Aadhaar and PAN on WhatsApp', st4d:'Clear photos of Aadhaar front and back, and PAN',
-    st5:'A few questions', st5d:'About the policy, health, work and nominee', st5c:'A few questions', st5cd:'When, where and how the incident happened',
+    st5:'A few questions', st5d:'About the policy, health, work and nominee', st5c:'A few questions', st5cd:'When, where and how the incident happened', st5hd:'Hospital admission, treatment, bills and past illness', st5bd:'Your address, education and work history', st6hd:'Search words like hospital, admit, bill and send screenshots',
     st6:'WhatsApp search screenshots (optional)', st6d:'Search words like accident, theft, police and send screenshots',
     p_chats:'WhatsApp search', chatDone:'✓ I have sent all screenshots', chatSkip:'Nothing found / I don’t want to', searchThese:'Search these words in WhatsApp:', shotsGot:'Screenshots received', openWaChat:'Open WhatsApp',
     r_aadhaar:'Aadhaar card', r_pan:'PAN card', r_chair:'A chair', r_light:'Good light', r_quiet:'A quiet place', r_time:'10–15 minutes',
@@ -434,13 +434,15 @@ function paintText(){
   document.querySelectorAll('[data-t]').forEach(el => { const v = tr(el.dataset.t); if (typeof v === 'string') el.textContent = v; });
   document.querySelectorAll('[data-ph]').forEach(el => { const v = tr(el.dataset.ph); if (typeof v === 'string') el.placeholder = v; });
   const isPolicy = !info || info.isPolicy;
-  const steps = [['st1','st1d'],['st2','st2d'], ...(isPolicy ? [['st3','st3d']] : []), ['st4','st4d'], isPolicy ? ['st5','st5d'] : ['st5c','st5cd'], ...(isPolicy ? [] : [['st6','st6d']])];
+  const svc = info && info.service, hasChats = !isPolicy && svc !== 'bgv_employee';
+  const qDesc = svc === 'health_claim' ? 'st5hd' : svc === 'bgv_employee' ? 'st5bd' : 'st5cd';
+  const steps = [['st1','st1d'],['st2','st2d'], ...(isPolicy ? [['st3','st3d']] : []), ['st4','st4d'], isPolicy ? ['st5','st5d'] : ['st5c', qDesc], ...(hasChats ? [['st6', svc === 'health_claim' ? 'st6hd' : 'st6d']] : [])];
   $('steps').innerHTML = steps.map((s, i) => `<li><span class="n">${i + 1}</span><div><b>${tr(s[0])}</b><span>${tr(s[1])}</span></div></li>`).join('');
   const ready = ['r_aadhaar','r_pan', ...(isPolicy ? ['r_chair'] : []), 'r_light','r_quiet','r_time'];
   $('ready').innerHTML = ready.map(k => `<span>${tr(k)}</span>`).join('');
   $('intro').textContent = introKey === 'case' ? ui().intro(info.caseTypeLabel, info.caseRef) : tr(introKey);
   $('firmLine').textContent = info && info.firm ? ui().onBehalf(info.firm) : '';
-  $('phases').innerHTML = PHASES.filter(p => isPolicy ? p !== 'chats' : p !== 'body').map(p => `<div data-p="${p}"></div>`).join('');
+  $('phases').innerHTML = PHASES.filter(p => p === 'chats' ? hasChats : p === 'body' ? isPolicy : true).map(p => `<div data-p="${p}"></div>`).join('');
 }
 
 function renderLangs(){

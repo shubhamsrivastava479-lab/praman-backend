@@ -19,48 +19,47 @@ const RES_STATE = { fail: 'focus', mismatch: 'focus', discrepancy: 'focus', part
 const DETAIL_LABELS = { mobile: 'Mobile', email: 'Email', dob: 'Date of birth', gender: 'Gender', address: 'Address', city: 'City', state: 'State', pincode: 'Pincode',
   insurerName: 'Insurance company', verificationType: 'Verification type', productName: 'Product / plan', policyStartDate: 'Policy start date', premium: 'Premium', nomineeName: 'Nominee',
   claimType: 'Claim type', claimAmount: 'Claim amount', incidentDate: 'Incident date', incidentPlace: 'Incident place', hospitalName: 'Hospital', admissionDate: 'Admission date',
-  dischargeDate: 'Discharge date', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle make / model', branch: 'Branch', agentName: 'Agent / advisor', remarks: 'Remarks' };
+  dischargeDate: 'Discharge date', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle make / model', branch: 'Branch', agentName: 'Agent / advisor',
+  clientName: 'Client', position: 'Position', employeeId: 'Employee ID', remarks: 'Remarks' };
 
-// Groups the automatic checks into 8 areas for the first page. Each area gets the
-// worst result among its checks, and the reasons behind anything not clear.
-const AREAS = [
-  ['identity', 'Identity', /^(name_|aadhaar|pan_|dob_aadhaar|dob_spoken|confirm_insuredName)/],
-  ['face', 'Face and liveness', /^(face_|blink|challenge|body_|live_code)/],
-  ['documents', 'Documents', /^(id_tamper_|doc_)/],
-  ['details', 'Case details', /^(confirm_|district_)/],
-  ['answers', 'Answers', null],
-  ['chats', 'Chats and screen', /^(chat|screen)/],
-  ['location', 'Location / device', /^(location|device|gps)/],
-  ['signoff', 'Reviewer sign-off', /(?!)/]
-];
+// Groups everything the call found into the areas of THIS service (service-profiles.js).
+// Each area gets the worst result among its items, and the reasons behind anything not clear.
+const profiles = require('./service-profiles');
 function glance(R, rv) {
-  const tiles = AREAS.map(([key, label]) => ({ key, label, state: 'none', note: '', reasons: [], n: 0 }));
-  const by = k => tiles.find(t => t.key === k);
-  const bump = (t, st, why) => { if (RANK[st] > RANK[t.state]) t.state = st; if (st === 'focus' || st === 'check') { if (why && t.reasons.length < 3) t.reasons.push(why); } };
+  const prof = profiles.profileOf(R.meta.service);
+  const tiles = prof.areas.map(([key, label, rule]) => ({ key, label, rule, state: 'none', note: '', reasons: [], n: 0 }));
+  const bump = (t, st, why) => { if (RANK[st] > RANK[t.state]) t.state = st; if ((st === 'focus' || st === 'check') && why && t.reasons.length < 3 && !t.reasons.includes(why)) t.reasons.push(why); };
+  const withSrc = k => tiles.filter(t => (t.rule.src || []).includes(k));
+  const fallback = tiles.find(t => t.key === 'identity');
   for (const k of R.checks || []) {
-    const id = k.id || '';
-    const area = AREAS.find(a => a[2] && a[2].test(id)) || AREAS[4];
-    const t = by(area[0]); const st = RES_STATE[k.result];
-    if (!st) continue;
-    t.n++; bump(t, st, k.detail ? `${k.label} - ${k.detail}` : k.label);
+    const st = RES_STATE[k.result]; if (!st) continue;
+    const t = tiles.find(x => x.rule.checks && x.rule.checks.test(k.id || '')) || (/^(consistency|age_|answer)/.test(k.id || '') ? null : fallback);
+    const target = t || tiles.find(x => x.rule.sections && x.rule.sections.length) || fallback;
+    target.n++; bump(target, st, k.detail ? `${k.label} - ${k.detail}` : k.label);
   }
-  for (const sec of R.sections || []) for (const q of sec.qa) { const t = by('answers'); if (q.answer) { t.n++; bump(t, 'clear'); } if (q.concern) bump(t, 'check', q.concern); }
-  const loc = by('location');
-  if ((R.locations || []).length || R.call.startLocation) { loc.n++; bump(loc, 'clear'); }
-  if (R.call.device) { loc.n++; bump(loc, 'clear'); }
-  for (const x of R.crossCase || []) bump(loc, 'focus', x);
-  const docs = by('documents');
-  if ((R.received || []).length || (R.documents.aadhaar || {}).masked || (R.documents.pan || {}).masked) { docs.n++; bump(docs, 'clear'); }
-  const so = by('signoff');
-  if (rv) { so.n++; bump(so, rv.finalVerdict === 'verified' ? 'clear' : rv.finalVerdict === 'found_discrepancy' || rv.finalVerdict === 'unverified' ? 'focus' : 'check', rv.remarks || VERDICT[rv.finalVerdict]); }
-  else if (R.call.status === 'completed') bump(so, 'check', 'Waiting for a person to sign off');
+  for (const sec of R.sections || []) for (const q of sec.qa) {
+    const t = tiles.find(x => (x.rule.keys || []).includes(q.key)) || tiles.find(x => (x.rule.sections || []).includes(sec.key) && !(x.rule.skipKeys || []).includes(q.key));
+    if (!t) continue;
+    if (q.answer) { t.n++; bump(t, 'clear'); }
+    if (q.concern) bump(t, t.rule.concern || 'check', q.concern); // mis-selling, a criminal case: a concern there is a focus point
+  }
+  for (const t of withSrc('location')) {
+    if ((R.locations || []).length || R.call.startLocation) { t.n++; bump(t, 'clear'); }
+    if (R.call.device) { t.n++; bump(t, 'clear'); }
+  }
+  for (const t of withSrc('docs')) if ((R.received || []).length || (R.documents.aadhaar || {}).masked || (R.documents.pan || {}).masked) { t.n++; bump(t, 'clear'); }
+  for (const t of withSrc('triggers')) for (const x of R.triggers || []) { if (x.state === 'none') continue; t.n++; bump(t, x.state, `${x.label}: ${x.detail}`); }
+  for (const t of withSrc('signoff')) {
+    if (rv) { t.n++; bump(t, rv.finalVerdict === 'verified' ? 'clear' : rv.finalVerdict === 'found_discrepancy' || rv.finalVerdict === 'unverified' ? 'focus' : 'check', rv.remarks || VERDICT[rv.finalVerdict]); }
+    else if (R.call.status === 'completed') bump(t, 'check', 'Waiting for a person to sign off');
+  }
   for (const t of tiles) {
-    t.note = t.state === 'none' ? (t.key === 'signoff' ? 'Not reviewed yet' : 'Not part of this check')
+    t.note = t.state === 'none' ? (t.key === 'signoff' ? 'Not reviewed yet' : 'Not covered in this call')
       : t.reasons[0] || (t.n ? `${t.n} item${t.n > 1 ? 's' : ''} checked, all clear` : 'Clear');
   }
   const count = { focus: 0, check: 0, clear: 0 };
   tiles.forEach(t => { if (count[t.state] != null) count[t.state]++; });
-  return { tiles, count };
+  return { tiles, count, prof };
 }
 
 const clean = v => String(v == null ? '' : v).replace(/₹/g, 'Rs.').replace(/•/g, 'x').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/…/g, '...')
@@ -96,35 +95,37 @@ function render(R, opts = {}) {
     doc.font('Helvetica').fontSize(10).fillColor('#cfd6ff').text('Verification report  |  At a glance', x, 52);
 
     const G = glance(R, rv);
+    const vWord = (rv ? G.prof.verdict[rv.finalVerdict] : G.prof.verdict[R.result.decision]) || verdict;
     const VC = { verified: CLR.clear, partially_verified: CLR.check, pending_verification: CLR.check, handoff: CLR.check, found_discrepancy: CLR.focus, unverified: CLR.focus };
     const vKey = rv ? rv.finalVerdict : (R.result.decision || 'pending_verification');
     const vColor = VC[vKey] || CLR.none;
 
     // title + case facts (left), result box (right)
     const BX = 48 + W - 168;
-    doc.fillColor(INK).font('Helvetica-Bold').fontSize(17).text(clean(R.meta.caseTypeLabel).replace(/^./, ch => ch.toUpperCase()), 48, 112, { width: W - 185 });
+    doc.fillColor(INK).font('Helvetica-Bold').fontSize(17).text(clean(G.prof.title), 48, 112, { width: W - 185 });
     doc.font('Helvetica').fontSize(9).fillColor(MUTE).text(`Report no. ${clean(R.meta.reportNo)}   |   Created ${ist(R.meta.generatedAt)}`, 48, doc.y + 2, { width: W - 185 });
     const d = R.case.details || {};
+    const isBgv = R.meta.service === 'bgv_employee';
     const facts = [
-      ['Customer', R.case.insuredName], ['WhatsApp', R.case.whatsapp], ['Mobile', d.mobile], ['Email', d.email],
-      ['City / State', [d.city || R.case.district, d.state].filter(Boolean).join(', ')], ['Insurer', d.insurerName],
-      ['Policy no.', R.case.policyNo], [R.meta.isPolicy ? 'Case no.' : 'Claim no.', R.case.claimNo],
-      ['Verification', d.verificationType || R.meta.caseTypeLabel],
-      [R.meta.isPolicy ? 'Sum assured' : 'Claim amount', R.meta.isPolicy ? (R.case.policyValue ? 'Rs. ' + Number(R.case.policyValue).toLocaleString('en-IN') : '') : d.claimAmount],
-      ['Call', R.call.startedAt ? `${ist(R.call.startedAt)}${R.call.durationMin ? ', ' + R.call.durationMin + ' min' : ''}` : 'Not held']
+      [G.prof.person, R.case.insuredName], ['WhatsApp', R.case.whatsapp], ['Mobile', d.mobile], ['Email', d.email],
+      ['City / State', [d.city || R.case.district, d.state].filter(Boolean).join(', ')], ...(isBgv ? [] : [['Insurer', d.insurerName]]),
+      [R.meta.isPolicy ? 'Policy no.' : isBgv ? 'Case no.' : 'Claim no.', R.case.claimNo], ...(R.case.policyNo && R.case.policyNo !== R.case.claimNo ? [['Policy no.', R.case.policyNo]] : []),
+      ...G.prof.facts(d, R.case),
+      ['Call', R.call.startedAt ? `${new Date(R.call.startedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}${R.call.durationMin ? ', ' + R.call.durationMin + ' min' : ''}${R.call.language ? ', ' + R.call.language : ''}` : 'Not held']
     ].filter(f => f[1] && String(f[1]).trim());
+    if (facts.length > 10) facts.splice(9, facts.length - 10); // keep the call line last
     let fy = doc.y + 10;
     const colW = (W - 185) / 2;
     facts.forEach((f, i) => {
-      const cx = 48 + (i % 2) * colW, cy = fy + Math.floor(i / 2) * 27;
+      const cx = 48 + (i % 2) * colW, cy = fy + Math.floor(i / 2) * 25;
       doc.font('Helvetica').fontSize(7.5).fillColor(MUTE).text(f[0].toUpperCase(), cx, cy, { width: colW - 8, lineBreak: false });
       doc.font('Helvetica-Bold').fontSize(9.5).fillColor(INK).text(clean(f[1]), cx, cy + 10, { width: colW - 8, height: 12, ellipsis: true });
     });
-    const factsBottom = fy + Math.ceil(facts.length / 2) * 27;
+    const factsBottom = fy + Math.ceil(facts.length / 2) * 25;
 
     doc.roundedRect(BX, 108, 168, 132, 10).fill(vColor);
     doc.fillColor('#fff').font('Helvetica-Bold').fontSize(8).text('RESULT', BX, 122, { width: 168, align: 'center' });
-    doc.font('Helvetica-Bold').fontSize(16).text(verdict, BX + 10, 138, { width: 148, align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(vWord.length > 18 ? 13.5 : 16).text(clean(vWord), BX + 10, 138, { width: 148, align: 'center' });
     doc.font('Helvetica').fontSize(8.5).text(rv ? 'Signed off by a person' : 'AI result, not yet signed off', BX + 10, doc.y + 4, { width: 148, align: 'center' });
     doc.font('Helvetica-Bold').fontSize(9).text(`${G.count.focus} focus  |  ${G.count.check} check  |  ${G.count.clear} clear`, BX + 6, 216, { width: 156, align: 'center' });
 
@@ -132,9 +133,10 @@ function render(R, opts = {}) {
     const top = Math.max(factsBottom, 252) + 14;
     doc.font('Helvetica-Bold').fontSize(12).fillColor(BRAND).text('Where to focus', 48, top);
     doc.font('Helvetica').fontSize(8.5).fillColor(MUTE).text('Each box is one area of the verification. Red boxes are where the reader should look first.', 48, doc.y + 1, { width: W });
-    const hubTop = doc.y + 10, TW = 176, TH = 64, GAP = 12;
-    const cxm = 48 + W / 2, cym = hubTop + (4 * TH + 3 * GAP) / 2;
-    const slots = G.tiles.map((t, i) => ({ t, x: i < 4 ? 48 : 48 + W - TW, y: hubTop + (i % 4) * (TH + GAP) }));
+    const rows = Math.ceil(G.tiles.length / 2), TW = 178, GAP = rows > 4 ? 8 : 12, TH = rows > 4 ? 52 : 64;
+    const hubTop = doc.y + 10;
+    const cxm = 48 + W / 2, cym = hubTop + (rows * TH + (rows - 1) * GAP) / 2;
+    const slots = G.tiles.map((t, i) => ({ t, x: i < rows ? 48 : 48 + W - TW, y: hubTop + (i % rows) * (TH + GAP) }));
     slots.forEach(({ t, x: tx, y: ty }) => {
       const ex = tx === 48 ? tx + TW : tx, ey = ty + TH / 2;
       doc.moveTo(cxm, cym).lineTo(ex, ey).lineWidth(t.state === 'focus' ? 1.6 : 0.8);
@@ -151,19 +153,19 @@ function render(R, opts = {}) {
       const col = CLR[t.state], faded = t.state === 'none';
       doc.roundedRect(tx, ty, TW, TH, 8).lineWidth(t.state === 'focus' ? 2 : 0.8).fillAndStroke(t.state === 'focus' ? '#fdeeee' : '#ffffff', faded ? '#dfe2e8' : col);
       doc.circle(tx + 14, ty + 15, 4.5).fill(faded ? '#c9cdd4' : col);
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(faded ? '#a3a8b2' : INK).text(t.label, tx + 24, ty + 9, { width: TW - 84, height: 13, ellipsis: true });
-      const tag = STATE_WORD[t.state];
-      doc.font('Helvetica-Bold').fontSize(7).fillColor(faded ? '#a3a8b2' : col).text(tag.toUpperCase(), tx + TW - 62, ty + 11, { width: 54, align: 'right', lineBreak: false });
-      doc.font('Helvetica').fontSize(7.8).fillColor(faded ? '#a3a8b2' : MUTE).text(clean(t.note), tx + 12, ty + 27, { width: TW - 22, height: 32, ellipsis: true });
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(faded ? '#a3a8b2' : INK).text(t.label, tx + 24, ty + 9, { width: TW - 32, height: 13, ellipsis: true });
+      doc.font('Helvetica-Bold').fontSize(7.6).fillColor(faded ? '#a3a8b2' : col).text(STATE_WORD[t.state].toUpperCase() + '  ', tx + 12, ty + 25, { width: TW - 22, height: TH - 28, ellipsis: true, continued: true })
+        .font('Helvetica').fillColor(faded ? '#a3a8b2' : MUTE).text(clean(t.note));
     });
 
     // look here first
-    let ly = hubTop + 4 * TH + 3 * GAP + 16;
+    let ly = hubTop + rows * TH + (rows - 1) * GAP + 14;
     const todo = G.tiles.filter(t => t.state === 'focus' || t.state === 'check').sort((a1, b1) => RANK[b1.state] - RANK[a1.state]);
     const items = [];
     todo.forEach(t => t.reasons.forEach(r => items.push([t, r])));
-    (R.result.flags || []).forEach(f => { if (!items.some(i => i[1] === f)) items.push([{ label: 'Flag', state: 'focus' }, f]); });
-    const show = items.slice(0, 5);
+    (R.result.flags || []).forEach(f => { if (!items.some(i => String(i[1]).includes(f))) items.push([{ label: 'Flag', state: 'focus' }, f]); });
+    const room2 = Math.max(1, Math.floor((doc.page.height - 100 - ly - 30) / 15));
+    const show = items.slice(0, Math.min(5, room2));
     const boxH = 30 + Math.max(1, show.length) * 15;
     doc.roundedRect(48, ly, W, boxH, 8).lineWidth(0.8).stroke(LINE);
     doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text(show.length ? 'Look here first' : 'Nothing needs attention', 60, ly + 9);
@@ -208,12 +210,26 @@ function render(R, opts = {}) {
       const all = [['Case', R.case.caseRef], ['Claim / policy no.', R.case.claimNo], ['Policy no.', R.case.policyNo], ['Customer', R.case.insuredName], ['WhatsApp', R.case.whatsapp],
         ['Vehicle no.', R.case.vehicleNo], ['District', R.case.district], ['Sum assured', R.case.policyValue ? 'Rs. ' + Number(R.case.policyValue).toLocaleString('en-IN') : ''],
         ['Customer language', R.call.language], ['Call date', R.call.startedAt ? ist(R.call.startedAt) : ''], ['Call length', R.call.durationMin ? R.call.durationMin + ' min' : '']]
-        .concat(Object.entries(DETAIL_LABELS).map(([k, l]) => [l, dd[k]]))
+        .concat(Object.entries(DETAIL_LABELS).map(([k, l]) => [l, ['claimAmount', 'premium'].includes(k) ? profiles.money(dd[k]) : dd[k]]))
         .filter(f => f[1] && String(f[1]).trim());
       for (let i = 0; i < all.length; i += 2) {
         const y = doc.y; const half = W / 2;
         [all[i], all[i + 1]].forEach((f, j) => { if (!f) return; doc.font('Helvetica').fontSize(8.5).fillColor(MUTE).text(f[0], 48 + j * half, y, { width: 105 }); doc.fillColor(INK).text(clean(f[1]), 48 + j * half + 108, y, { width: half - 116 }); });
         doc.y = Math.max(doc.y, y + 12) + 3;
+      }
+    }
+    if ((R.triggers || []).length) {
+      H('Trigger check');
+      row(['Trigger', 'Result', 'Detail'], [170, 70, W - 240], { head: true });
+      R.triggers.forEach(t => row([t.label, STATE_WORD[t.state] === 'Not checked' ? 'No data' : STATE_WORD[t.state], t.detail || ''], [170, 70, W - 240]));
+    }
+    {
+      const worst = G.count.focus ? 'focus' : G.count.check ? 'check' : 'clear';
+      const steps = G.prof.next[worst] || [];
+      if (steps.length) {
+        H(worst === 'clear' ? 'Suggested next step' : 'Suggested next steps');
+        steps.forEach((t, i) => P(`${i + 1}. ${t}`, { gap: 0.2 }));
+        P('Suggestions only. The final decision stays with the insurer / reviewer.', { size: 8.5, color: MUTE });
       }
     }
     doc.moveDown(0.8);

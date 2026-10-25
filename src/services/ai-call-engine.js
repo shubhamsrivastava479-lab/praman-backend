@@ -32,9 +32,11 @@ function sec(caseId, create = true) {
 // ---------- small helpers ----------
 const now = () => new Date().toISOString();
 const isPolicy = c => c.caseType === 'policy_verification';
-const typeLabel = c => isPolicy(c)
-  ? (c.policyType === 'term' ? 'term insurance policy verification' : 'life insurance policy verification')
-  : 'motor claim investigation';
+const profiles = require('./service-profiles');
+const svcOf = c => require('./plans').serviceOfCase(c);
+const TYPE_LABELS = { pivc_life: 'life insurance policy verification', pivc_term: 'term insurance policy verification', pivc_health: 'health insurance policy verification',
+  motor_claim: 'motor claim investigation', health_claim: 'health claim investigation', bgv_employee: 'employee background verification' };
+const typeLabel = c => TYPE_LABELS[svcOf(c)] || 'motor claim investigation';
 
 // Rough great-circle distance in km, used to notice if the customer moves
 // far away during the call (e.g. a different person takes over elsewhere).
@@ -102,52 +104,7 @@ function setCheck(a, id, label, result, detail) {
 }
 
 // ---------- the script ----------
-const PIVC_QUESTIONS = [
-  ['identity', 'dob', 'Please tell me your date of birth.'],
-  ['identity', 'address', 'What is your current residential address?'],
-  ['policyDetails', 'applied_self', 'Did you apply for this policy yourself?'],
-  ['policyDetails', 'explained_by', 'Who explained this policy to you? Was it a person from the company or an agent?'],
-  ['policyDetails', 'premium', 'Do you know how much premium you will pay and how often?'],
-  ['policyDetails', 'term', 'For how many years will you pay the premium?'],
-  ['policyDetails', 'promises', 'Did anyone promise you guaranteed returns, or ask you to pay in cash?'],
-  ['policyDetails', 'signed_self', 'Did you sign the proposal form yourself?'],
-  ['healthDisclosure', 'illness', 'Do you have any existing illness, for example diabetes, high blood pressure, or heart disease?'],
-  ['healthDisclosure', 'surgery', 'Have you had any surgery or hospital admission in the last five years?'],
-  ['healthDisclosure', 'tobacco', 'Do you smoke or use tobacco or alcohol?'],
-  ['healthDisclosure', 'medicines', 'Are you currently taking any regular medicines?'],
-  ['healthDisclosure', 'disclosed', 'Were all these health details correctly written in your proposal form?'],
-  ['incomeOccupation', 'occupation', 'What is your occupation?'],
-  ['incomeOccupation', 'income', 'What is your approximate annual income?'],
-  ['nominee', 'nominee', 'Who is the nominee in your policy, and what is their relationship with you?'],
-  ['identity', 'age', 'To confirm, how old are you, in years?']
-];
-// Extra questions for TERM plans: large cover, low premium, so mis-selling and
-// non-disclosure of health / income / other policies are the main risks.
-const TERM_EXTRA_QUESTIONS = [
-  ['policyDetails', 'sum_assured', 'What is the total cover amount, that is the sum assured, of this term policy?'],
-  ['policyDetails', 'cover_reason', 'Why did you choose this much cover? For example, for a loan or for your family.'],
-  ['policyDetails', 'no_maturity', 'Do you understand that this is a term plan, and no money is paid back if you survive the policy term?'],
-  ['policyDetails', 'riders', 'Does your policy have any extra rider, like accidental death or critical illness cover?'],
-  ['incomeOccupation', 'income_proof', 'Did you give your income proof, like ITR or salary slip, yourself?'],
-  ['incomeOccupation', 'hazardous', 'Does your work or any hobby involve risk, for example driving heavy vehicles, mining, working at heights, or adventure sports?'],
-  ['incomeOccupation', 'other_policies', 'Do you have any other life or term insurance policy, with this or any other company? If yes, what is the total cover?'],
-  ['healthDisclosure', 'medical_test', 'Was a medical test done for this policy? If yes, where was it done?'],
-  ['healthDisclosure', 'family_history', 'Did your parents, brothers or sisters have heart disease, cancer or diabetes before the age of sixty?'],
-  ['healthDisclosure', 'rejected_before', 'In the last few years, was any insurance application of yours rejected or postponed?'],
-  ['nominee', 'nominee_aware', 'Does your nominee know that this policy is in their name?']
-];
-
-const CLAIM_QUESTIONS = [
-  ['lossDetails', 'when', 'On what date and at what time did the accident or loss happen?'],
-  ['lossDetails', 'where', 'At what place did it happen? Please tell me the exact location.'],
-  ['lossDetails', 'how', 'Please explain in your own words how it happened.'],
-  ['lossDetails', 'driver', 'Who was driving the vehicle at that time?'],
-  ['lossDetails', 'injuries', 'Was anyone injured, or was any other vehicle or person involved?'],
-  ['police', 'fir', 'Was a police complaint or FIR registered? If yes, at which police station?'],
-  ['vehicle', 'location', 'Where is the vehicle right now?'],
-  ['vehicle', 'repair', 'Has the vehicle been repaired? If yes, at which garage?'],
-  ['witness', 'witness', 'Were there any witnesses to the incident?']
-];
+// The questions of each service live in service-profiles.js.
 
 function chatKeywords(c) {
   const k = ['accident', 'theft', 'police'];
@@ -170,10 +127,13 @@ function buildQueue(c, cfg = {}) {
 
   const confirms = [];
   if (c.insuredName) confirms.push({ key: 'insuredName', label: 'name', value: c.insuredName });
-  if (c.claimNo) confirms.push({ key: 'claimNo', label: c.caseType === 'policy_verification' ? 'policy number' : 'claim number', value: c.claimNo, spell: true });
+  const svc = svcOf(c), prof = profiles.profileOf(svc), det = c.details || {};
+  if (c.claimNo) confirms.push({ key: 'claimNo', label: c.caseType === 'policy_verification' ? 'policy number' : svc === 'bgv_employee' ? 'case number' : 'claim number', value: c.claimNo, spell: true });
   if (c.policyNo && c.policyNo !== c.claimNo) confirms.push({ key: 'policyNo', label: 'policy number', value: c.policyNo, spell: true });
   if (c.vehicleNo) confirms.push({ key: 'vehicleNo', label: 'vehicle number', value: c.vehicleNo, spell: true });
   if (c.district) confirms.push({ key: 'district', label: 'district', value: c.district });
+  if (svc === 'health_claim' && det.hospitalName) confirms.push({ key: 'hospitalName', label: 'hospital name', value: det.hospitalName });
+  if (svc === 'bgv_employee' && (det.clientName || det.insurerName)) confirms.push({ key: 'clientName', label: 'new employer', value: det.clientName || det.insurerName });
   for (const f of confirms) {
     q.push({
       id: 'confirm_' + f.key, type: 'confirm', key: f.key, label: f.label, value: f.value, section: 'identity',
@@ -213,16 +173,14 @@ function buildQueue(c, cfg = {}) {
     text: 'Now please send a clear photo of your PAN card on the same WhatsApp chat.'
   });
 
-  const bank = isPolicy(c)
-    ? (c.policyType === 'term' ? [...PIVC_QUESTIONS, ...TERM_EXTRA_QUESTIONS] : PIVC_QUESTIONS)
-    : CLAIM_QUESTIONS;
+  const bank = prof.questions();
   for (const [section, key, text] of bank) q.push({ id: 'q_' + key, type: 'ask', kind: 'free', key, section, text });
 
   // Claim cases: WhatsApp history check. The customer searches their own
   // WhatsApp and sends screenshots of the search results (phone browsers
   // cannot share the screen, so screenshots are the way that works on every phone).
-  if (!isPolicy(c)) {
-    const keywords = chatKeywords(c);
+  if (!isPolicy(c) && prof.chats !== false) {
+    const keywords = prof.chats ? prof.chats.slice() : chatKeywords(c);
     q.push({
       id: 'chats_consent', type: 'consent', section: 'chatHistory',
       text: 'One more step, which is optional. To understand when and with whom the incident was first discussed, I would like you to search your own WhatsApp for a few words, and send me screenshots of the search results. You decide what to send. Do you agree? Please say yes or no.'

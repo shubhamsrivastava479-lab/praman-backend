@@ -43,7 +43,7 @@ function customerLink(c, baseUrl) {
 }
 const normMode = m => /^(full|auto|ai)/i.test(String(m || '').replace(/[^a-z]/gi, '')) ? 'full_automation' : 'executive';
 
-const normPolicyType = t => /term/i.test(String(t || '')) ? 'term' : 'life';
+const normPolicyType = t => /term/i.test(String(t || '')) ? 'term' : /health|medi/i.test(String(t || '')) ? 'health' : 'life';
 
 function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service, details }) {
   const svc = plans.serviceFor({ service, caseType, policyType });
@@ -221,6 +221,9 @@ const DETAIL_COLUMNS = [
   ['vehicleMake', ['vehiclemake', 'make', 'makemodel', 'vehiclemodel', 'model', 'vehicledetails']],
   ['branch', ['branch', 'branchname']],
   ['agentName', ['agent', 'agentname', 'advisor', 'advisorname', 'salesperson']],
+  ['clientName', ['client', 'clientname', 'hiringcompany', 'newemployer']],
+  ['position', ['position', 'designation', 'role', 'jobtitle', 'jobrole']],
+  ['employeeId', ['employeeid', 'empid', 'employeeno', 'candidateid']],
   ['remarks', ['remarks', 'notes', 'comments', 'instructions']]
 ];
 const cellText = v => v instanceof Date && !isNaN(v) ? v.toISOString().slice(0, 10) : String(v == null ? '' : v).trim().slice(0, 300);

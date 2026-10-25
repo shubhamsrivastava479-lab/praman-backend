@@ -9,11 +9,7 @@
 // It is worked out from the call's own records every time it is read, so it can never drift
 // from what really happened.
 
-const GROUPS = {
-  identity: 'Identity', policyDetails: 'Policy details and sales practice', healthDisclosure: 'Health disclosure',
-  incomeOccupation: 'Income and occupation', nominee: 'Nominee', lossDetails: 'Loss details', police: 'Police / FIR',
-  vehicle: 'Vehicle', witness: 'Witnesses', chatHistory: 'WhatsApp history check', custom: 'Additional questions'
-};
+const GROUPS = { ...require('./service-profiles').SECTION_LABELS, lossDetails: 'Loss details' };
 const G_PHOTO = 'Photos and liveness check', G_DOC = 'Documents';
 const short = (t, n = 150) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
 

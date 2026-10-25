@@ -42,7 +42,7 @@
   .ws-motor{display:none;}
   body[data-svc="motor_claim"] .ws-motor, body[data-svc="all"] .ws-motor{display:flex;}
   .ws-pivc-only, .ws-motor-only{display:none;}
-  body[data-svc="pivc_life"] .ws-pivc-only, body[data-svc="pivc_term"] .ws-pivc-only, body[data-svc="all"] .ws-pivc-only{display:block;}
+  body[data-svc="pivc_life"] .ws-pivc-only, body[data-svc="pivc_term"] .ws-pivc-only, body[data-svc="pivc_health"] .ws-pivc-only, body[data-svc="all"] .ws-pivc-only{display:block;}
   body[data-svc="motor_claim"] .ws-motor-only, body[data-svc="all"] .ws-motor-only{display:block;}
   .flow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
   .flow button{background:#fff;color:#10151f;border:1px solid #dde1e6;padding:8px 12px;font-size:12px;border-radius:9px;text-align:left;font-weight:600;}
@@ -1035,7 +1035,7 @@ if (user && !['agent', 'viewer', 'insurer'].includes(user.role)) { document.getE
 
 // ---------- Workspace: only the services this firm has bought ----------
 let myServices = [], ws = 'all';
-const WS_COLOR = { pivc_life: '#1f6f63', pivc_term: '#2b3a8c', motor_claim: '#8a4b12', all: '#10151f' };
+const WS_COLOR = { pivc_life: '#1f6f63', pivc_term: '#2b3a8c', pivc_health: '#0f6e8c', motor_claim: '#8a4b12', health_claim: '#9b2c4a', bgv_employee: '#4b3b8f', all: '#10151f' };
 const svcInfo = k => myServices.find(x => x.key === k);
 loadNtf();
 async function loadWorkspace(){
@@ -1084,7 +1084,13 @@ function applyFormFor(key){
   document.getElementById('claimNo').placeholder = x ? x.numberLabel : 'Claim / Policy No.';
   document.getElementById('policyValue').placeholder = x && x.caseType === 'claim_investigation' ? 'Claim amount (₹, optional)' : 'Sum assured / policy value (₹, optional)';
   document.getElementById('bulkTitle').textContent = x ? `Bulk upload — ${x.short} cases (Excel/CSV)` : 'Bulk upload cases (Excel/CSV)';
-  const motor = x && x.caseType === 'claim_investigation';
+  const motor = x && x.key === 'motor_claim';
+  if (x && ws !== 'all' && (x.key === 'health_claim' || x.key === 'bgv_employee')) {
+    document.getElementById('bulkCols').innerHTML = (x.key === 'health_claim'
+      ? 'Columns: <code>claimNo</code>, <code>insuredName</code>, <code>whatsappNumber</code>, and for a better report <code>policyStartDate</code>, <code>hospitalName</code>, <code>admissionDate</code>, <code>dischargeDate</code>, <code>diagnosis</code>, <code>claimAmount</code>.'
+      : 'Columns: <code>claimNo</code> (case or employee no.), <code>insuredName</code> (candidate), <code>whatsappNumber</code>, and <code>clientName</code>, <code>position</code>, <code>employeeId</code>, <code>city</code>.') + ' Every row is created as ' + escH(x.label) + '.' + EXTRA_COLS;
+    return;
+  }
   document.getElementById('bulkCols').innerHTML = ws === 'all'
     ? 'Columns: <code>claimNo</code> (or <code>policyNo</code>), <code>insuredName</code>, <code>whatsappNumber</code>, <code>service</code> (' + myServices.map(s => '<code>' + escH(s.key) + '</code>').join(', ') + '), <code>vehicleNo</code> and <code>district</code> for motor claims, <code>verificationMode</code> (optional: full_automation or executive). Column names are case-insensitive.'
     : motor
@@ -1097,7 +1103,7 @@ function applyFormFor(key){
 const DETAIL_LABELS = { mobile: 'Mobile', email: 'Email', dob: 'DOB', gender: 'Gender', address: 'Address', city: 'City', state: 'State', pincode: 'Pincode',
   insurerName: 'Insurer', verificationType: 'Verification type', productName: 'Plan', policyStartDate: 'Policy start', premium: 'Premium', nomineeName: 'Nominee',
   claimType: 'Claim type', claimAmount: 'Claim amount', incidentDate: 'Incident date', incidentPlace: 'Incident place', hospitalName: 'Hospital', admissionDate: 'Admitted',
-  dischargeDate: 'Discharged', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle', branch: 'Branch', agentName: 'Agent', remarks: 'Remarks' };
+  dischargeDate: 'Discharged', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle', branch: 'Branch', agentName: 'Agent', clientName: 'Client', position: 'Position', employeeId: 'Employee ID', remarks: 'Remarks' };
 function caseDetailsHtml(c) {
   const d = c.details || {};
   const rows = Object.keys(DETAIL_LABELS).filter(k => d[k]);

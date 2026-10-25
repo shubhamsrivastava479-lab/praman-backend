@@ -35,6 +35,33 @@ const SERVICES = {
     policyType: null,
     numberLabel: 'Claim no.',
     about: 'Investigates an accident or theft claim: loss details, police / FIR, vehicle, witnesses, WhatsApp chat history screenshots, documents and photos of the vehicle with location.'
+  },
+  health_claim: {
+    label: 'Health Claim Investigation',
+    short: 'Health claim',
+    icon: '🏥',
+    caseType: 'claim_investigation',
+    policyType: 'health',
+    numberLabel: 'Claim no.',
+    about: 'Investigates a hospitalisation claim with the claimant on video: hospital stay, treatment and bills, past illness (pre-existing disease), other claims, WhatsApp history screenshots and documents, with policy-timing triggers in the report.'
+  },
+  pivc_health: {
+    label: 'Health Insurance Policy Verification',
+    short: 'Health PIVC',
+    icon: '🩺',
+    caseType: 'policy_verification',
+    policyType: 'health',
+    numberLabel: 'Policy no.',
+    about: 'Verifies a new health policy with the proposer: identity, members covered, waiting periods explained, height and weight, illnesses of every covered member, lifestyle, other policies and portability. Face, liveness and full-body photos with location.'
+  },
+  bgv_employee: {
+    label: 'Employee Background Verification',
+    short: 'Employee BGV',
+    icon: '🪪',
+    caseType: 'background_verification',
+    policyType: null,
+    numberLabel: 'Case / employee no.',
+    about: 'Video verification of a job candidate from their home: identity, current and permanent address with live location, education, employment history, gaps, criminal and dual-employment declaration, and a reference.'
   }
 };
 const ALL = Object.keys(SERVICES);
@@ -42,8 +69,10 @@ const ALL = Object.keys(SERVICES);
 // Which service a case (or a create request) belongs to.
 function serviceFor({ service, caseType, policyType } = {}) {
   if (service && SERVICES[service]) return service;
-  const t = String(caseType || '');
-  if (/pivc|policy|life|term|issuance/i.test(t)) return /term/i.test(String(policyType || '') + t) ? 'pivc_term' : 'pivc_life';
+  const t = String(caseType || ''), pt = String(policyType || '');
+  if (/bgv|background|employee|candidate/i.test(t)) return 'bgv_employee';
+  if (/pivc|policy|life|term|issuance|login|proposal/i.test(t)) return /term/i.test(pt + t) ? 'pivc_term' : /health|medi/i.test(pt + t) ? 'pivc_health' : 'pivc_life';
+  if (/health|hospital|medi/i.test(t + ' ' + pt)) return 'health_claim';
   return 'motor_claim';
 }
 const serviceOfCase = c => c.service && SERVICES[c.service] ? c.service : serviceFor({ caseType: c.caseType, policyType: c.policyType });

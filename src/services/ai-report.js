@@ -8,19 +8,8 @@ const { typeLabel } = require('./ai-call-engine');
 const ckl = require('./checklist');
 const { fileLink, documentRows, recordingRows, chatRows } = require('./report-files');
 
-const SECTION_LABELS = {
-  identity: 'Identity',
-  policyDetails: 'Policy details and sales practice',
-  healthDisclosure: 'Health disclosure',
-  incomeOccupation: 'Income and occupation',
-  nominee: 'Nominee',
-  lossDetails: 'Loss details',
-  police: 'Police / FIR',
-  vehicle: 'Vehicle',
-  witness: 'Witnesses',
-  chatHistory: 'WhatsApp history check',
-  custom: 'Additional questions'
-};
+const profiles = require('./service-profiles');
+const SECTION_LABELS = profiles.SECTION_LABELS;
 const PIVC_ORDER = ['identity', 'policyDetails', 'healthDisclosure', 'incomeOccupation', 'nominee', 'custom'];
 const CLAIM_ORDER = ['identity', 'lossDetails', 'police', 'vehicle', 'witness', 'custom'];
 
@@ -59,7 +48,8 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
   const aiRecording = recordings.filter(x => x.kind === 'AI verification call').slice(-1)[0] || null;
   const received = documentRows(c, evidence);
 
-  const order = isPolicy ? PIVC_ORDER : CLAIM_ORDER;
+  const svc = require('./plans').serviceOfCase(c);
+  const order = profiles.profileOf(svc).order || (isPolicy ? PIVC_ORDER : CLAIM_ORDER);
   const answers = a.answers || [];
   const checklist = c.pivcChecklist || {};
   const sections = order.map(key => ({
@@ -68,6 +58,7 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
     status: (checklist[key] || {}).status || null,
     notes: (checklist[key] || {}).notes || '',
     qa: answers.filter(x => (x.section || 'identity') === key).map(x => ({
+      key: x.key || '',
       question: x.question,
       answer: answerText(x),
       original: x.original && x.original !== x.english ? x.original : '',
@@ -88,6 +79,7 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
       firm,
       caseTypeLabel: typeLabel(c),
       isPolicy,
+      service: svc,
       policyType: c.policyType || null
     },
     case: {
@@ -125,6 +117,7 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
     },
     checks: (a.checks || []).map(k => ({ id: k.id, label: k.label, result: k.result, detail: k.detail || '' })),
     crossCase: (a.crossCase || []).map(x => x.text || String(x)),
+    triggers: profiles.triggers(svc, c),
     sections,
     locations: (a.locations || []).map(l => ({ what: l.what, latitude: l.latitude, longitude: l.longitude, accuracy: l.accuracy, at: l.at })),
     received,
@@ -148,7 +141,7 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
   };
   // Fingerprint: changes if anything in the report is altered later. Same value on the dashboard and on the share link.
   const body = { r: out.meta.reportNo, case: out.case, call: { ...out.call, recordingUrl: !!out.call.recordingUrl }, result: out.result, photos: out.photos.map(p => [p.type, p.at]), documents: out.documents,
-    checks: out.checks.map(k => ({ label: k.label, result: k.result, detail: k.detail })), sections: out.sections, locations: out.locations, custody: custody.map(x => [x.timestamp, x.event, x.actor]), review: out.review, history: out.reviewHistory, checklist: out.checklist.items.map(i => [i.id, i.status]) };
+    checks: out.checks.map(k => ({ label: k.label, result: k.result, detail: k.detail })), sections: out.sections.map(x => ({ ...x, qa: x.qa.map(({ key, ...q }) => q) })), locations: out.locations, custody: custody.map(x => [x.timestamp, x.event, x.actor]), review: out.review, history: out.reviewHistory, checklist: out.checklist.items.map(i => [i.id, i.status]) };
   out.meta.fingerprint = crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
   return out;
 }
