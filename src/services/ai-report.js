@@ -94,7 +94,8 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
       caseRef: c.caseRef || '', caseId: c.id, claimNo: c.claimNo, policyNo: c.policyNo || '', insuredName: c.insuredName || '',
       whatsapp: maskPhone(c.whatsappNumber), district: c.district || '', vehicleNo: c.vehicleNo || '',
       policyValue: c.policyValue || null, createdAt: c.createdAt, status: c.status,
-      spotCheckRequired: !!c.spotCheckRequired, needsExecutive: !!c.needsExecutive
+      spotCheckRequired: !!c.spotCheckRequired, needsExecutive: !!c.needsExecutive,
+      ...(c.details ? { details: publicView ? { ...c.details, mobile: c.details.mobile ? maskPhone(c.details.mobile) : undefined } : c.details } : {})
     },
     call: {
       status: a.status || 'not_started',
@@ -122,7 +123,8 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
       aadhaar: pick(docs.aadhaar, ['name', 'dob', 'gender', 'masked', 'address']),
       pan: pick(docs.pan, ['name', 'dob', 'fatherName', 'masked'])
     },
-    checks: (a.checks || []).map(k => ({ label: k.label, result: k.result, detail: k.detail || '' })),
+    checks: (a.checks || []).map(k => ({ id: k.id, label: k.label, result: k.result, detail: k.detail || '' })),
+    crossCase: (a.crossCase || []).map(x => x.text || String(x)),
     sections,
     locations: (a.locations || []).map(l => ({ what: l.what, latitude: l.latitude, longitude: l.longitude, accuracy: l.accuracy, at: l.at })),
     received,
@@ -146,7 +148,7 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
   };
   // Fingerprint: changes if anything in the report is altered later. Same value on the dashboard and on the share link.
   const body = { r: out.meta.reportNo, case: out.case, call: { ...out.call, recordingUrl: !!out.call.recordingUrl }, result: out.result, photos: out.photos.map(p => [p.type, p.at]), documents: out.documents,
-    checks: out.checks, sections: out.sections, locations: out.locations, custody: custody.map(x => [x.timestamp, x.event, x.actor]), review: out.review, history: out.reviewHistory, checklist: out.checklist.items.map(i => [i.id, i.status]) };
+    checks: out.checks.map(k => ({ label: k.label, result: k.result, detail: k.detail })), sections: out.sections, locations: out.locations, custody: custody.map(x => [x.timestamp, x.event, x.actor]), review: out.review, history: out.reviewHistory, checklist: out.checklist.items.map(i => [i.id, i.status]) };
   out.meta.fingerprint = crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
   return out;
 }

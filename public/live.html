@@ -123,6 +123,7 @@ async function api(path, opts = {}) {
   try {
     const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     liveToken = d.token; $('link').value = d.joinUrl;
+    if (d.appUrl) $('linkMsg').textContent = 'Android app link (for customers who must share their phone screen): ' + d.appUrl;
     $('caseLine').textContent = `${d.caseRef ? d.caseRef + ' · ' : ''}${d.claimNo}${d.insuredName ? ' · ' + d.insuredName : ''}`;
     if (d.language) custState.language = d.language;
     ice = await api(`/api/live/case/${encodeURIComponent(caseId)}/ice`);

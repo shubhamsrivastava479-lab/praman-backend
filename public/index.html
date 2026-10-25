@@ -831,6 +831,7 @@ async function openCase(id, scroll){
       <div style="font-size:12px;color:#c8781f;font-weight:700;">Case no. ${escH(c.caseRef || '')} </div>
       <h2>${escH(c.claimNo)} <span class="tag">${escH(({ in_progress: 'In progress', completed: 'Completed', open: 'Open' }[c.status]) || String(c.status || '').replace(/_/g, ' '))}</span> ${isPivc ? `<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC · ${c.policyType === 'term' ? 'Term' : 'Life'}</span>` : ''} ${isAi ? '<span class="tag" style="background:#e2e8fb;color:#2b3a8c;">🤖 AI call</span>' : ''}</h2>
       <div style="font-size:12.5px;color:#555;">${escH(c.insuredName || '')} · WhatsApp: ${escH(c.whatsappNumber)}</div>
+      ${caseDetailsHtml(c)}
       ${c.lastKnownLocation ? `<div style="font-size:11.5px;color:#888;margin-top:2px;">📍 Last captured location: ${c.lastKnownLocation.latitude.toFixed(5)}, ${c.lastKnownLocation.longitude.toFixed(5)} (±${Math.round(c.lastKnownLocation.accuracy||0)}m) — ${new Date(c.lastKnownLocation.capturedAt).toLocaleString()} <a href="https://maps.google.com/?q=${c.lastKnownLocation.latitude},${c.lastKnownLocation.longitude}" target="_blank">View on map</a></div>` : ''}
       ${c.spotCheckRequired ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f4e3cc;color:#8a5416;">🎯 Selected for spot-check review</span></div>` : ''}
       ${c.verificationFlags && c.verificationFlags.length ? `<div style="font-size:11.5px;margin-top:4px;color:#b23a2c;">⚠️ ${c.verificationFlags.map(escH).join(' · ')}</div>` : ''}
@@ -1089,7 +1090,22 @@ function applyFormFor(key){
     : motor
       ? 'Columns: <code>claimNo</code>, <code>insuredName</code>, <code>whatsappNumber</code>, <code>vehicleNo</code>, <code>district</code>, <code>verificationMode</code> (optional: full_automation or executive — overrides the choice below). Column names are case-insensitive.'
       : 'Columns: <code>policyNo</code>, <code>insuredName</code>, <code>whatsappNumber</code>, <code>policyValue</code> (optional), <code>verificationMode</code> (optional: full_automation or executive — overrides the choice below). Column names are case-insensitive. Every row is created as ' + escH(x ? x.label : '') + '.';
+  document.getElementById('bulkCols').innerHTML += EXTRA_COLS;
 }
+
+// Extra details that came from the Excel upload (insurer, city, claim amount, hospital, ...).
+const DETAIL_LABELS = { mobile: 'Mobile', email: 'Email', dob: 'DOB', gender: 'Gender', address: 'Address', city: 'City', state: 'State', pincode: 'Pincode',
+  insurerName: 'Insurer', verificationType: 'Verification type', productName: 'Plan', policyStartDate: 'Policy start', premium: 'Premium', nomineeName: 'Nominee',
+  claimType: 'Claim type', claimAmount: 'Claim amount', incidentDate: 'Incident date', incidentPlace: 'Incident place', hospitalName: 'Hospital', admissionDate: 'Admitted',
+  dischargeDate: 'Discharged', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle', branch: 'Branch', agentName: 'Agent', remarks: 'Remarks' };
+function caseDetailsHtml(c) {
+  const d = c.details || {};
+  const rows = Object.keys(DETAIL_LABELS).filter(k => d[k]);
+  if (!rows.length) return '';
+  return `<details style="margin-top:6px;font-size:12.5px;"><summary style="cursor:pointer;color:#2b3a8c;">Case details from upload (${rows.length})</summary>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px;margin-top:6px;">${rows.map(k => `<div><span style="color:#888;">${DETAIL_LABELS[k]}:</span> ${escH(d[k])}</div>`).join('')}</div></details>`;
+}
+const EXTRA_COLS = ' Optional extra columns: <code>mobile</code>, <code>email</code>, <code>city</code>, <code>state</code>, <code>pincode</code>, <code>address</code>, <code>dob</code>, <code>gender</code>, <code>insurerName</code>, <code>verificationType</code>, <code>productName</code>, <code>sumInsured</code>, <code>claimType</code>, <code>claimAmount</code>, <code>incidentDate</code>, <code>hospitalName</code>, <code>admissionDate</code>, <code>dischargeDate</code>, <code>diagnosis</code>, <code>vehicleMake</code>, <code>branch</code>, <code>agentName</code>, <code>remarks</code>.';
 
 loadWorkspace().then(loadCases);
 loadWhatsappAccounts();

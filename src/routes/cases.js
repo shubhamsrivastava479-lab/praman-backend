@@ -45,7 +45,7 @@ const normMode = m => /^(full|auto|ai)/i.test(String(m || '').replace(/[^a-z]/gi
 
 const normPolicyType = t => /term/i.test(String(t || '')) ? 'term' : 'life';
 
-function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service }) {
+function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service, details }) {
   const svc = plans.serviceFor({ service, caseType, policyType });
   caseType = plans.SERVICES[svc].caseType;
   policyType = plans.SERVICES[svc].policyType || policyType;
@@ -73,6 +73,7 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
     status: 'in_progress',
     verdict: null,
     verificationMode: normMode(verificationMode),
+    ...(details && Object.keys(details).length ? { details } : {}),
     dueAt,
     createdAt: createdAt.toISOString()
   };
@@ -192,6 +193,46 @@ router.get('/lookup/:q', async (req, res) => {
   res.json({ id: c.id, caseRef: c.caseRef, claimNo: c.claimNo, insuredName: c.insuredName });
 });
 
+// Extra customer / policy / claim columns an Excel row may carry. Each entry:
+// [field kept on the case, column names that fill it (lower case, letters only)].
+const DETAIL_COLUMNS = [
+  ['mobile', ['mobile', 'mobileno', 'mobilenumber', 'phone', 'phoneno', 'alternatemobile', 'alternatenumber']],
+  ['email', ['email', 'emailid', 'emailaddress', 'mail']],
+  ['dob', ['dob', 'dateofbirth', 'birthdate']],
+  ['gender', ['gender', 'sex']],
+  ['address', ['address', 'fulladdress', 'residentialaddress']],
+  ['city', ['city', 'town']],
+  ['state', ['state']],
+  ['pincode', ['pincode', 'pin', 'pinno', 'zip', 'postalcode']],
+  ['insurerName', ['insurer', 'insurername', 'insurancecompany', 'insurancecompanyname', 'insurancecompanyname', 'company', 'companyname']],
+  ['verificationType', ['verificationtype', 'investigationtype']],
+  ['productName', ['product', 'productname', 'planname', 'plan']],
+  ['policyStartDate', ['policystartdate', 'riskstartdate', 'policyissuedate', 'policydate']],
+  ['premium', ['premium', 'premiumamount']],
+  ['nomineeName', ['nominee', 'nomineename']],
+  ['claimType', ['claimtype']],
+  ['claimAmount', ['claimamount', 'claimedamount', 'amountclaimed']],
+  ['incidentDate', ['incidentdate', 'dateofloss', 'lossdate', 'accidentdate', 'dateofincident']],
+  ['incidentPlace', ['incidentplace', 'placeofloss', 'accidentplace', 'lossplace']],
+  ['hospitalName', ['hospital', 'hospitalname']],
+  ['admissionDate', ['admissiondate', 'dateofadmission', 'doa']],
+  ['dischargeDate', ['dischargedate', 'dateofdischarge', 'dod']],
+  ['diagnosis', ['diagnosis', 'ailment', 'disease', 'illness']],
+  ['vehicleMake', ['vehiclemake', 'make', 'makemodel', 'vehiclemodel', 'model', 'vehicledetails']],
+  ['branch', ['branch', 'branchname']],
+  ['agentName', ['agent', 'agentname', 'advisor', 'advisorname', 'salesperson']],
+  ['remarks', ['remarks', 'notes', 'comments', 'instructions']]
+];
+const cellText = v => v instanceof Date && !isNaN(v) ? v.toISOString().slice(0, 10) : String(v == null ? '' : v).trim().slice(0, 300);
+function detailsFromRow(row) {
+  const out = {};
+  for (const [field, cols] of DETAIL_COLUMNS) {
+    const col = cols.find(k => cellText(row[k]));
+    if (col) out[field] = cellText(row[col]);
+  }
+  return out;
+}
+
 // Bulk-create cases from an uploaded Excel/CSV file, then automatically send
 // each field contact a WhatsApp message containing their call-join link.
 //
@@ -215,7 +256,7 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
 
   let rows;
   try {
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
   } catch (err) {
@@ -231,8 +272,10 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
     const row = {};
     for (const [k, v] of Object.entries(rawRow)) row[norm(k)] = v;
 
-    const claimNo = row.claimno || row.policyno || row.claimpolicyno;
-    const whatsappNumber = row.whatsappnumber || row.mobile || row.phone;
+    const claimNo = row.claimno || row.claimnumber || row.policyno || row.policynumber || row.claimpolicyno;
+    const whatsappNumber = row.whatsappnumber || row.whatsappno || row.whatsapp || row.mobile || row.mobileno || row.mobilenumber || row.phone;
+    const details = detailsFromRow(row);
+    if (details.mobile && String(details.mobile).replace(/\D/g, '') === String(whatsappNumber).replace(/\D/g, '')) delete details.mobile;
 
     if (!claimNo || !whatsappNumber) {
       results.push({ row: rawRow, status: 'skipped', reason: 'Missing claimNo/policyNo or whatsappNumber' });
@@ -244,7 +287,7 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
       continue;
     }
     // Service of this row: a "service" / "caseType" column, else the workspace's service.
-    const rowType = row.service || row.casetype || '';
+    const rowType = row.service || row.casetype || row.verificationtype || row.investigationtype || '';
     const svc = rowType
       ? plans.serviceFor({ service: String(rowType).trim().toLowerCase(), caseType: rowType, policyType: row.policytype || row.plantype || row.producttype || defaultPolicyType })
       : (defaultService && plans.SERVICES[defaultService] ? defaultService : allowed[0]);
@@ -258,14 +301,15 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
     const newCase = buildCase({
       vendorId: req.user.vendorRootId,
       claimNo: String(claimNo),
-      insuredName: row.insuredname || '',
-      vehicleNo: row.vehicleno || '',
+      insuredName: row.insuredname || row.name || row.customername || row.proposername || '',
+      vehicleNo: row.vehicleno || row.vehiclenumber || row.registrationno || '',
       district: row.district || '',
-      policyNo: row.policyno || '',
+      policyNo: row.policyno || row.policynumber || '',
       whatsappNumber: String(whatsappNumber),
       accountId,
       service: svc,
-      policyValue: row.policyvalue || null,
+      policyValue: String(row.policyvalue || row.suminsured || row.sumassured || '').replace(/[^0-9.]/g, '') || null,
+      details,
       verificationMode: row.verificationmode || row.mode || defaultMode
     });
     db.data.cases.push(newCase);

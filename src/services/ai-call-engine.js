@@ -872,7 +872,9 @@ function applyIdMedia(c, ex, buffer, meta = {}) {
 async function prepareFinish(c) {
   const a = c.aiCall;
   runDerivedChecks(c);
+  const d = c.details || {};
   const caseInfo = { claimNo: c.claimNo, insuredName: c.insuredName, policyNo: c.policyNo, vehicleNo: c.vehicleNo, district: c.district, policyValue: c.policyValue };
+  for (const k of ['dob', 'gender', 'city', 'state', 'productName', 'claimType', 'claimAmount', 'incidentDate', 'incidentPlace', 'hospitalName', 'admissionDate', 'dischargeDate', 'diagnosis', 'vehicleMake']) if (d[k]) caseInfo[k] = d[k];
   const docs = { aadhaar: { name: a.docs.aadhaar.name, dob: a.docs.aadhaar.dob, gender: a.docs.aadhaar.gender, address: a.docs.aadhaar.address }, pan: { name: a.docs.pan.name, dob: a.docs.pan.dob } };
   const [sum, cons] = await Promise.allSettled([
     gemini.summarizeAiCall({ caseType: typeLabel(c), caseInfo, answers: a.answers, checks: a.checks, flags: a.flags }),
