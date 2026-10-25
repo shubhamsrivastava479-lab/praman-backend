@@ -82,9 +82,7 @@ router.post('/cases', async (req, res) => {
   const account = db.data.whatsappAccounts.find(a => a.id === accountId);
   if (b.sendLink !== false && account) {
     try {
-      const wa = require('../services/whatsapp');
-      await wa.sendTemplateMessage(c.whatsappNumber, String(b.templateName || followup.settingsOf(req.firm).reminderTemplate), account, 'en',
-        [{ type: 'body', parameters: [{ type: 'text', text: cases.customerLink(c, baseOf(req)) }] }]);
+      await require('../services/customer-message').sendTemplate(c, account, { firm: req.firm, link: cases.customerLink(c, baseOf(req)), fallbackName: String(b.templateName || followup.settingsOf(req.firm).reminderTemplate) });
       whatsapp = 'sent'; c.lastContactAt = new Date().toISOString();
       db.data.custody.push({ id: uid('cust'), caseId: c.id, event: 'WhatsApp link sent to the customer (API)', actor: 'api', timestamp: new Date().toISOString() });
     } catch (e) { whatsapp = 'failed: ' + String(e.message || e).slice(0, 120); }

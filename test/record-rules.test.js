@@ -133,3 +133,22 @@ test('a mismatch from the call becomes a check and a flag', async () => {
   assert.equal(k.result, 'mismatch'); assert.equal(k.said, '90000'); assert.equal(k.expected, '185000');
   assert.ok(c.aiCall.flags.some(f => /Claim amount does not match/.test(f)));
 });
+
+test('customer message: name, reason by service, call link, app link with the reason', () => {
+  const m = require('../src/services/customer-message');
+  const firm = { vendorName: 'Praman Services', followUp: {} };
+  const c = { service: 'health_claim', caseType: 'claim_investigation', claimNo: 'HC/26/1', insuredName: 'Ravi Kumar', details: { insurerName: 'Example General' } };
+  const t = m.text(c, { firm, joinUrl: 'https://x/live-join.html?t=abc', appUrl: 'https://x/downloads/praman-call.apk', kind: 'live' });
+  assert.match(t, /नमस्ते Ravi Kumar जी/); assert.match(t, /Hello Ravi Kumar/);
+  assert.match(t, /हेल्थ इंश्योरेंस क्लेम की जाँच/); assert.match(t, /checking your health insurance claim \(claim no\. HC\/26\/1\)/);
+  assert.match(t, /Example General/);
+  assert.match(t, /live-join\.html\?t=abc/); assert.match(t, /praman-call\.apk/); assert.match(t, /Why the app/);
+  const ai = m.text({ ...c, service: 'bgv_employee' }, { firm, joinUrl: 'https://x/ai-call.html?t=1', appUrl: 'https://x/a.apk', kind: 'ai' });
+  assert.doesNotMatch(ai, /a\.apk/);                                     // AI call: no app needed
+  assert.match(ai, /background verification/);
+  // templates: 1-variable by default, 3 variables when the firm set one; variables are one line
+  assert.deepEqual(m.template(c, { firm, link: 'L', fallbackName: 'old_tpl' }), { name: 'old_tpl', params: ['L'] });
+  const t3 = m.template(c, { firm: { ...firm, followUp: { linkTemplate: 'praman_verification_link' } }, link: 'L', appUrl: 'A' });
+  assert.equal(t3.name, 'praman_verification_link'); assert.equal(t3.params[0], 'Ravi Kumar');
+  assert.ok(t3.params.every(p => !/\n/.test(p))); assert.match(t3.params[2], /L .*A/);
+});

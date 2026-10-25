@@ -853,6 +853,7 @@ async function openCase(id, scroll){
         ${isPivc ? '' : `<button class="secondary" onclick="requestHistory('${c.id}')" title="Ask the customer to search WhatsApp for accident / theft / police and send screenshots">Ask for WhatsApp search screenshots</button>`}
         <button class="secondary" onclick="window.open('${callUrl}','_blank')">Open call (agent)</button>
         <button class="link" onclick="navigator.clipboard.writeText('${joinUrl}');alert('${isAi ? 'AI call link copied — send it via WhatsApp. The customer can join any time.' : 'Verification link copied — send it via WhatsApp. Insured can choose self-verification or talk to an executive.'}')">Copy verification link</button>
+        <button class="link" onclick="copyCustomerMessage('${c.id}')" title="Customer name, reason for the call and the link, in Hindi and English">Copy message for customer</button>
         ${isPivc ? '' : `<button class="secondary" onclick="window.open('/report.html?case=${c.id}','_blank')">Open formatted report</button>`}
         <button class="secondary" onclick="getShareLink('${c.id}')">Get shareable link for company</button>
       </div>
@@ -1114,6 +1115,13 @@ function caseDetailsHtml(c) {
 }
 const EXTRA_COLS = ' Optional extra columns: <code>mobile</code>, <code>email</code>, <code>city</code>, <code>state</code>, <code>pincode</code>, <code>address</code>, <code>dob</code>, <code>gender</code>, <code>insurerName</code>, <code>verificationType</code>, <code>productName</code>, <code>sumInsured</code>, <code>claimType</code>, <code>claimAmount</code>, <code>incidentDate</code>, <code>hospitalName</code>, <code>admissionDate</code>, <code>dischargeDate</code>, <code>diagnosis</code>, <code>vehicleMake</code>, <code>branch</code>, <code>agentName</code>, <code>policyEndDate</code>, <code>annualIncome</code>, <code>premiumFrequency</code>, <code>garageName</code>, <code>employer1Name/From/To</code>, <code>employer2Name/From/To</code>, <code>passingYear</code>, <code>remarks</code>.';
 
+async function copyCustomerMessage(caseId) {
+  const r = await fetch(API + `/api/cases/${caseId}/customer-message`, { headers: authHeaders() });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return alert(d.error || 'Could not make the message');
+  try { await navigator.clipboard.writeText(d.message); alert('Message copied. Paste it in WhatsApp to the customer.'); }
+  catch { prompt('Copy this message:', d.message); }
+}
 loadWorkspace().then(loadCases);
 loadWhatsappAccounts();
 </script>

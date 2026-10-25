@@ -17,8 +17,8 @@ function publicBase() {
 }
 
 async function defaultSend(c, account, template, link) {
-  const wa = require('./whatsapp');
-  return wa.sendTemplateMessage(c.whatsappNumber, template, account, 'en', [{ type: 'body', parameters: [{ type: 'text', text: link }] }]);
+  const firm = (require('../db').db.data.users || []).find(u => u.id === c.vendorId);
+  return require('./customer-message').sendTemplate(c, account, { firm, link, fallbackName: template });
 }
 
 // One pass over all open cases. `send` can be replaced in tests.

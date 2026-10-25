@@ -54,6 +54,8 @@
     </div>
     <div class="row"><label class="inline"><input type="checkbox" id="auto"> Send reminders automatically</label></div>
     <div class="hint">The template must be approved by Meta, with one variable: the link. You can already use the same template as for the first message.</div>
+    <div class="row"><label>Better: template with the customer's name, reason and link (3 variables)<input id="ltpl" placeholder="e.g. praman_verification_link"></label></div>
+    <div class="hint">When set, every link message sent outside WhatsApp's 24-hour window uses this template instead: <code>{{1}}</code> customer name, <code>{{2}}</code> reason (for example "checking your health insurance claim (claim no. HC/26/88123)"), <code>{{3}}</code> the video call link (plus the Android app link for live calls). Leave empty to keep the 1-variable template above.</div>
     <h2 style="margin-top:18px;">Review, alerts and reports</h2>
     <div class="row"><label class="inline"><input type="checkbox" id="rev"> An investigator must sign off every AI call before the case is completed (recommended)</label></div>
     <div class="hint">When this is on, even a call the AI marks "Verified" shows as <b>Awaiting review</b> until someone opens the report and gives the final verdict. Turn it off only if you want clean calls to complete by themselves.</div>
@@ -210,11 +212,11 @@ $('who').textContent = user.vendorName + ' · ' + user.email;
 async function loadFlow() {
   const d = await api('GET', '/api/workflow/settings'); const s = d.settings || {};
   $('tat').value = s.tatHours; $('every').value = s.remindEveryHours; $('max').value = s.maxReminders;
-  $('qf').value = s.quietFrom; $('qt').value = s.quietTo; $('tpl').value = s.reminderTemplate; $('auto').checked = !!s.autoRemind; $('rev').checked = s.requireReview !== false; $('nem').value = s.notifyEmail || ''; $('iem').value = s.insurerEmail || ''; $('sra').value = s.secondReviewAbove || 0; $('canned').value = (s.cannedRemarks || []).join('\n'); $('cmsg').checked = s.completionMessage !== false;
+  $('qf').value = s.quietFrom; $('qt').value = s.quietTo; $('tpl').value = s.reminderTemplate; $('ltpl').value = s.linkTemplate || ''; $('auto').checked = !!s.autoRemind; $('rev').checked = s.requireReview !== false; $('nem').value = s.notifyEmail || ''; $('iem').value = s.insurerEmail || ''; $('sra').value = s.secondReviewAbove || 0; $('canned').value = (s.cannedRemarks || []).join('\n'); $('cmsg').checked = s.completionMessage !== false;
   $('ret').innerHTML = d.retentionDays ? `Stored files are deleted <b>${d.retentionDays} days</b> after a case is finished.` : 'Stored files are <b>kept</b> (no automatic deletion is set for your account).';
 }
 $('saveFlow').onclick = async () => {
-  const d = await api('PUT', '/api/workflow/settings', { tatHours: $('tat').value, remindEveryHours: $('every').value, maxReminders: $('max').value, quietFrom: $('qf').value, quietTo: $('qt').value, reminderTemplate: $('tpl').value.trim(), autoRemind: $('auto').checked, requireReview: $('rev').checked, notifyEmail: $('nem').value.trim(), insurerEmail: $('iem').value.trim(), secondReviewAbove: $('sra').value, cannedRemarks: $('canned').value.split('\n'), completionMessage: $('cmsg').checked });
+  const d = await api('PUT', '/api/workflow/settings', { tatHours: $('tat').value, remindEveryHours: $('every').value, maxReminders: $('max').value, quietFrom: $('qf').value, quietTo: $('qt').value, reminderTemplate: $('tpl').value.trim(), linkTemplate: $('ltpl').value.trim(), autoRemind: $('auto').checked, requireReview: $('rev').checked, notifyEmail: $('nem').value.trim(), insurerEmail: $('iem').value.trim(), secondReviewAbove: $('sra').value, cannedRemarks: $('canned').value.split('\n'), completionMessage: $('cmsg').checked });
   say('flowMsg', d._ok ? 'Saved. New cases use these settings; existing cases keep their deadline.' : (d.error || 'Not saved'), d._ok);
 };
 

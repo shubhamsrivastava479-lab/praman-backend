@@ -19,6 +19,7 @@ const storage = require('../services/storage');
 const wa = require('../services/whatsapp');
 const plans = require('../services/plans');
 const followup = require('../services/followup');
+const msg = require('../services/customer-message');
 const { getIceServers } = require('../services/ice');
 const { caseFileKey } = require('../services/ids');
 const { rateLimit } = require('../services/security');
@@ -57,25 +58,23 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
   }
   const joinUrl = `${baseUrl(req)}/live-join.html?t=${c.liveCall.token}`;
   const appUrl = appUrlFor(req);
+  const firm = plans.firmOf(db.data, req.user);
+  const message = msg.text(c, { firm, joinUrl, appUrl, kind: 'live' });
   let sent = false, sendError = null;
   if (req.body.sendWhatsApp) {
     const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
     if (!account) sendError = 'This case has no WhatsApp number linked.';
     else {
       try {
-        await wa.sendTextMessage(c.whatsappNumber,
-          `नमस्ते${c.insuredName ? ' ' + c.insuredName : ''}। आपके केस (${c.claimNo}) के लिए हमारे जाँच अधिकारी आपसे वीडियो कॉल पर बात करना चाहते हैं। जुड़ने के लिए यह लिंक खोलें:\n${joinUrl}\n\nYour investigator would like to speak with you on a video call for case ${c.claimNo}. Open this link to join.${appUrl ? `\n\nअगर अधिकारी को आपकी फ़ोन की स्क्रीन देखनी हो, तो पहले यह Android ऐप इंस्टॉल करें (और लिंक इसी ऐप में खोलें):\n${appUrl}\n\nIf the investigator needs to see your phone screen, install this Android app first and open the link in it:\n${appUrl}` : ''}`,
-          account);
+        await wa.sendTextMessage(c.whatsappNumber, message, account);
         sent = true;
         c.lastContactAt = now();
         custody(c.id, 'Live video call link sent to the customer on WhatsApp', req.user.email || 'agent');
       } catch (e) {
         if (/24|window|re-engage|131047/i.test(e.message)) {
-          // Outside the 24-hour window only an approved template works: send the firm's link template with the live link.
+          // Outside the 24-hour window only an approved template works.
           try {
-            const firm = plans.firmOf(db.data, req.user);
-            const tpl = req.body.templateName || followup.settingsOf(firm).reminderTemplate || 'claim_investigation_intake';
-            await wa.sendTemplateMessage(c.whatsappNumber, tpl, account, 'en', [{ type: 'body', parameters: [{ type: 'text', text: joinUrl }] }]);
+            const tpl = await msg.sendTemplate(c, account, { firm, link: joinUrl, appUrl, fallbackName: req.body.templateName || followup.settingsOf(firm).reminderTemplate || 'claim_investigation_intake' });
             sent = true;
             c.lastContactAt = now();
             custody(c.id, `Live video call link sent to the customer on WhatsApp (template "${tpl}")`, req.user.email || 'agent');
@@ -87,7 +86,7 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
     }
   }
   await db.write();
-  res.json({ token: c.liveCall.token, joinUrl, appUrl, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo, caseRef: c.caseRef || '', language: c.liveCall.language || null });
+  res.json({ token: c.liveCall.token, joinUrl, appUrl, message, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo, caseRef: c.caseRef || '', language: c.liveCall.language || null });
 });
 
 router.get('/case/:caseId/ice', requireAuth, async (req, res) => {

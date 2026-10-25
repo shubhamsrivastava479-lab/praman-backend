@@ -76,7 +76,8 @@
     <div class="card">
       <h3>Customer link</h3>
       <div class="link"><input id="link" readonly><button class="b2 ghost" id="copyBtn">Copy</button></div>
-      <div style="display:flex;gap:6px;margin-top:8px;"><button class="b2 green" id="waBtn">Send on WhatsApp</button><button class="b2 ghost" id="newBtn" title="Create a new link; the old one stops working">New link</button></div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><button class="b2 green" id="waBtn">Send on WhatsApp</button><button class="b2 ghost" id="msgBtn" title="Copy the full message: customer name, reason, video call link and app link">Copy message</button><button class="b2 ghost" id="newBtn" title="Create a new link; the old one stops working">New link</button></div>
+      <details style="margin-top:8px;font-size:12px;"><summary style="cursor:pointer;">See the message the customer gets</summary><pre id="msgPreview" style="white-space:pre-wrap;font:inherit;font-size:12px;margin:6px 0 0;max-height:260px;overflow:auto;"></pre></details>
       <div class="msg" id="linkMsg"></div>
     </div>
     <div class="card">
@@ -109,7 +110,7 @@ if (!jwt) location.href = '/login.html';
 const auth = (h = {}) => ({ ...h, Authorization: 'Bearer ' + jwt });
 const $ = id => document.getElementById(id);
 const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-let socket, pc, ice, local, liveToken, custState = {}, pendingCandidates = [];
+let socket, pc, ice, local, liveToken, custState = {}, pendingCandidates = [], custMsg = '';
 let rec = null, recChunks = [], recCtx, recDest, canvas, cctx, drawTimer, remoteAudioSrc = null, t0 = 0, saved = false, shotN = 0;
 
 async function api(path, opts = {}) {
@@ -122,7 +123,7 @@ async function api(path, opts = {}) {
 (async function init() {
   try {
     const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    liveToken = d.token; $('link').value = d.joinUrl;
+    liveToken = d.token; $('link').value = d.joinUrl; custMsg = d.message || ''; $('msgPreview').textContent = custMsg;
     if (d.appUrl) $('linkMsg').textContent = 'Android app link (for customers who must share their phone screen): ' + d.appUrl;
     $('caseLine').textContent = `${d.caseRef ? d.caseRef + ' · ' : ''}${d.claimNo}${d.insuredName ? ' · ' + d.insuredName : ''}`;
     if (d.language) custState.language = d.language;
@@ -338,6 +339,7 @@ $('backBtn').onclick = () => socket.emit('live-cmd', { type: 'ask-back-camera' }
 $('frontBtn').onclick = () => socket.emit('live-cmd', { type: 'ask-front-camera' });
 $('mediaRetry').onclick = () => getMedia();
 $('reconBtn').onclick = () => socket.emit('live-cmd', { type: 'reoffer' });
+$('msgBtn').onclick = async () => { try { await navigator.clipboard.writeText(custMsg || $('link').value); $('linkMsg').textContent = 'Message copied. Paste it in WhatsApp.'; } catch { $('linkMsg').textContent = 'Could not copy. Open "See the message" and copy it by hand.'; } };
 $('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('linkMsg').textContent = 'Link copied.'; } catch { $('link').select(); } };
 $('waBtn').onclick = async () => {
   $('linkMsg').textContent = 'Sending…';

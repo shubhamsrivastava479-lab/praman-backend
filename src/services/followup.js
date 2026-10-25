@@ -11,7 +11,7 @@
 //   requireReview     a "verified" AI call still waits for an investigator's sign-off before the case is completed (default true)
 //
 // Case fields: dueAt, assignedTo (agent user id), followUp { count, lastAt, nextAt, stopped }, escalatedAt
-const DEFAULTS = { tatHours: 48, autoRemind: true, remindEveryHours: 6, maxReminders: 3, quietFrom: 21, quietTo: 8, reminderTemplate: 'claim_investigation_intake', requireReview: true, notifyEmail: '', insurerEmail: '', cannedRemarks: [], secondReviewAbove: 0, completionMessage: true };
+const DEFAULTS = { tatHours: 48, autoRemind: true, remindEveryHours: 6, maxReminders: 3, quietFrom: 21, quietTo: 8, reminderTemplate: 'claim_investigation_intake', linkTemplate: '', requireReview: true, notifyEmail: '', insurerEmail: '', cannedRemarks: [], secondReviewAbove: 0, completionMessage: true };
 
 const num = (v, lo, hi, d) => { const n = Number(v); return isFinite(n) && v !== '' && v != null ? Math.min(hi, Math.max(lo, n)) : d; };
 
@@ -30,7 +30,8 @@ function normalize(raw = {}) {
     cannedRemarks: (Array.isArray(r.cannedRemarks) ? r.cannedRemarks : []).map(x => String(x || '').trim().slice(0, 300)).filter(Boolean).slice(0, 12),
     secondReviewAbove: num(r.secondReviewAbove, 0, 1e10, 0),      // 0 = off; sum assured / claim amount above this needs two sign-offs
     completionMessage: r.completionMessage === undefined ? true : !!r.completionMessage,
-    reminderTemplate: String(r.reminderTemplate || DEFAULTS.reminderTemplate).replace(/[^a-z0-9_]/gi, '').slice(0, 80) || DEFAULTS.reminderTemplate
+    reminderTemplate: String(r.reminderTemplate || DEFAULTS.reminderTemplate).replace(/[^a-z0-9_]/gi, '').slice(0, 80) || DEFAULTS.reminderTemplate,
+    linkTemplate: String(r.linkTemplate || '').replace(/[^a-z0-9_]/gi, '').slice(0, 80) // optional: {{1}} name, {{2}} reason, {{3}} link
   };
 }
 

@@ -247,6 +247,15 @@ function detailsFromRow(row) {
   return out;
 }
 
+// The full message for the customer (name, reason, link), for the executive to copy and send.
+router.get('/:id/customer-message', async (req, res) => {
+  await db.read();
+  const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
+  if (!c) return res.status(404).json({ error: 'Case not found' });
+  const link = customerLink(c, baseUrlFor(req));
+  res.json({ link, message: require('../services/customer-message').text(c, { firm: plans.firmOf(db.data, req.user), joinUrl: link, kind: c.verificationMode === 'full_automation' ? 'ai' : 'live' }) });
+});
+
 // Bulk-create cases from an uploaded Excel/CSV file, then automatically send
 // each field contact a WhatsApp message containing their call-join link.
 //
@@ -338,13 +347,7 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
     if (account) {
       try {
         const joinUrl = customerLink(newCase, baseUrl);
-        await wa.sendTemplateMessage(
-          newCase.whatsappNumber,
-          templateName || 'claim_investigation_intake',
-          account,
-          'en',
-          [{ type: 'body', parameters: [{ type: 'text', text: joinUrl }] }]
-        );
+        await require('../services/customer-message').sendTemplate(newCase, account, { firm: plans.firmOf(db.data, req.user), link: joinUrl, fallbackName: templateName || 'claim_investigation_intake' });
         db.data.custody.push({
           id: uid('cust'), caseId: newCase.id, event: 'WhatsApp call-join link sent (bulk upload)',
           actor: 'agent', timestamp: new Date().toISOString()

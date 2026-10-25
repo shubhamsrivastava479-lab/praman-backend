@@ -217,15 +217,14 @@ router.post('/send-intake/:caseId', requireAuth, async (req, res) => {
     const templateName = req.body.templateName || 'claim_investigation_intake';
     const { customerLink, baseUrlFor } = require('./cases');
     const link = customerLink(c, baseUrlFor(req));
-    const components = (req.body.components && req.body.components.length)
-      ? req.body.components
-      : [{ type: 'body', parameters: [{ type: 'text', text: link }] }];
-    await wa.sendTemplateMessage(c.whatsappNumber, templateName, account, 'en', components);
+    let used = templateName;
+    if (req.body.components && req.body.components.length) await wa.sendTemplateMessage(c.whatsappNumber, templateName, account, 'en', req.body.components);
+    else used = await require('../services/customer-message').sendTemplate(c, account, { firm: require('../services/plans').firmOf(db.data, req.user), link, fallbackName: templateName });
     c.lastContactAt = new Date().toISOString();
     db.data.custody.push({
       id: uid('cust'),
       caseId: c.id,
-      event: `Intake template "${templateName}" sent`,
+      event: `Intake template "${used}" sent`,
       actor: 'agent',
       timestamp: new Date().toISOString()
     });
