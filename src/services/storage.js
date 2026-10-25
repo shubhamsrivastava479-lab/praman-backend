@@ -70,6 +70,11 @@ async function s3Put(key, buffer, contentType, cfg) {
 // Saves a buffer under a stable filename and returns a publicly reachable
 // URL (relative /media/... for local disk, or absolute for S3/R2).
 async function saveFile(buffer, filename, mimeType) {
+  const url = await saveFileRaw(buffer, filename, mimeType);
+  if (!/^(backups|healthcheck)\//.test(filename)) require('./file-facts').recordBuffer(url, buffer, mimeType); // exact fingerprint + PDF / photo metadata
+  return url;
+}
+async function saveFileRaw(buffer, filename, mimeType) {
   const cfg = await getS3Config();
   if (cfg) {
     return s3Put(filename, buffer, mimeType, cfg);
@@ -84,6 +89,11 @@ async function saveFile(buffer, filename, mimeType) {
 // temp file on disk to storage, so a 500 MB video never sits in memory.
 // Uses SigV4 with UNSIGNED-PAYLOAD (supported by AWS S3 and Cloudflare R2).
 async function saveFileFromPath(filePath, filename, mimeType) {
+  const url = await saveFileFromPathRaw(filePath, filename, mimeType);
+  await require('./file-facts').recordPath(url, filePath, mimeType);
+  return url;
+}
+async function saveFileFromPathRaw(filePath, filename, mimeType) {
   const cfg = await getS3Config();
   const size = fs.statSync(filePath).size;
   if (!cfg) {
@@ -197,6 +207,11 @@ async function s3Request(method, key, cfg, extra = {}) {
 // Moves a stored file to a new key (used when a document is moved to another
 // case, so the file sits in that case's folder). Returns the new file URL.
 async function moveFile(fileUrl, newKey) {
+  const to = await moveFileRaw(fileUrl, newKey);
+  if (to && to !== fileUrl) { const ff = require('./file-facts'); const f = ff.factsFor(fileUrl); if (f) ff.record(to, f); }
+  return to;
+}
+async function moveFileRaw(fileUrl, newKey) {
   if (!fileUrl) return fileUrl;
   if (fileUrl.startsWith('/media/')) {
     const src = path.join(mediaDir, fileUrl.slice('/media/'.length));

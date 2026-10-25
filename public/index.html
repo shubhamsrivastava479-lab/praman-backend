@@ -83,6 +83,7 @@
     <button class="navbtn" id="navWA" onclick="showView('whatsapp')">WhatsApp</button>
     <button class="navbtn" id="navTeam" onclick="showView('team')" style="display:none;">Team</button>
     <button class="navbtn" id="navPerf" onclick="showView('performance')">Performance</button>
+    <a class="navbtn" href="/fraud.html" style="text-decoration:none;box-sizing:border-box;">🛡️ Fraud dashboard</a>
     <a class="navbtn" id="navSettings" href="/settings.html" style="display:none;text-decoration:none;box-sizing:border-box;">⚙️ Settings</a>
     <input id="caseSearch" placeholder="Search: case no., claim no., name, mobile" oninput="renderCaseList()" style="width:100%;margin-top:14px;box-sizing:border-box;background:#1a2130;border:1px solid #2b3446;color:#e8eaf0;">
     <div id="caseList" style="margin-top:10px;"></div>
@@ -1103,7 +1104,7 @@ function applyFormFor(key){
 const DETAIL_LABELS = { mobile: 'Mobile', email: 'Email', dob: 'DOB', gender: 'Gender', address: 'Address', city: 'City', state: 'State', pincode: 'Pincode',
   insurerName: 'Insurer', verificationType: 'Verification type', productName: 'Plan', policyStartDate: 'Policy start', premium: 'Premium', nomineeName: 'Nominee',
   claimType: 'Claim type', claimAmount: 'Claim amount', incidentDate: 'Incident date', incidentPlace: 'Incident place', hospitalName: 'Hospital', admissionDate: 'Admitted',
-  dischargeDate: 'Discharged', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle', branch: 'Branch', agentName: 'Agent', clientName: 'Client', position: 'Position', employeeId: 'Employee ID', remarks: 'Remarks' };
+  dischargeDate: 'Discharged', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle', branch: 'Branch', agentName: 'Agent', clientName: 'Client', position: 'Position', employeeId: 'Employee ID', policyEndDate: 'Policy end', annualIncome: 'Yearly income', premiumFrequency: 'Premium frequency', garageName: 'Garage', employer1Name: 'Latest employer', employer1From: 'Latest job from', employer1To: 'Latest job to', employer2Name: 'Previous employer', employer2From: 'Previous job from', employer2To: 'Previous job to', passingYear: 'Passing year', remarks: 'Remarks' };
 function caseDetailsHtml(c) {
   const d = c.details || {};
   const rows = Object.keys(DETAIL_LABELS).filter(k => d[k]);
@@ -1111,7 +1112,7 @@ function caseDetailsHtml(c) {
   return `<details style="margin-top:6px;font-size:12.5px;"><summary style="cursor:pointer;color:#2b3a8c;">Case details from upload (${rows.length})</summary>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px;margin-top:6px;">${rows.map(k => `<div><span style="color:#888;">${DETAIL_LABELS[k]}:</span> ${escH(d[k])}</div>`).join('')}</div></details>`;
 }
-const EXTRA_COLS = ' Optional extra columns: <code>mobile</code>, <code>email</code>, <code>city</code>, <code>state</code>, <code>pincode</code>, <code>address</code>, <code>dob</code>, <code>gender</code>, <code>insurerName</code>, <code>verificationType</code>, <code>productName</code>, <code>sumInsured</code>, <code>claimType</code>, <code>claimAmount</code>, <code>incidentDate</code>, <code>hospitalName</code>, <code>admissionDate</code>, <code>dischargeDate</code>, <code>diagnosis</code>, <code>vehicleMake</code>, <code>branch</code>, <code>agentName</code>, <code>remarks</code>.';
+const EXTRA_COLS = ' Optional extra columns: <code>mobile</code>, <code>email</code>, <code>city</code>, <code>state</code>, <code>pincode</code>, <code>address</code>, <code>dob</code>, <code>gender</code>, <code>insurerName</code>, <code>verificationType</code>, <code>productName</code>, <code>sumInsured</code>, <code>claimType</code>, <code>claimAmount</code>, <code>incidentDate</code>, <code>hospitalName</code>, <code>admissionDate</code>, <code>dischargeDate</code>, <code>diagnosis</code>, <code>vehicleMake</code>, <code>branch</code>, <code>agentName</code>, <code>policyEndDate</code>, <code>annualIncome</code>, <code>premiumFrequency</code>, <code>garageName</code>, <code>employer1Name/From/To</code>, <code>employer2Name/From/To</code>, <code>passingYear</code>, <code>remarks</code>.';
 
 loadWorkspace().then(loadCases);
 loadWhatsappAccounts();

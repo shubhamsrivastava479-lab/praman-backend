@@ -121,6 +121,13 @@ router.get('/insights', async (req, res) => {
   });
 });
 
+// Fraud dashboard: exact rules only (record-rules.js, service-profiles.js), counted for the firm.
+router.get('/fraud', async (req, res) => {
+  await db.read();
+  const days = Math.min(730, Math.max(1, parseInt(req.query.days, 10) || 90));
+  res.json(require('../services/fraud-stats').build(db.data, req.user.vendorRootId, { days }));
+});
+
 router.get('/mine', async (req, res) => {
   await db.read();
   const vendorId = req.user.vendorRootId;

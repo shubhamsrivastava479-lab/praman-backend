@@ -20,7 +20,10 @@ const DETAIL_LABELS = { mobile: 'Mobile', email: 'Email', dob: 'Date of birth', 
   insurerName: 'Insurance company', verificationType: 'Verification type', productName: 'Product / plan', policyStartDate: 'Policy start date', premium: 'Premium', nomineeName: 'Nominee',
   claimType: 'Claim type', claimAmount: 'Claim amount', incidentDate: 'Incident date', incidentPlace: 'Incident place', hospitalName: 'Hospital', admissionDate: 'Admission date',
   dischargeDate: 'Discharge date', diagnosis: 'Diagnosis', vehicleMake: 'Vehicle make / model', branch: 'Branch', agentName: 'Agent / advisor',
-  clientName: 'Client', position: 'Position', employeeId: 'Employee ID', remarks: 'Remarks' };
+  clientName: 'Client', position: 'Position', employeeId: 'Employee ID',
+  policyEndDate: 'Policy end date', annualIncome: 'Yearly income', premiumFrequency: 'Premium frequency', garageName: 'Garage',
+  employer1Name: 'Latest employer', employer1From: 'Latest job from', employer1To: 'Latest job to', employer2Name: 'Previous employer',
+  employer2From: 'Previous job from', employer2To: 'Previous job to', passingYear: 'Passing year', remarks: 'Remarks' };
 
 // Groups everything the call found into the areas of THIS service (service-profiles.js).
 // Each area gets the worst result among its items, and the reasons behind anything not clear.
@@ -35,20 +38,26 @@ function glance(R, rv) {
     const st = RES_STATE[k.result]; if (!st) continue;
     const t = tiles.find(x => x.rule.checks && x.rule.checks.test(k.id || '')) || (/^(consistency|age_|answer)/.test(k.id || '') ? null : fallback);
     const target = t || tiles.find(x => x.rule.sections && x.rule.sections.length) || fallback;
-    target.n++; bump(target, st, k.detail ? `${k.label} - ${k.detail}` : k.label);
+    target.n++; bump(target, st, (/_api$/.test(k.id || '') ? 'Official: ' : 'AI: ') + (k.detail ? `${k.label} - ${k.detail}` : k.label));
   }
   for (const sec of R.sections || []) for (const q of sec.qa) {
     const t = tiles.find(x => (x.rule.keys || []).includes(q.key)) || tiles.find(x => (x.rule.sections || []).includes(sec.key) && !(x.rule.skipKeys || []).includes(q.key));
     if (!t) continue;
     if (q.answer) { t.n++; bump(t, 'clear'); }
-    if (q.concern) bump(t, t.rule.concern || 'check', q.concern); // mis-selling, a criminal case: a concern there is a focus point
+    if (q.concern) bump(t, t.rule.concern || 'check', 'AI: ' + q.concern); // mis-selling, a criminal case: a concern there is a focus point
   }
   for (const t of withSrc('location')) {
     if ((R.locations || []).length || R.call.startLocation) { t.n++; bump(t, 'clear'); }
     if (R.call.device) { t.n++; bump(t, 'clear'); }
   }
   for (const t of withSrc('docs')) if ((R.received || []).length || (R.documents.aadhaar || {}).masked || (R.documents.pan || {}).masked) { t.n++; bump(t, 'clear'); }
-  for (const t of withSrc('triggers')) for (const x of R.triggers || []) { if (x.state === 'none') continue; t.n++; bump(t, x.state, `${x.label}: ${x.detail}`); }
+  // record rules: to the box they name (area), else the triggers box, else documents, else identity
+  const trigBox = withSrc('triggers')[0] || tiles.find(t => t.key === 'docs') || fallback;
+  for (const x of R.triggers || []) {
+    if (x.state === 'none') continue;
+    const t = (x.area && tiles.find(y => y.key === x.area)) || (x.area === 'docs' && tiles.find(y => (y.rule.src || []).includes('docs'))) || trigBox;
+    t.n++; bump(t, x.state, `Record: ${x.label} - ${x.detail}`);
+  }
   for (const t of withSrc('signoff')) {
     if (rv) { t.n++; bump(t, rv.finalVerdict === 'verified' ? 'clear' : rv.finalVerdict === 'found_discrepancy' || rv.finalVerdict === 'unverified' ? 'focus' : 'check', rv.remarks || VERDICT[rv.finalVerdict]); }
     else if (R.call.status === 'completed') bump(t, 'check', 'Waiting for a person to sign off');
@@ -163,8 +172,8 @@ function render(R, opts = {}) {
     const todo = G.tiles.filter(t => t.state === 'focus' || t.state === 'check').sort((a1, b1) => RANK[b1.state] - RANK[a1.state]);
     const items = [];
     todo.forEach(t => t.reasons.forEach(r => items.push([t, r])));
-    (R.result.flags || []).forEach(f => { if (!items.some(i => String(i[1]).includes(f))) items.push([{ label: 'Flag', state: 'focus' }, f]); });
-    const room2 = Math.max(1, Math.floor((doc.page.height - 100 - ly - 30) / 15));
+    (R.result.flags || []).forEach(f => { if (!items.some(i => String(i[1]).includes(f))) items.push([{ label: 'Flag', state: 'focus' }, 'AI: ' + f]); });
+    const room2 = Math.max(1, Math.floor((doc.page.height - 112 - ly - 30) / 15));
     const show = items.slice(0, Math.min(5, room2));
     const boxH = 30 + Math.max(1, show.length) * 15;
     doc.roundedRect(48, ly, W, boxH, 8).lineWidth(0.8).stroke(LINE);
@@ -182,11 +191,12 @@ function render(R, opts = {}) {
     if (items.length > show.length) doc.font('Helvetica').fontSize(8).fillColor(MUTE).text(`+ ${items.length - show.length} more in the pages that follow`, 48 + W - 200, ly + 10, { width: 188, align: 'right' });
 
     // legend + fingerprint
-    const lgY = Math.min(ly + boxH + 10, doc.page.height - 86);
+    const lgY = Math.min(ly + boxH + 8, doc.page.height - 96);
     [['focus', 'Focus: look first'], ['check', 'Check: partly matched'], ['clear', 'Clear'], ['none', 'Not checked']].forEach(([k, t], i) => {
       const lx = 48 + i * 125; doc.circle(lx + 4, lgY + 4, 3.5).fill(k === 'none' ? '#c9cdd4' : CLR[k]);
       doc.font('Helvetica').fontSize(8).fillColor(MUTE).text(t, lx + 12, lgY, { lineBreak: false });
     });
+    doc.font('Helvetica').fontSize(7.2).fillColor(MUTE).text('Trigger and repeat checks come from records (exact rules, no AI). Photo, voice and document readings are AI findings that a person confirms.', 48, doc.page.height - 80, { width: W });
     doc.font('Helvetica').fontSize(6.8).fillColor(MUTE).text('Integrity fingerprint (SHA-256): ' + R.meta.fingerprint + '. If anything in this report is changed later, this value changes.', 48, doc.page.height - 66, { width: W, lineBreak: true });
 
     // ---- helpers ----
@@ -210,7 +220,7 @@ function render(R, opts = {}) {
       const all = [['Case', R.case.caseRef], ['Claim / policy no.', R.case.claimNo], ['Policy no.', R.case.policyNo], ['Customer', R.case.insuredName], ['WhatsApp', R.case.whatsapp],
         ['Vehicle no.', R.case.vehicleNo], ['District', R.case.district], ['Sum assured', R.case.policyValue ? 'Rs. ' + Number(R.case.policyValue).toLocaleString('en-IN') : ''],
         ['Customer language', R.call.language], ['Call date', R.call.startedAt ? ist(R.call.startedAt) : ''], ['Call length', R.call.durationMin ? R.call.durationMin + ' min' : '']]
-        .concat(Object.entries(DETAIL_LABELS).map(([k, l]) => [l, ['claimAmount', 'premium'].includes(k) ? profiles.money(dd[k]) : dd[k]]))
+        .concat(Object.entries(DETAIL_LABELS).map(([k, l]) => [l, ['claimAmount', 'premium', 'annualIncome'].includes(k) ? profiles.money(dd[k]) : dd[k]]))
         .filter(f => f[1] && String(f[1]).trim());
       for (let i = 0; i < all.length; i += 2) {
         const y = doc.y; const half = W / 2;
@@ -220,6 +230,7 @@ function render(R, opts = {}) {
     }
     if ((R.triggers || []).length) {
       H('Trigger check');
+      P('Exact rules on the case record, dates, amounts, files and the firm\'s other cases. No AI is used here: the same data always gives the same result.', { size: 8.5, color: MUTE });
       row(['Trigger', 'Result', 'Detail'], [170, 70, W - 240], { head: true });
       R.triggers.forEach(t => row([t.label, STATE_WORD[t.state] === 'Not checked' ? 'No data' : STATE_WORD[t.state], t.detail || ''], [170, 70, W - 240]));
     }
@@ -248,8 +259,9 @@ function render(R, opts = {}) {
     }
     if ((R.checks || []).length) {
       H('Automatic checks');
-      row(['Check', 'Result', 'Detail'], [190, 70, W - 260], { head: true });
-      R.checks.forEach(k => row([k.label, RESULT[k.result] || k.result, k.detail || ''], [190, 70, W - 260]));
+      P('Checks made during the call. "Official" = matched with a government record. "AI" = an AI finding that a person should confirm.', { size: 8.5, color: MUTE });
+      row(['Check', 'Result', 'Source', 'Detail'], [175, 62, 58, W - 295], { head: true });
+      R.checks.forEach(k => row([k.label, RESULT[k.result] || k.result, /_api$/.test(k.id || '') ? 'Official' : 'AI', k.detail || ''], [175, 62, 58, W - 295]));
     }
     const docsLines = [];
     const a = R.documents.aadhaar || {}, p = R.documents.pan || {};

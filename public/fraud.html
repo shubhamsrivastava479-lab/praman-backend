@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Praman — Fraud dashboard</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#04345a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root{--bg:#f1f3f5;--card:#fff;--line:#dde1e6;--ink:#10151f;--mute:#667;--brand:#c8781f;--focus:#c62828;--check:#b7791f;--clear:#2e7d32;--none:#9aa0aa;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f131b;--card:#171d29;--line:#2b3446;--ink:#e8eaf0;--mute:#9aa3b5;}}
+  body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);margin:0;}
+  .wrap{max-width:1100px;margin:0 auto;padding:22px 16px 60px;}
+  h1{font-size:20px;margin:0 0 4px;} h2{font-size:15px;margin:0 0 8px;}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+  .top a{color:var(--brand);font-size:13px;text-decoration:none;font-weight:600;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  .hint{font-size:12px;color:var(--mute);line-height:1.55;}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;border-top:5px solid var(--none);}
+  .tile b{display:block;font-size:28px;line-height:1.1;} .tile span{font-size:12px;color:var(--mute);}
+  .tile.focus{border-top-color:var(--focus);} .tile.check{border-top-color:var(--check);} .tile.clear{border-top-color:var(--clear);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;} th,td{text-align:left;padding:6px;border-bottom:1px solid var(--line);} th{color:var(--mute);font-weight:600;}
+  td.n{text-align:right;font-variant-numeric:tabular-nums;} th.n{text-align:right;}
+  .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;display:flex;min-width:80px;}
+  .bar i{display:block;height:100%;} .bar .f{background:var(--focus);} .bar .c{background:var(--check);}
+  .tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;color:#fff;} .tag.focus{background:var(--focus);} .tag.check{background:var(--check);}
+  select{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);}
+  .empty{color:var(--mute);font-size:12.5px;padding:6px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><img src="/logo-compact.png" alt="Praman" style="height:34px;width:auto;display:block;margin-bottom:6px;"><h1>Fraud dashboard</h1>
+      <div class="hint">Every number here comes from exact rules on your case records, dates, amounts and files. No AI is used, so the same data always gives the same numbers.</div></div>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <select id="days"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 6 months</option><option value="365">Last 12 months</option></select>
+      <a href="/index.html">← Back to dashboard</a>
+    </div>
+  </div>
+  <div class="tiles" id="tiles"></div>
+  <div class="grid">
+    <div class="card"><h2>Triggers found most often</h2><div class="hint">How many cases each rule marked Focus (red) or Check (amber).</div><div id="triggers"></div></div>
+    <div class="card"><h2>By service</h2><div id="services"></div></div>
+    <div class="card"><h2>Hospitals</h2><div class="hint">Health claims per hospital, sorted by Focus cases.</div><div id="hospitals"></div></div>
+    <div class="card"><h2>Agents</h2><div class="hint">Cases per agent (from the agentName column).</div><div id="agents"></div></div>
+    <div class="card"><h2>Garages</h2><div id="garages"></div></div>
+    <div class="card"><h2>Vehicles with more than one claim</h2><div id="vehicles"></div></div>
+  </div>
+</div>
+<script>
+const token = localStorage.getItem('praman_token');
+if (!token) location.href = '/login.html';
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const RES = { verified: 'Verified', partially_verified: 'Partly verified', found_discrepancy: 'Discrepancy', unverified: 'Unverified', handoff: 'Handed over' };
+
+function table(rows, cols) {
+  if (!rows.length) return '<div class="empty">Nothing yet.</div>';
+  return `<table><tr>${cols.map(c => `<th class="${c.n ? 'n' : ''}">${c.h}</th>`).join('')}</tr>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.n ? 'n' : ''}">${c.f(r)}</td>`).join('')}</tr>`).join('')}</table>`;
+}
+const people = rows => table(rows, [
+  { h: 'Name', f: r => esc(r.name) }, { h: 'Cases', n: 1, f: r => r.cases },
+  { h: 'Focus', n: 1, f: r => r.focus ? `<span class="tag focus">${r.focus}</span>` : '0' },
+  { h: 'Discrepancy', n: 1, f: r => r.discrepancy }
+]);
+
+async function load() {
+  const r = await fetch('/api/analytics/fraud?days=' + $('days').value, { headers: { Authorization: 'Bearer ' + token } });
+  if (r.status === 401) { localStorage.removeItem('praman_token'); location.href = '/login.html'; return; }
+  const d = await r.json(); const t = d.totals;
+  const res = Object.entries(t.results).map(([k, v]) => `${RES[k] || k}: ${v}`).join(' · ') || 'No results yet';
+  $('tiles').innerHTML = [
+    ['', t.cases, 'Cases opened'], ['focus', t.focus, 'Cases with a Focus point'], ['check', t.check, 'Cases with only Check points'],
+    ['clear', t.clear, 'Cases with nothing found'], ['', d.tat.averageHours == null ? '–' : d.tat.averageHours + ' h', `Average time to finish (${d.tat.finished} finished)`],
+    [t.overdue ? 'focus' : '', t.overdue, `Open cases past the deadline (of ${t.open} open)`]
+  ].map(([cls, n, l]) => `<div class="tile ${cls}"><b>${esc(n)}</b><span>${esc(l)}</span></div>`).join('') +
+    `<div class="tile" style="grid-column:1/-1;"><span>Results: ${esc(res)}</span></div>`;
+  const max = Math.max(1, ...d.triggers.map(x => x.focus + x.check));
+  $('triggers').innerHTML = table(d.triggers, [
+    { h: 'Rule', f: x => esc(x.label) },
+    { h: '', f: x => `<div class="bar" title="${x.focus} focus, ${x.check} check"><i class="f" style="width:${x.focus / max * 100}%"></i><i class="c" style="width:${x.check / max * 100}%"></i></div>` },
+    { h: 'Focus', n: 1, f: x => x.focus }, { h: 'Check', n: 1, f: x => x.check }
+  ]);
+  $('services').innerHTML = table(d.byService, [{ h: 'Service', f: x => esc(x.label) }, { h: 'Cases', n: 1, f: x => x.cases }, { h: 'Focus', n: 1, f: x => x.focus }, { h: 'Discrepancy', n: 1, f: x => x.discrepancy }]);
+  $('hospitals').innerHTML = people(d.hospitals); $('agents').innerHTML = people(d.agents);
+  $('garages').innerHTML = people(d.garages); $('vehicles').innerHTML = people(d.vehicles);
+}
+$('days').addEventListener('change', load);
+load();
+</script>
+</body>
+</html>

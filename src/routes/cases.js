@@ -221,6 +221,17 @@ const DETAIL_COLUMNS = [
   ['vehicleMake', ['vehiclemake', 'make', 'makemodel', 'vehiclemodel', 'model', 'vehicledetails']],
   ['branch', ['branch', 'branchname']],
   ['agentName', ['agent', 'agentname', 'advisor', 'advisorname', 'salesperson']],
+  ['policyEndDate', ['policyenddate', 'policyexpirydate', 'expirydate', 'riskenddate']],
+  ['annualIncome', ['annualincome', 'yearlyincome', 'income']],
+  ['premiumFrequency', ['premiumfrequency', 'paymentfrequency', 'premiummode', 'frequency']],
+  ['garageName', ['garage', 'garagename', 'workshop']],
+  ['employer1Name', ['employer1name', 'employer1', 'latestemployer', 'currentemployer']],
+  ['employer1From', ['employer1from', 'latestemployerfrom', 'currentemployerfrom']],
+  ['employer1To', ['employer1to', 'latestemployerto', 'currentemployerto']],
+  ['employer2Name', ['employer2name', 'employer2', 'previousemployer']],
+  ['employer2From', ['employer2from', 'previousemployerfrom']],
+  ['employer2To', ['employer2to', 'previousemployerto']],
+  ['passingYear', ['passingyear', 'yearofpassing', 'graduationyear']],
   ['clientName', ['client', 'clientname', 'hiringcompany', 'newemployer']],
   ['position', ['position', 'designation', 'role', 'jobtitle', 'jobrole']],
   ['employeeId', ['employeeid', 'empid', 'employeeno', 'candidateid']],
@@ -267,13 +278,13 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
   }
 
   // Normalize column names so "WhatsApp Number", "whatsapp_number", etc. all match.
-  const norm = key => key.toLowerCase().replace(/[^a-z]/g, '');
+  const norm = key => key.toLowerCase().replace(/[^a-z0-9]/g, ''); // letters and digits (employer1From vs employer2From)
   const results = [];
   const baseUrl = (publicBaseUrl && !/your-deployed/i.test(publicBaseUrl)) ? publicBaseUrl.replace(/\/$/, "") : baseUrlFor(req);
 
   for (const rawRow of rows) {
     const row = {};
-    for (const [k, v] of Object.entries(rawRow)) row[norm(k)] = v;
+    for (const [k, v] of Object.entries(rawRow)) { row[norm(k)] = v; const lettersOnly = norm(k).replace(/[0-9]/g, ''); if (!(lettersOnly in row)) row[lettersOnly] = v; } // "WhatsApp No (91...)" still matches
 
     const claimNo = row.claimno || row.claimnumber || row.policyno || row.policynumber || row.claimpolicyno;
     const whatsappNumber = row.whatsappnumber || row.whatsappno || row.whatsapp || row.mobile || row.mobileno || row.mobilenumber || row.phone;

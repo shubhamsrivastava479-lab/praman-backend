@@ -250,39 +250,59 @@ function toDate(v) {
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
   if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
   m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/.exec(s); // Indian style day/month/year
-  if (m) { const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; return new Date(Date.UTC(y, +m[2] - 1, +m[1])); }
-  const t = Date.parse(s);
-  return isNaN(t) ? null : new Date(t);
+  if (m) { const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; return valid(y, +m[2], +m[1]); }
+  m = /^(\d{4})[/.-](\d{1,2})$/.exec(s) || /^(\d{1,2})[/.-](\d{4})$/.exec(s); // month and year only: first of the month
+  if (m) { const y = m[1].length === 4 ? +m[1] : +m[2], mo = m[1].length === 4 ? +m[2] : +m[1]; return valid(y, mo, 1); }
+  m = /^([A-Za-z]{3,9})[\s,-]+(\d{4})$/.exec(s); // "Jan 2022", "January 2022"
+  if (m) { const mo = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1; return mo ? valid(+m[2], mo, 1) : null; }
+  m = /^(\d{4})$/.exec(s); // year only
+  if (m) return valid(+m[1], 1, 1);
+  return null; // anything else is not read as a date: no guessing
 }
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+function valid(y, mo, d) { const t = new Date(Date.UTC(y, mo - 1, d)); return t.getUTCMonth() === mo - 1 && t.getUTCDate() === d ? t : null; }
 const days = (a, b) => Math.round((b - a) / 86400000);
 const ageOn = (dob, at = new Date()) => { const d = toDate(dob); if (!d) return null; let y = at.getUTCFullYear() - d.getUTCFullYear(); const m = at.getUTCMonth() - d.getUTCMonth(); if (m < 0 || (m === 0 && at.getUTCDate() < d.getUTCDate())) y--; return y; };
 // Long-standing illnesses that commonly come up as pre-existing (PED) in health claims.
 const CHRONIC = /diabet|sugar|hypertens|blood pressure|\bbp\b|thyroid|cardiac|heart|angina|kidney|renal|ckd|dialysis|liver|cirrhosis|asthma|copd|cataract|knee replacement|arthritis|hernia|piles|haemorrhoid|hemorrhoid|fistula|stone|calculus|cancer|tumou?r|epilep|stroke|paraly/i;
 
+// Rules on ONE case's own record (Excel details, dates, amounts) and its call times.
+// Each result: { label, state: focus | check | clear | none, detail, area? }  (area = page-1 box)
+const PREMIUM_TIMES = { yearly: 1, annual: 1, annually: 1, single: 1, halfyearly: 2, half: 2, semiannual: 2, quarterly: 4, monthly: 12 };
+const IST_HOUR = iso => (new Date(new Date(iso).getTime() + 5.5 * 3600e3)).getUTCHours();
 function triggers(svc, c) {
-  const d = c.details || {}, out = [];
-  const add = (label, state, detail) => out.push({ label, state, detail });
-  const start = toDate(d.policyStartDate);
+  const d = c.details || {}, out = [], a = c.aiCall || {};
+  const add = (label, state, detail, area) => out.push({ label, state, detail, ...(area ? { area } : {}) });
+  const start = toDate(d.policyStartDate), end = toDate(d.policyEndDate);
   if (svc === 'health_claim') {
     const adm = toDate(d.admissionDate), dis = toDate(d.dischargeDate);
-    if (start && adm) { const n = days(start, adm); add('Claim soon after the policy started', n <= 30 ? 'focus' : n <= 90 ? 'check' : 'clear', `Admission ${n} days after the policy start date`); }
-    else add('Claim soon after the policy started', 'none', 'Policy start date or admission date not in the case record');
+    const accident = /accident|injur/i.test(String(d.claimType || '') + ' ' + String(d.diagnosis || ''));
+    if (start && adm) {
+      const n = days(start, adm);
+      add('Policy timing', n < 0 ? 'focus' : n < 30 ? (accident ? 'check' : 'focus') : n <= 90 ? 'check' : 'clear',
+        n < 0 ? 'Admission date is before the policy start date'
+          : n < 30 ? `Admission ${n} days after the policy start: inside the first 30-day waiting period${accident ? ' (accident claims are allowed in it)' : d.claimType ? ' and not an accident' : ' (claim type not given)'}`
+            : `Admission ${n} days after the policy start date${n <= 90 ? ': early claim' : ''}`);
+    } else add('Policy timing', 'none', 'Policy start date or admission date not in the case record');
     if (adm && dis) {
       const n = days(adm, dis);
       add('Length of hospital stay', n < 0 ? 'focus' : n === 0 ? 'check' : n > 10 ? 'check' : 'clear',
         n < 0 ? 'Discharge date is before the admission date' : n === 0 ? 'Admitted and discharged the same day: confirm it was day care or truly needed admission' : `${n} day${n > 1 ? 's' : ''} in hospital${n > 10 ? ': long stay, check it was needed' : ''}`);
+      const wd = adm.getUTCDay();
+      if ((wd === 0 || wd === 6) && n <= 1) add('Weekend short stay', 'check', `Admitted on a ${wd === 0 ? 'Sunday' : 'Saturday'} for ${n === 0 ? 'less than a day' : '1 day'}`);
     } else add('Length of hospital stay', 'none', 'Admission or discharge date not in the case record');
     if (d.diagnosis && CHRONIC.test(d.diagnosis)) {
       const yrs = start ? days(start, adm || new Date()) / 365.25 : null;
       if (yrs != null && yrs >= 5) add('Possible pre-existing illness', 'clear', `"${d.diagnosis}" is often long-standing, but the policy has run over 5 years (moratorium): it can be questioned only for fraud`);
-      else add('Possible pre-existing illness', 'check', `"${d.diagnosis}" is often long-standing. Check past records${yrs != null ? `; policy has run ${yrs.toFixed(1)} years` : ''}`);
-    } else add('Possible pre-existing illness', d.diagnosis ? 'clear' : 'none', d.diagnosis ? 'Diagnosis is not one that is usually long-standing' : 'Diagnosis not in the case record');
+      else add('Possible pre-existing illness', 'check', `"${d.diagnosis}" is often long-standing. Check past records${yrs != null ? `; policy has run ${yrs < 1 ? Math.round(yrs * 365.25) + ' days' : yrs.toFixed(1) + ' years'}` : ''}`);
+    } else add('Possible pre-existing illness', d.diagnosis ? 'clear' : 'none', d.diagnosis ? 'Diagnosis is not in the list of usually long-standing illnesses' : 'Diagnosis not in the case record');
     const amt = amount(d.claimAmount);
     add('Claim amount', amt ? (amt >= 100000 ? 'check' : 'clear') : 'none', amt ? `${money(amt)}${amt >= 100000 ? ': above Rs. 1 lakh, a closer look is usual' : ''}` : 'Claim amount not in the case record');
   } else if (svc === 'motor_claim') {
     const inc = toDate(d.incidentDate);
     if (start && inc) { const n = days(start, inc); add('Incident soon after the policy started', n < 0 ? 'focus' : n <= 30 ? 'focus' : n <= 60 ? 'check' : 'clear', n < 0 ? 'Incident date is before the policy start date' : `Incident ${n} days after the policy start date`); }
     else add('Incident soon after the policy started', 'none', 'Policy start date or incident date not in the case record');
+    if (end && inc) { const n = days(end, inc); add('Incident near the policy end', n > 0 ? 'focus' : n >= -15 ? 'check' : 'clear', n > 0 ? `Incident ${n} days AFTER the policy end date` : n >= -15 ? `Incident ${-n} days before the policy end date` : `Incident ${-n} days before the policy end date`); }
     if (inc && c.createdAt) { const n = days(inc, new Date(c.createdAt)); add('Time from incident to investigation', n > 15 ? 'check' : 'clear', `Case opened ${n} days after the incident${n > 15 ? ': check when the claim was first reported' : ''}`); }
     else add('Time from incident to investigation', 'none', 'Incident date not in the case record');
     const amt = amount(d.claimAmount);
@@ -290,12 +310,40 @@ function triggers(svc, c) {
   } else if (svc === 'pivc_life' || svc === 'pivc_term' || svc === 'pivc_health') {
     const age = ageOn(d.dob);
     add('Senior citizen proposer', age == null ? 'none' : age >= 60 ? 'check' : 'clear', age == null ? 'Date of birth not in the case record' : age >= 60 ? `Age ${age}: confirm the product suits the customer and was clearly explained` : `Age ${age}`);
-    const sa = Number(c.policyValue) || 0;
+    const sa = Number(c.policyValue) || 0, income = amount(d.annualIncome);
     if (svc !== 'pivc_health') add('Large cover', sa ? (sa >= 1000000 ? 'check' : 'clear') : 'none', sa ? `${money(sa)}${sa >= 1000000 ? ': live executive call required' : ''}` : 'Sum assured not in the case record');
     if (svc === 'pivc_term' && age != null && age < 25 && sa >= 10000000) add('Young proposer with very large cover', 'check', `Age ${age} with ${money(sa)} cover: check income and reason for cover`);
+    const prem = amount(d.premium), times = PREMIUM_TIMES[String(d.premiumFrequency || '').toLowerCase().replace(/[^a-z]/g, '')];
+    if (prem && income && times) {
+      const pct = Math.round(prem * times / income * 100);
+      add('Premium compared with income', pct > 50 ? 'focus' : pct > 30 ? 'check' : 'clear', `Yearly premium ${money(prem * times)} is ${pct}% of yearly income ${money(income)}${pct > 30 ? ': may not be affordable' : ''}`, 'sales');
+    } else add('Premium compared with income', 'none', !income ? 'Yearly income not in the case record' : !prem ? 'Premium not in the case record' : 'Premium frequency (yearly / monthly ...) not in the case record');
+    if (svc !== 'pivc_health') {
+      if (sa && income) { const x = sa / income; add('Cover compared with income', x > 25 ? 'check' : 'clear', `Cover is ${x.toFixed(1)} times the yearly income${x > 25 ? ': above 25 times, check the reason for this cover' : ''}`, 'income'); }
+      else add('Cover compared with income', 'none', 'Sum assured or yearly income not in the case record');
+    }
+  } else if (svc === 'bgv_employee') {
+    const f1 = toDate(d.employer1From), t1 = toDate(d.employer1To), f2 = toDate(d.employer2From), t2 = toDate(d.employer2To);
+    for (const [f, t, n] of [[f1, t1, 'latest'], [f2, t2, 'previous']]) if (f && t && t < f) add(`Dates of the ${n} job`, 'focus', `"To" date is before the "from" date`, 'employment');
+    if (t2 && f1) {
+      const g = days(t2, f1);
+      if (g > 90) add('Gap between jobs', 'check', `${Math.round(g / 30.4)} months between the previous job and the latest job`, 'gaps');
+      else if (g < -30) add('Two jobs at the same time', 'check', `The previous job ends ${Math.round(-g / 30.4)} months after the latest job started`, 'employment');
+      else add('Gap between jobs', 'clear', g > 0 ? `${g} days between jobs` : 'No gap', 'gaps');
+    } else add('Gap between jobs', 'none', 'Job dates not in the case record', 'gaps');
+    const by = toDate(d.dob), py = Number(String(d.passingYear || '').replace(/\D/g, '').slice(0, 4));
+    if (by && py > 1900) { const age = py - by.getUTCFullYear(); add('Age at passing the qualification', age < 18 ? 'check' : 'clear', `About ${age} years old in the passing year ${py}${age < 18 ? ': unusually young, check the year' : ''}`, 'education'); }
+    else add('Age at passing the qualification', 'none', 'Date of birth or passing year not in the case record', 'education');
   }
-  for (const x of (c.aiCall && c.aiCall.crossCase) || []) add('Same details on another case', 'focus', x.text || String(x));
+  // the call itself
+  if (a.startedAt) {
+    const h = IST_HOUR(a.startedAt);
+    if (h >= 22 || h < 7) add('Call at night', 'check', `Call started at ${String(h).padStart(2, '0')}:00 to ${String((h + 1) % 24).padStart(2, '0')}:00 India time`);
+    const endAt = a.completedAt || a.handoffAt;
+    if (a.status === 'completed' && endAt) { const m = (new Date(endAt) - new Date(a.startedAt)) / 60000; if (m < 4) add('Very short call', 'check', `The whole call took ${m.toFixed(1)} minutes`); }
+  }
+  for (const x of a.crossCase || []) add('Same details on another case', 'focus', x.text || String(x));
   return out;
 }
 
-module.exports = { PROFILES, profileOf, SECTION_LABELS, triggers, toDate, ageOn, money };
+module.exports = { PROFILES, profileOf, SECTION_LABELS, triggers, toDate, ageOn, money, amount, days };

@@ -125,6 +125,7 @@ router.post('/webhook', async (req, res) => {
           if (read.storeBuffer !== buffer) item.storedSha256 = crypto.createHash('sha256').update(read.storeBuffer).digest('hex');
           const key = item.caseId ? caseFileKey(item.caseId, item.evidenceId, ext) : unassignedFileKey(item.vendorId, item.evidenceId, item.mimeType);
           item.fileUrl = await storage.saveFile(read.storeBuffer, key, item.mimeType);
+          if (read.storeBuffer !== buffer) require('../services/file-facts').recordBuffer(item.fileUrl, buffer, mt); // facts of the file exactly as the customer sent it
         } catch (e) {
           console.warn('WhatsApp media could not be downloaded/saved:', e.message);
           item.analysis = { documentType: 'other', extractedText: '', note: 'The file could not be downloaded from WhatsApp.' };

@@ -11,7 +11,7 @@ const pdf = require('../src/services/report-pdf');
 let base, FA;
 test.before(async () => {
   await start(0); base = `http://127.0.0.1:${server.address().port}`;
-  db.data.users.push({ id: 'bd1', email: 'bd1@t', vendorName: 'Detail Co', role: 'vendor_admin', approved: true, services: ['pivc_life', 'pivc_term', 'motor_claim'],
+  db.data.users.push({ id: 'bd1', email: 'bd1@t', vendorName: 'Detail Co', role: 'vendor_admin', approved: true, services: ['pivc_life', 'pivc_term', 'motor_claim', 'bgv_employee'],
     billing: billing.validateConfig({ model: 'per_case', gstPercent: 0 }).config });
   await db.write();
   FA = signToken({ id: 'bd1', email: 'bd1@t', role: 'vendor_admin', vendorRootId: 'bd1' });
@@ -72,10 +72,25 @@ test('health claim triggers: early claim, same-day stay, possible pre-existing i
   const { triggers } = require('../src/services/service-profiles');
   const t = triggers('health_claim', { details: { policyStartDate: '2026-09-01', admissionDate: '2026-09-20', dischargeDate: '20/09/2026', diagnosis: 'Hernia repair', claimAmount: '1,20,000' } });
   const by = l => t.find(x => x.label === l);
-  assert.equal(by('Claim soon after the policy started').state, 'focus');
+  assert.equal(by('Policy timing').state, 'focus');
   assert.equal(by('Length of hospital stay').state, 'check');
   assert.equal(by('Possible pre-existing illness').state, 'check');
   assert.equal(by('Claim amount').state, 'check');
   const life = triggers('pivc_life', { details: { dob: '1950-01-01' }, policyValue: 2000000 });
   assert.equal(life.find(x => x.label === 'Senior citizen proposer').state, 'check');
+});
+
+test('bulk upload reads numbered columns (employer1 / employer2) separately', async () => {
+  const XLSX = require('xlsx');
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['claimNo', 'insuredName', 'whatsappNumber', 'verificationType', 'Employer 1 From', 'employer1To', 'employer2From', 'Employer 2 To', 'passingYear'],
+    ['BG-9', 'Arjun', '919900000077', 'Employee BGV', '2022-01', '2024-02', '2018-07', '2021-08', '2018']
+  ]);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'S');
+  const fd = new FormData(); fd.append('file', new Blob([XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })]), 'b.xlsx');
+  const body = await (await fetch(base + '/api/cases/bulk-upload', { method: 'POST', headers: { Authorization: 'Bearer ' + FA }, body: fd })).json();
+  assert.equal(body.created, 1, JSON.stringify(body.results));
+  const c = db.data.cases.find(x => x.claimNo === 'BG-9');
+  assert.equal(c.service, 'bgv_employee');
+  assert.deepEqual([c.details.employer1From, c.details.employer1To, c.details.employer2From, c.details.employer2To, c.details.passingYear], ['2022-01', '2024-02', '2018-07', '2021-08', '2018']);
 });

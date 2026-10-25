@@ -117,7 +117,11 @@ function buildAiReport(c, { evidence = [], custody = [], firm = '', publicView =
     },
     checks: (a.checks || []).map(k => ({ id: k.id, label: k.label, result: k.result, detail: k.detail || '' })),
     crossCase: (a.crossCase || []).map(x => x.text || String(x)),
-    triggers: profiles.triggers(svc, c),
+    triggers: (() => {
+      const data = require('../db').db.data, rules = require('./record-rules');
+      const own = (data.evidence || []).filter(e => e.caseId === c.id);
+      return [...profiles.triggers(svc, c).map(t => ({ source: 'record', ...t })), ...rules.crossCase(c, data), ...rules.fileRules(c, data, own)];
+    })(),
     sections,
     locations: (a.locations || []).map(l => ({ what: l.what, latitude: l.latitude, longitude: l.longitude, accuracy: l.accuracy, at: l.at })),
     received,

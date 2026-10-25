@@ -104,6 +104,7 @@ function start() {
   setInterval(() => guarded('wallet', async () => { const w = require('./wallet'); const r = w.sweep(db.data); if (r.charged) await db.write(); const bad = w.reconcile(db.data); if (bad.length) errlog.record('wallet:mismatch', new Error('Wallet balance differs from ledger for ' + bad.map(b => b.vendorId).join(', '))); return { ...r, mismatch: bad.length }; }), 60e3).unref();
   setInterval(() => guarded('billing', () => require('./billing').tick()), 6 * 3600e3).unref();
   setInterval(() => guarded('backup', () => require('./backup').tick()), 30 * 60e3).unref();
+  setInterval(() => guarded('file-facts', () => require('./file-facts').backfill(25)), 10 * 60e3).unref();
   setInterval(() => {
     const ist = new Date(Date.now() + 5.5 * 3600e3);
     const day = ist.toISOString().slice(0, 10);
