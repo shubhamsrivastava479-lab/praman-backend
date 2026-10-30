@@ -196,3 +196,7 @@ themselves in the dashboard, not set as server env vars).
 
 ## Billing
 Per-case, subscription or hybrid billing with GST invoices, PDFs, payments and reminders. All prices are set by Super Admin (Super Admin -> Billing). See `docs/BILLING_GUIDE.md`.
+
+
+## Domain
+The live address is https://pramanservices.space. Steps to move or re-point it: docs/DOMAIN-SETUP.md

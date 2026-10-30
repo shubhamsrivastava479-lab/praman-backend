@@ -115,7 +115,7 @@ router.post('/webhook', async (req, res) => {
           item.sha256 = hash || crypto.createHash('sha256').update(buffer).digest('hex'); // hash of the file exactly as received
           item.caption = msg.media.caption || item.caption;
 
-          const read = await docReader.processMedia({ buffer, mimeType: mt, msgType: msg.type });
+          const read = await require('../services/usage').run({ caseId: item.caseId || null, firmId: item.vendorId }, () => docReader.processMedia({ buffer, mimeType: mt, msgType: msg.type }));
           item.analysis = read.analysis;
           item.transcript = read.transcript;
           if (item.aiActive && read.idExtract) { item.idExtract = read.idExtract; item.idBuffer = buffer; }

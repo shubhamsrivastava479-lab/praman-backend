@@ -17,6 +17,11 @@ const cleanTmp = (req, res, next) => { res.on('close', () => { if (req.file && r
 const { caseFileKey } = require('../services/ids');
 const router = express.Router();
 router.use(rateLimit({ windowMs: 60_000, max: 15 })); // protects against case-ID brute-forcing and API-cost abuse
+router.use('/:caseId', (req, res, next) => { // AI cost is counted against this case and firm (usage.js)
+  const c = (db.data.cases || []).find(x => x.id === req.params.caseId);
+  if (!c) return next();
+  require('../services/usage').run({ caseId: c.id, firmId: c.vendorId }, next);
+});
 
 async function getPlatformCreds(c) {
   const apiKey = await getSetting('gridlinesApiKey', 'GRIDLINES_API_KEY');

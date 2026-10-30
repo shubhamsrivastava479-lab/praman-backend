@@ -37,7 +37,9 @@ import android.widget.TextView
 class MainActivity : Activity() {
 
     companion object {
-        const val BASE = "https://praman-backend-vtbz.onrender.com"
+        const val BASE = "https://pramanservices.space"
+        // Old address stays trusted so call links already sent to customers keep working.
+        private val OLD_HOST = "praman-backend-vtbz.onrender.com"
         private const val REQ_PERMS = 11
         private const val REQ_SCREEN = 12
     }
@@ -47,7 +49,7 @@ class MainActivity : Activity() {
 
     private fun trusted(u: Uri?): Boolean {
         val base = Uri.parse(BASE)
-        return u != null && u.scheme == "https" && u.host == base.host
+        return u != null && u.scheme == "https" && (u.host == base.host || u.host == OLD_HOST)
     }
 
     /** Accepts a full call link, a whole WhatsApp message that contains the link, or just the code. */

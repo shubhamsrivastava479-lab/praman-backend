@@ -604,12 +604,12 @@ router.post('/:id/generate-report', async (req, res) => {
   const transcriptText = transcripts.map(t => `${t.speaker}: ${t.english || t.original}`).join('\n');
 
   try {
-    const html = await gemini.draftReport({
+    const html = await require('../services/usage').run({ caseId: c.id, firmId: c.vendorId }, () => gemini.draftReport({
       caseInfo: { claimNo: c.claimNo, insuredName: c.insuredName, vehicleNo: c.vehicleNo,
         aiVerification: c.aiCall && c.aiCall.status === 'completed' ? { decision: c.aiCall.decision, summary: c.aiCall.summary, checks: c.aiCall.checks, flags: c.aiCall.flags } : undefined },
       evidenceSummaries,
       transcriptText
-    });
+    }));
     const report = {
       id: uid('report'),
       caseId: c.id,

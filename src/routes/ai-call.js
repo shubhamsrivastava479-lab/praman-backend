@@ -21,6 +21,12 @@ const router = express.Router();
 const cleanTmp = (req, res, next) => { res.on('close', () => { if (req.file && req.file.path) fs.promises.unlink(req.file.path).catch(() => {}); }); next(); };
 
 router.use(rateLimit({ windowMs: 60_000, max: 120 }));
+// AI cost is counted against this case and firm (usage.js).
+router.use('/:token', (req, res, next) => {
+  const c = (db.data.cases || []).find(x => x.aiCall && x.aiCall.token === req.params.token);
+  if (!c) return next();
+  require('../services/usage').run({ caseId: c.id, firmId: c.vendorId }, next);
+});
 
 async function load(token) {
   await db.read();
@@ -69,9 +75,11 @@ async function warmAhead(token) {
     const c = await load(token);
     const a = c && c.aiCall;
     if (!a || a.status !== 'in_progress' || !Array.isArray(a.queue)) return;
-    for (const st of a.queue.slice(a.i, a.i + 4)) {
-      if (st && st.text && st.type !== 'close') await speak(st.text, a.language);
-    }
+    await require('../services/usage').run({ caseId: c.id, firmId: c.vendorId }, async () => {
+      for (const st of a.queue.slice(a.i, a.i + 4)) {
+        if (st && st.text && st.type !== 'close') await speak(st.text, a.language);
+      }
+    });
   } catch { /* best effort */ }
 }
 router.use((req, res, next) => {

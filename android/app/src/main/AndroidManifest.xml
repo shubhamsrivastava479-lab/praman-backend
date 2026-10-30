@@ -36,6 +36,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="pramanservices.space" android:pathPrefix="/live-join.html" />
                 <data android:scheme="https" android:host="praman-backend-vtbz.onrender.com" android:pathPrefix="/live-join.html" />
             </intent-filter>
         </activity>

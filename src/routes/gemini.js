@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(requireAuth);
+router.use((req, res, next) => require('../services/usage').run({ firmId: req.user && (req.user.vendorRootId || req.user.id) }, next));
 
 router.post('/translate', async (req, res) => {
   const { text, targetLang } = req.body;

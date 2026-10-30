@@ -27,7 +27,7 @@ async function generate(models, body, label, opts = {}) {
   let lastErr;
   for (const model of list) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (Date.now() > deadline) { require('./usage').bump(label, (models[0] || ''), false); throw lastErr || new Error(`${label} timed out`); }
+      if (Date.now() > deadline) { require('./usage').record({ label, model: models[0] || '', ok: false }); throw lastErr || new Error(`${label} timed out`); }
       let res;
       try {
         res = await fetch(`${BASE_URL}/${model}:generateContent`, {
@@ -37,7 +37,7 @@ async function generate(models, body, label, opts = {}) {
           signal: AbortSignal.timeout(Math.max(3000, Math.min(perTry, deadline - Date.now())))
         });
       } catch (e) { lastErr = new Error(`${label} network error (${model}): ${e.message}`); cooldown.set(model, Date.now() + 30_000); break; } // slow/dead model: skip it for 30 s
-      if (res.ok) { cooldown.delete(model); require('./usage').bump(label, model, true); return res.json(); }
+      if (res.ok) { cooldown.delete(model); const json = await res.json(); require('./usage').record({ label, model, ok: true, reply: json }); return json; }
       const errText = await res.text();
       lastErr = new Error(`${label} error ${res.status} (${model}): ${errText}`);
       if (!RETRYABLE.has(res.status)) throw lastErr; // bad key / bad request: no point trying others
@@ -46,7 +46,7 @@ async function generate(models, body, label, opts = {}) {
       if (res.status === 503 || res.status === 500) { cooldown.set(model, Date.now() + 20_000); break; } // overloaded: next model now
     }
   }
-  require('./usage').bump(label, (models[0] || ''), false);
+  require('./usage').record({ label, model: models[0] || '', ok: false });
   throw lastErr;
 }
 
@@ -441,5 +441,14 @@ Use null for "consistent" when there is too little to judge (e.g. no relevant me
   return parseJson(raw, { assessment: '', firstMention: { date: '', chat: '' }, peopleTold: [], consistent: null, concerns: [] });
 }
 
-module.exports = {
-  checkChallenge, checkConsistency, extractValues, translateStrings, readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness };
+// Every exported job runs with its own name as the "task", so cost is counted per job.
+const TASK = {
+  transcribeAndTranslateAudio: 'Speech to text (customer voice)', generateSpeech: 'Voice of the AI (text to speech)', translateText: 'Translation',
+  translateStrings: 'Translation', judgeAnswer: 'Understanding answers', extractValues: 'Reading values for record match', checkFacePhoto: 'Face photo check',
+  checkBlink: 'Blink check', checkChallenge: 'Random action check', checkBodyPhoto: 'Body photo check', extractIdDocument: 'Reading Aadhaar / PAN',
+  summarizeAiCall: 'Call summary', checkConsistency: 'Consistency check', assessChatHistory: 'WhatsApp screenshots check', readDocument: 'Reading WhatsApp documents',
+  describeVideo: 'Describing WhatsApp videos', analyzeImage: 'Reading images', draftReport: 'Report drafting', checkLiveness: 'Liveness (older check)'
+};
+const tracked = (name, fn) => (...args) => require('./usage').run({ task: TASK[name] || name }, () => fn(...args));
+module.exports = Object.fromEntries(Object.entries({
+  checkChallenge, checkConsistency, extractValues, translateStrings, readDocument, assessChatHistory, describeVideo, extractIdDocument, checkFacePhoto, checkBodyPhoto, checkBlink, judgeAnswer, summarizeAiCall, translateText, transcribeAndTranslateAudio, analyzeImage, draftReport, generateSpeech, checkLiveness }).map(([k, f]) => [k, tracked(k, f)]));

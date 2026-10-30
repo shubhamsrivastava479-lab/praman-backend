@@ -58,8 +58,18 @@
   </div>
 
   <div class="card">
-    <b>AI usage — last 30 days</b>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <b>AI cost — what costs the most</b>
+      <span style="font-size:12px;">Days <select id="acDays" onchange="loadAiCost()"><option>7</option><option selected>30</option><option>90</option></select>
+      &nbsp; ₹ per US$ <input id="acRate" type="number" step="0.01" style="width:70px;" onchange="saveRate()"></span>
+    </div>
     <div id="aiUse" style="margin-top:10px;font-size:12.5px;"></div>
+    <div id="aiCostBox" style="margin-top:10px;font-size:12.5px;"></div>
+    <details style="margin-top:10px;font-size:12.5px;"><summary style="cursor:pointer;"><b>Model prices</b> (US$ per 1 million tokens, from your Google billing / pricing page)</summary>
+      <div class="hint" style="color:#666;margin:6px 0;">Tokens are exact (Google sends them with every reply). Cost is tokens × these prices. A model without a price shows tokens only. Audio input is the customer's voice; leave it empty to use the normal input price.</div>
+      <div id="acPrices"></div>
+      <button onclick="savePrices()" style="margin-top:8px;">Save prices</button> <span id="acMsg" style="font-size:12px;"></span>
+    </details>
     <div id="aiFirms" style="margin-top:10px;font-size:12.5px;"></div>
   </div>
 
@@ -416,6 +426,7 @@ async function loadPlatformPerformance(){
     `<tr><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${v.vendorName}</td><td style="padding:6px;border-bottom:1px solid #f0f1f3;">${v.caseCount}</td></tr>`
   ).join('') || '<tr><td colspan="2" style="color:#999;padding:6px;">No vendors yet.</td></tr>';
 
+  loadAiCost();
   const u = d.aiUsage || { text: 0, voice: 0, errors: 0, days: [] };
   document.getElementById('aiUse').innerHTML = `Text/understanding calls: <b>${u.text}</b> · Voice calls: <b>${u.voice}</b> · Failed calls: <b style="color:${u.errors ? '#b23a2c' : 'inherit'}">${u.errors}</b> · Lines re-used from memory since last restart: <b>${u.cacheHits || 0}</b><div style="color:#888;font-size:11.5px;margin-top:4px;">Counted since this feature was added; the count is for the whole platform. Use it with your Google billing page to watch cost.</div>`;
   document.getElementById('aiFirms').innerHTML = (d.aiCallsByFirm || []).length ? '<b>Finished AI calls by company</b>' + d.aiCallsByFirm.map(f => `<div>${String(f.vendorName).replace(/[<>&]/g, '')} — ${f.aiCalls}</div>`).join('') : '';
@@ -427,6 +438,45 @@ async function loadPlatformPerformance(){
   } else {
     warnBox.style.display = 'none';
   }
+}
+
+// ---------- AI cost ----------
+let acData = null;
+function acRate() { try { return Number(localStorage.getItem('praman_inr_rate')) || 0; } catch { return 0; } }
+function saveRate() { try { localStorage.setItem('praman_inr_rate', document.getElementById('acRate').value); } catch {} if (acData) drawAiCost(); }
+const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n || 0);
+function money(usd) { const r = acRate(); return '$' + (usd || 0).toFixed(usd < 1 ? 4 : 2) + (r ? ' <span style="color:#888">(₹' + ((usd || 0) * r).toFixed(usd * r < 10 ? 2 : 0) + ')</span>' : ''); }
+async function loadAiCost() {
+  const days = document.getElementById('acDays').value;
+  try { acData = await (await fetch('/api/super-admin/ai-cost?days=' + days, { headers: authHeaders() })).json(); } catch { return; }
+  if (!document.getElementById('acRate').value && acRate()) document.getElementById('acRate').value = acRate();
+  drawAiCost();
+}
+function drawAiCost() {
+  const d = acData; if (!d) return;
+  const total = d.usd || 0;
+  const th = 'style="text-align:left;padding:5px 6px;color:#888;font-size:11px;text-transform:uppercase;border-bottom:1px solid #eee;"';
+  const td = 'style="padding:5px 6px;border-bottom:1px solid #f0f1f3;"', tdr = 'style="padding:5px 6px;border-bottom:1px solid #f0f1f3;text-align:right;font-variant-numeric:tabular-nums;"';
+  const share = x => total ? Math.round((x.usd || 0) / total * 100) : 0;
+  const bar = x => `<div style="background:#eef0f3;border-radius:4px;height:8px;width:90px;"><div style="background:#c8781f;height:8px;border-radius:4px;width:${share(x)}%"></div></div>`;
+  const table = (title, rows) => rows.length ? `<div style="margin-top:14px;"><b>${title}</b><table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr><th ${th}>Name</th><th ${th}>Calls</th><th ${th}>Input</th><th ${th}>Of which voice</th><th ${th}>Output</th><th ${th}>Cost</th><th ${th}>Share</th></tr>${rows.map(x => `<tr><td ${td}>${esc(x.name)}${x.errors ? ` <span style="color:#b23a2c">(${x.errors} failed)</span>` : ''}${x.unpriced ? ` <span style="color:#888">(${x.unpriced} without price)</span>` : ''}</td><td ${tdr}>${x.calls}</td><td ${tdr}>${fmtTok(x.inTok)}</td><td ${tdr}>${fmtTok(x.audioTok)}</td><td ${tdr}>${fmtTok(x.outTok)}</td><td ${tdr}>${!x.usd && x.unpriced ? '<span style="color:#b07a00">price not set</span>' : money(x.usd)}</td><td ${td}>${bar(x)} ${share(x)}%</td></tr>`).join('')}</table></div>` : '';
+  const maxDay = Math.max(0.000001, ...d.days.map(x => x.usd));
+  const daysHtml = d.days.length ? `<div style="margin-top:14px;"><b>Cost per day</b><div style="display:flex;align-items:flex-end;gap:3px;height:70px;margin-top:6px;">${d.days.map(x => `<div title="${x.date}: $${x.usd.toFixed(4)}, ${x.text + x.voice} calls" style="flex:1;background:#2b3a8c;height:${Math.max(2, x.usd / maxDay * 70)}px;border-radius:2px;"></div>`).join('')}</div></div>` : '';
+  const cases = d.topCases.length ? `<div style="margin-top:14px;"><b>Most expensive cases</b>${d.perCase ? ` <span style="color:#888">· average per case ${money(d.perCase.averageUsd)} over ${d.perCase.cases} cases</span>` : ''}<table style="width:100%;border-collapse:collapse;margin-top:6px;"><tr><th ${th}>Case</th><th ${th}>Firm</th><th ${th}>Calls</th><th ${th}>Cost</th><th ${th}>Biggest part</th></tr>${d.topCases.map(c => { const top = Object.entries(c.tasks).sort((a, b) => b[1] - a[1])[0]; return `<tr><td ${td}>${esc(c.caseRef)}</td><td ${td}>${esc(c.firm)}</td><td ${tdr}>${c.calls}</td><td ${tdr}>${money(c.usd)}</td><td ${td}>${top ? esc(top[0]) : '—'}</td></tr>`; }).join('')}</table></div>` : '';
+  const unpriced = d.models.filter(m => m.unpriced).map(m => m.name);
+  document.getElementById('aiCostBox').innerHTML = `<div style="font-size:14px;">Total in ${d.days.length} day(s) with use: <b>${money(total)}</b> · ${d.text + d.voice} AI calls · <span style="color:${d.errors ? '#b23a2c' : 'inherit'}">${d.errors} failed</span></div>`
+    + (unpriced.length ? `<div style="margin-top:6px;color:#b07a00;">Not in the total yet: no price set for ${unpriced.map(esc).join(', ')}. Add it under Model prices below.</div>` : '')
+    + daysHtml + table('By task (what the AI was doing)', d.tasks) + table('By model', d.models) + table('By firm', d.firms) + cases
+    + `<div style="color:#888;font-size:11.5px;margin-top:8px;">Counted from the time this was added. Compare with your Google billing page now and then.</div>`;
+  const models = Array.from(new Set([...Object.keys(d.prices || {}), ...d.models.map(m => m.name)])).filter(m => m && m !== '?');
+  document.getElementById('acPrices').innerHTML = `<table style="border-collapse:collapse;"><tr><th ${th}>Model</th><th ${th}>Input</th><th ${th}>Voice input</th><th ${th}>Output</th></tr>${models.map(m => { const p = (d.prices || {})[m] || {}; const v = x => x == null ? '' : x; return `<tr data-m="${esc(m)}"><td ${td}>${esc(m)}${p.note ? `<div style="color:#888;font-size:11px;">${esc(p.note)}</div>` : ''}</td><td ${td}><input data-k="in" value="${v(p.in)}" style="width:70px;"></td><td ${td}><input data-k="audioIn" value="${v(p.audioIn)}" style="width:70px;"></td><td ${td}><input data-k="out" value="${v(p.out)}" style="width:70px;"></td></tr>`; }).join('')}</table>`;
+}
+async function savePrices() {
+  const prices = {};
+  document.querySelectorAll('#acPrices tr[data-m]').forEach(tr => { const o = {}; tr.querySelectorAll('input').forEach(i => o[i.dataset.k] = i.value.trim()); prices[tr.dataset.m] = o; });
+  const r = await fetch('/api/super-admin/ai-prices', { method: 'PUT', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prices }) });
+  document.getElementById('acMsg').textContent = r.ok ? 'Saved. Costs from now on use these prices.' : 'Could not save.';
+  if (r.ok) loadAiCost();
 }
 
 async function loadHealth(){

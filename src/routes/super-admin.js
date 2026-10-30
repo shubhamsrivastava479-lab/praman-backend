@@ -214,6 +214,20 @@ router.get('/analytics', async (req, res) => {
   });
 });
 
+// ---------- AI cost ----------
+router.get('/ai-cost', async (req, res) => {
+  await db.read();
+  const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 30));
+  res.json(require('../services/usage').summary(days));
+});
+router.put('/ai-prices', async (req, res) => {
+  await db.read();
+  const prices = require('../services/usage').setPrices((req.body || {}).prices);
+  await db.write();
+  require('../services/audit').log(req.user, 'ai_prices_set', Object.keys(prices).join(', '), null);
+  res.json({ ok: true, prices });
+});
+
 // ---------- Backups (daily, automatic) ----------
 router.get('/backups', async (req, res) => {
   await db.read();
