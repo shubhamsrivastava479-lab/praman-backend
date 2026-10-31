@@ -53,7 +53,15 @@ async function run({ dryRun = false, now = new Date(), remove = storage.deleteFi
       c.filesPurgedAt = now.toISOString();
     }
   }
-  if (res.deleted || res.failed) await db.write();
+  // Data fetched by ID checks (PAN, RC, CIBIL ...) follows the same period; the transaction log itself is kept.
+  res.apiResults = 0;
+  for (const c of db.data.cases) {
+    if (c.legalHold) continue;
+    const d = days(db.data.users.find(u => u.id === c.vendorId)), done = finishedAt(c);
+    if (!d || !done || now - done < d * 86400e3) continue;
+    for (const r of (db.data.apiResults || [])) if (r.caseId === c.id && !r.purgedAt) { r.data = null; r.request = null; r.raw = undefined; r.purgedAt = now.toISOString(); res.apiResults++; }
+  }
+  if (res.deleted || res.failed || res.apiResults) await db.write();
   return res;
 }
 

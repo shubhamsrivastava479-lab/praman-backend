@@ -60,7 +60,7 @@ function settingsOf(data) {
     upi: s.upi || '', terms: s.terms || '',
     defaultPaymentTermsDays: Number.isFinite(Number(s.defaultPaymentTermsDays)) ? Number(s.defaultPaymentTermsDays) : 15,
     autoIssue: s.autoIssue === true,
-    kycRates: { dl: Number(s.kycRates && s.kycRates.dl) || 0, aadhaar_generate: Number(s.kycRates && s.kycRates.aadhaar_generate) || 0, aadhaar_verify: Number(s.kycRates && s.kycRates.aadhaar_verify) || 0, pan: Number(s.kycRates && s.kycRates.pan) || 0 }
+    kycRates: Object.fromEntries(require('./gridlines-apis').KINDS.map(k => [k, Number(s.kycRates && s.kycRates[k]) || 0]))
   };
 }
 function cleanSettings(b = {}) {
@@ -73,7 +73,7 @@ function cleanSettings(b = {}) {
     upi: t(b.upi, 60), terms: t(b.terms, 800),
     defaultPaymentTermsDays: Number.isFinite(days) && days >= 0 && days <= 120 ? Math.round(days) : 15,
     autoIssue: b.autoIssue === true,
-    kycRates: Object.fromEntries(['dl', 'aadhaar_generate', 'aadhaar_verify', 'pan'].map(k => { const n = Number(b.kycRates && b.kycRates[k]); return [k, Number.isFinite(n) && n >= 0 && n <= 10000 ? Math.round(n * 100) / 100 : 0]; }))
+    kycRates: Object.fromEntries(require('./gridlines-apis').KINDS.map(k => { const n = Number(b.kycRates && b.kycRates[k]); return [k, Number.isFinite(n) && n >= 0 && n <= 10000 ? Math.round(n * 100) / 100 : 0]; }))
   };
 }
 
@@ -131,7 +131,7 @@ function validateConfig(input = {}) {
   out.notes = String(input.notes || '').trim().slice(0, 500);
   try {
     const w = input.wallet || {}, kr = {};
-    for (const k of ['dl', 'aadhaar_generate', 'aadhaar_verify', 'pan']) { const v = money((w.kycRates || {})[k], 'ID check price'); if (v != null) kr[k] = v; }
+    for (const k of require('./gridlines-apis').KINDS) { const v = money((w.kycRates || {})[k], 'ID check price'); if (v != null) kr[k] = v; }
     out.wallet = { enabled: out.model === 'wallet' || w.enabled === true, creditLimit: money(w.creditLimit, 'Credit limit') || 0, lowAlert: money(w.lowAlert, 'Low-balance alert'), kycRates: kr };
   } catch (e) { return bad(e.message); }
   if (out.model && out.model !== 'per_case' && out.model !== 'wallet' && !(out.subscription.monthlyFee > 0)) return bad('A subscription needs a monthly fee. (Use the per-case model if there is no fixed fee.)');

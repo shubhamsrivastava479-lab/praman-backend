@@ -64,6 +64,7 @@ app.use('/api', (req, res, next) => /^\/(public|ai-call|participant|super-admin|
 app.use('/api/auth', authRouter);
 app.use('/api/whatsapp-accounts', whatsappAccountsRouter);
 app.use('/api/kyc', kycRouter);
+app.use('/api/gridlines', require('./routes/gridlines'));
 app.use('/api/cases', casesRouter);
 app.use('/api/public', publicRouter);
 app.use('/api/demo', require('./routes/demo'));

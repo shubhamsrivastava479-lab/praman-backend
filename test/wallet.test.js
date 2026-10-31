@@ -35,7 +35,7 @@ test.after(() => server.close());
 test('config: wallet model switches the wallet on; rates come from settings with firm override', () => {
   assert.equal(billing.configOf(firm('w1')).wallet.enabled, true);
   assert.equal(billing.configOf(firm('k1')).model, 'per_case');
-  assert.deepEqual(wallet.kycRatesOf(db.data, firm('w1')), { dl: 5, aadhaar_generate: 3, aadhaar_verify: 4, pan: 10 }); // pan overridden
+  assert.deepEqual(wallet.kycRatesOf(db.data, firm('w1')), { dl: 5, aadhaar_generate: 3, aadhaar_verify: 4, pan: 10, rc_detailed: 0, chassis_rc: 0, fastag: 0, echallan: 0, cibil: 0, digital_footprint: 0 }); // pan overridden; new checks are free until a price is set
   assert.deepEqual(wallet.kycRatesOf(db.data, firm('k1')).pan, 6);
 });
 

@@ -894,6 +894,17 @@ async function openCase(id, scroll){
       <div id="kycMsg" style="font-size:12px;margin-top:6px;"></div>
     </div>
 
+    <div class="card" id="glPanel" data-case="${c.id}">
+      <b>ID, vehicle &amp; credit checks</b>
+      <div class="hint">PAN, driving licence, RC, chassis, FASTag, e-challan, CIBIL, digital footprint. Each check is charged as per your plan and saved with this case.</div>
+      <div class="form-row"><select id="glApi" onchange="glForm()"><option value="">Loading…</option></select></div>
+      <div id="glFields"></div>
+      <div id="glMsg2" style="font-size:12px;margin-top:6px;"></div>
+      <pre id="glOut" style="display:none;background:#f6f6f6;padding:8px;font-size:11.5px;max-height:240px;overflow:auto;white-space:pre-wrap;"></pre>
+      <div class="hint" style="margin-top:8px;">Earlier checks on this case</div>
+      <div id="glHist" style="font-size:12px;"></div>
+    </div>
+
     <div class="card">
       <b>WhatsApp Evidence Vault (${c.evidence.length})</b>
       <div id="evidenceList">
@@ -929,6 +940,7 @@ async function openCase(id, scroll){
       <div id="reportBox" style="margin-top:10px;">${c.report ? c.report.html : '<span style="opacity:.6;">No report generated yet.</span>'}</div>
     </div>
   `;
+  glInit();
 }
 
 async function sendPhoneOtp(caseId){
@@ -943,6 +955,43 @@ async function verifyPhoneOtp(caseId){
   });
   const data = await res.json();
   document.getElementById('otpMsg').textContent = data.error || 'Phone number verified ✓';
+}
+
+// ---- Gridlines checks (PAN, DL, RC, chassis, FASTag, e-challan, CIBIL, digital footprint) ----
+let glChecks = null;
+async function glInit(){
+  const sel = document.getElementById('glApi'); if(!sel) return;
+  if(!glChecks){ try { glChecks = (await (await fetch(API + '/api/gridlines/catalog', { headers: authHeaders() })).json()).checks || []; } catch { glChecks = []; } }
+  sel.innerHTML = glChecks.length ? '<option value="">Choose a check…</option>' + glChecks.map(c => `<option value="${c.id}">${c.label}</option>`).join('') : '<option value="">No checks switched on yet</option>';
+  glHist();
+}
+function glForm(){
+  const c = glChecks.find(x => x.id === document.getElementById('glApi').value), box = document.getElementById('glFields');
+  if(!c){ box.innerHTML = ''; return; }
+  const attr = t => String(t||'').replace(/"/g,'&quot;');
+  box.innerHTML = c.inputs.map(i => `<div class="form-row"><input id="gli_${i.key}" placeholder="${attr(i.label)}${i.required?'':' (optional)'}" ${/date/i.test(i.key)?'type="date" title="'+attr(i.label)+'"':''}></div>${i.hint?`<div class="hint">${attr(i.hint)}</div>`:''}`).join('')
+    + (c.needsConsent ? '<label style="font-size:12.5px;display:block;margin:6px 0;"><input type="checkbox" id="gliConsent"> The person has given consent for this check</label>' : '')
+    + '<div class="form-row"><button onclick="glRun()">Run check</button></div>';
+}
+async function glRun(){
+  const panel = document.getElementById('glPanel'), id = document.getElementById('glApi').value, c = glChecks.find(x => x.id === id), m = document.getElementById('glMsg2'), out = document.getElementById('glOut');
+  const input = {}; c.inputs.forEach(i => { input[i.key] = document.getElementById('gli_' + i.key).value; });
+  m.style.color = '#555'; m.textContent = 'Checking…'; out.style.display = 'none';
+  const r = await fetch(API + '/api/gridlines/run/' + id, { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ input, caseId: panel.dataset.case, consent: !!(document.getElementById('gliConsent')||{}).checked }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ m.style.color = '#b23a2c'; m.textContent = d.error || 'The check could not be completed.'; glHist(); return; }
+  m.style.color = '#1f7a6c'; m.textContent = '✓ Done — saved with this case.';
+  out.style.display = 'block'; out.textContent = JSON.stringify(d.data, null, 2); glHist();
+}
+async function glHist(){
+  const panel = document.getElementById('glPanel'), box = document.getElementById('glHist'); if(!panel||!box) return;
+  const d = await (await fetch(API + '/api/gridlines/transactions?caseId=' + panel.dataset.case, { headers: authHeaders() })).json().catch(() => ({}));
+  const esc2 = t => String(t==null?'':t).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  box.innerHTML = (d.transactions||[]).map(t => `<div>${esc2(new Date(t.at).toLocaleString('en-IN'))} — ${esc2(t.label)} (${esc2(Object.values(t.input||{}).join(' · '))}) — ${esc2(t.status)}${t.resultId?` — <a href="#" onclick="glView('${t.id}');return false;">view data</a>`:''}</div>`).join('') || 'None yet.';
+}
+async function glView(tid){
+  const r = await fetch(API + '/api/gridlines/transactions/' + tid + '/result', { headers: authHeaders() }), d = await r.json().catch(()=>({})), out = document.getElementById('glOut');
+  out.style.display = 'block'; out.textContent = r.ok ? JSON.stringify(d.data, null, 2) : (d.error || 'No data');
 }
 
 async function verifyDL(caseId){

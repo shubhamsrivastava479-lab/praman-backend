@@ -322,6 +322,55 @@ router.post('/test-gemini', async (req, res) => {
   res.json(out);
 });
 
+// ---- Gridlines checks: one key per check, paths, and every call that was made ----
+router.get('/gridlines', async (req, res) => {
+  await db.read();
+  const gl = require('../services/gridlines'), mine = (db.data.platformSettings || {}).gridlinesApis || {};
+  const mask = k => k ? '••••' + String(k).slice(-4) : '';
+  res.json({ authType: (db.data.platformSettings || {}).gridlinesAuthType || process.env.GRIDLINES_AUTH_TYPE || 'API-Key',
+    apis: Object.entries(gl.APIS).map(([id, a]) => { const k = gl.keyOf(id), c = gl.configOf(id);
+      return { id, label: a.label, confirmed: c.confirmed, keySet: !!k.key, keySource: k.source, keyMask: mask(k.key), path: c.path, defaultPath: a.path,
+        body: JSON.stringify(c.body), customised: !!(mine[id] && (mine[id].path || mine[id].body)) }; }) });
+});
+router.put('/gridlines', async (req, res) => {
+  await db.read();
+  const gl = require('../services/gridlines'), ps = (db.data.platformSettings ||= {}), b = req.body || {};
+  ps.gridlinesKeys ||= {}; ps.gridlinesApis ||= {};
+  if (typeof b.authType === 'string') ps.gridlinesAuthType = b.authType.trim().slice(0, 40) || undefined;
+  for (const [id, v] of Object.entries(b.apis || {})) {
+    if (!gl.APIS[id] || !v) continue;
+    if (typeof v.key === 'string') { const k = v.key.trim(); if (k === '-') delete ps.gridlinesKeys[id]; else if (k) ps.gridlinesKeys[id] = k.slice(0, 300); }
+    if (typeof v.path === 'string') {
+      const p = v.path.trim();
+      if (p && !/^\/[A-Za-z0-9_\-\/.]+$/.test(p)) return res.status(400).json({ error: gl.APIS[id].label + ': path must look like /xyz-api/fetch' });
+      (ps.gridlinesApis[id] ||= {}).path = p || undefined;
+    }
+    if (typeof v.body === 'string') {
+      const t = v.body.trim();
+      if (t) { try { const o = JSON.parse(t); if (!o || typeof o !== 'object' || Array.isArray(o)) throw 0; } catch { return res.status(400).json({ error: gl.APIS[id].label + ': request body must be a JSON object' }); } }
+      (ps.gridlinesApis[id] ||= {}).body = t || undefined;
+    }
+  }
+  await db.write();
+  res.json({ ok: true });
+});
+router.get('/gridlines/transactions', async (req, res) => {
+  await db.read();
+  const q = req.query || {}, firms = new Map((db.data.users || []).filter(u => u.role === 'vendor_admin').map(u => [u.id, u.vendorName || u.email]));
+  let list = db.data.apiTransactions || [];
+  const stats = {}; for (const t of list) { const s = (stats[t.api] ||= { total: 0, success: 0, failed: 0 }); s.total++; if (t.status === 'success') s.success++; else if (t.status !== 'started') s.failed++; }
+  if (q.api) list = list.filter(t => t.api === q.api);
+  if (q.status) list = list.filter(t => t.status === q.status);
+  if (q.vendorId) list = list.filter(t => t.vendorId === q.vendorId);
+  res.json({ stats, transactions: list.slice(-Math.min(+q.limit || 200, 1000)).reverse().map(t => ({ ...t, firm: firms.get(t.vendorId) || t.vendorId })) });
+});
+router.get('/gridlines/transactions/:id/result', async (req, res) => {
+  await db.read();
+  const r = (db.data.apiResults || []).find(x => x.txnId === req.params.id);
+  if (!r) return res.status(404).json({ error: 'No stored data for this call.' });
+  res.json(r);
+});
+
 // Storage status + a full backup download (JSON) for the Super Admin.
 router.get('/system', async (req, res) => {
   const counts = {};

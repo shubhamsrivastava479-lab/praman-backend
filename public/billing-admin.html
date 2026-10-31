@@ -78,7 +78,7 @@
       <div><label>UPI id</label><input id="s_upi"></div>
     </div>
     <h3>Default price of each ID check (₹, before GST)</h3><div class="hint">What a firm with a wallet pays each time we call the ID provider. Keep it above your own cost per call. A firm can have its own price in its plan.</div>
-    <div class="f2"><div><label>Driving licence</label><input type="number" min="0" id="s_k_dl"></div><div><label>Aadhaar - send OTP</label><input type="number" min="0" id="s_k_aadhaar_generate"></div><div><label>Aadhaar - verify OTP</label><input type="number" min="0" id="s_k_aadhaar_verify"></div><div><label>PAN</label><input type="number" min="0" id="s_k_pan"></div></div>
+    <div class="f2"><div><label>Driving licence</label><input type="number" min="0" id="s_k_dl"></div><div><label>Aadhaar - send OTP</label><input type="number" min="0" id="s_k_aadhaar_generate"></div><div><label>Aadhaar - verify OTP</label><input type="number" min="0" id="s_k_aadhaar_verify"></div><div><label>PAN</label><input type="number" min="0" id="s_k_pan"></div><div><label>RC details</label><input type="number" min="0" id="s_k_rc_detailed"></div><div><label>Chassis to RC</label><input type="number" min="0" id="s_k_chassis_rc"></div><div><label>FASTag</label><input type="number" min="0" id="s_k_fastag"></div><div><label>E-challan</label><input type="number" min="0" id="s_k_echallan"></div><div><label>CIBIL score</label><input type="number" min="0" id="s_k_cibil"></div><div><label>Digital footprint</label><input type="number" min="0" id="s_k_digital_footprint"></div></div>
     <label>Address</label><textarea id="s_address" rows="2"></textarea>
     <label>Terms printed on the invoice</label><textarea id="s_terms" rows="2"></textarea>
     <label><input type="checkbox" id="s_autoIssue" style="width:auto"> Issue invoices automatically after the month ends (otherwise they wait as drafts for your check)</label>
@@ -150,7 +150,7 @@ async function editPlan(id) {
     <label><input type="checkbox" id="w_on" style="width:auto"> Wallet is on for this firm</label>
     <div class="f2"><div><label>Allowed to go below zero by (₹)</label><input type="number" min="0" id="w_limit" value="${c.wallet.creditLimit || ''}"></div>
       <div><label>Low-balance alert at (₹)</label><input type="number" min="0" id="w_low" value="${c.wallet.lowAlert ?? ''}"></div>
-      ${[['dl','Driving licence check'],['aadhaar_generate','Aadhaar - send OTP'],['aadhaar_verify','Aadhaar - verify OTP'],['pan','PAN check']].map(([k,l]) => `<div><label>${l} — price for this firm (₹)</label><input type="number" min="0" data-kyc="${k}" value="${c.wallet.kycRates[k] ?? ''}" placeholder="platform default"></div>`).join('')}</div>
+      ${[['dl','Driving licence check'],['aadhaar_generate','Aadhaar - send OTP'],['aadhaar_verify','Aadhaar - verify OTP'],['pan','PAN check'],['rc_detailed','RC details'],['chassis_rc','Chassis to RC'],['fastag','FASTag'],['echallan','E-challan'],['cibil','CIBIL score'],['digital_footprint','Digital footprint']].map(([k,l]) => `<div><label>${l} — price for this firm (₹)</label><input type="number" min="0" data-kyc="${k}" value="${c.wallet.kycRates[k] ?? ''}" placeholder="platform default"></div>`).join('')}</div>
     <h3>Other terms</h3><div class="f2">
       <div><label>Minimum monthly charge (₹, per-case only)</label><input type="number" min="0" id="p_min" value="${c.minimumMonthly || ''}"></div>
       <div><label>Discount %</label><input type="number" min="0" max="100" id="p_disc" value="${c.discountPercent || ''}"></div>
@@ -255,11 +255,11 @@ async function loadSettings() {
   const s = await api('GET', '/settings');
   sIds.forEach(k => $('s_' + k).value = s[k] ?? '');
   $('s_bankName').value = s.bank.name; $('s_bankAccount').value = s.bank.account; $('s_bankIfsc').value = s.bank.ifsc; $('s_bankBranch').value = s.bank.branch; $('s_autoIssue').checked = !!s.autoIssue;
-  ['dl','aadhaar_generate','aadhaar_verify','pan'].forEach(k => $('s_k_' + k).value = s.kycRates[k] || '');
+  ['dl','aadhaar_generate','aadhaar_verify','pan','rc_detailed','chassis_rc','fastag','echallan','cibil','digital_footprint'].forEach(k => $('s_k_' + k).value = s.kycRates[k] || '');
 }
 $('saveSettings').onclick = async () => {
   const b = {}; sIds.forEach(k => b[k] = $('s_' + k).value);
-  b.bank = { name: $('s_bankName').value, account: $('s_bankAccount').value, ifsc: $('s_bankIfsc').value, branch: $('s_bankBranch').value }; b.autoIssue = $('s_autoIssue').checked; b.kycRates = Object.fromEntries(['dl','aadhaar_generate','aadhaar_verify','pan'].map(k => [k, $('s_k_' + k).value]));
+  b.bank = { name: $('s_bankName').value, account: $('s_bankAccount').value, ifsc: $('s_bankIfsc').value, branch: $('s_bankBranch').value }; b.autoIssue = $('s_autoIssue').checked; b.kycRates = Object.fromEntries(['dl','aadhaar_generate','aadhaar_verify','pan','rc_detailed','chassis_rc','fastag','echallan','cibil','digital_footprint'].map(k => [k, $('s_k_' + k).value]));
   const r = await api('PUT', '/settings', b); say('setMsg', r.error || 'Saved', !r.error);
 };
 

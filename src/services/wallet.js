@@ -11,12 +11,7 @@ const { uid } = require('../db');
 const plans = require('./plans');
 const billing = require('./billing');
 
-const KYC = {
-  dl: 'Driving licence check',
-  aadhaar_generate: 'Aadhaar - send OTP',
-  aadhaar_verify: 'Aadhaar - verify OTP',
-  pan: 'PAN check'
-};
+const KYC = require('./gridlines-apis').KIND_LABELS; // every paid ID / vehicle / credit check has a price in the wallet
 const r2 = x => Math.round(Number(x || 0) * 100) / 100;
 const num = (v, d = null) => (v === '' || v == null || !Number.isFinite(Number(v))) ? d : Number(v);
 

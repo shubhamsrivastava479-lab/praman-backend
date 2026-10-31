@@ -2,6 +2,7 @@ const express = require('express');
 const { db, uid } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const kyc = require('../services/kyc');
+const gridlines = require('../services/gridlines');
 const otpService = require('../services/otp');
 const { getSetting } = require('../services/platform-settings');
 const { maskId, redactIdsInText, rateLimit } = require('../services/security');
@@ -24,6 +25,8 @@ async function getPlatformCreds(c) {
 // name or raw error text to the dashboard.
 function safeFail(res, err) {
   if (err && err.code === 'WALLET_LOW') return res.status(402).json({ error: err.message });
+  if (err && err.code === 'INVALID') return res.status(400).json({ error: err.message });
+  if (err && err.code === 'NOT_CONFIGURED') return res.status(503).json({ error: gridlines.vendorReason('NOT_CONFIGURED') });
   console.error('KYC verification error:', err.message); // full detail stays in server logs only
   res.status(400).json({ error: 'Verification could not be completed. Please check the details and try again.' });
 }
@@ -36,25 +39,11 @@ router.post('/dl-verify/:caseId', async (req, res) => {
   if (!c) return res.status(404).json({ error: 'Case not found' });
   const { dlNumber, dateOfBirth } = req.body;
   if (!dlNumber || !dateOfBirth) return res.status(400).json({ error: 'dlNumber and dateOfBirth are required' });
-
   try {
-    const creds = await getPlatformCreds(c);
-    const result = await kyc.verifyDrivingLicence(dlNumber, dateOfBirth, creds);
-    db.data.custody.push({
-      id: uid('cust'), caseId: c.id, event: `Driving licence ${maskId(dlNumber)} verified`,
-      actor: 'kyc_check', timestamp: new Date().toISOString()
-    });
-    db.data.evidence.push({
-      id: uid('ev'), caseId: c.id, source: 'kyc_check', type: 'dl_verification',
-      caption: `DL verification result for ${maskId(dlNumber)}`,
-      analysis: { documentType: 'dl', visibleText: redactIdsInText(JSON.stringify(result.data || result)), notableDetails: '' },
-      receivedAt: new Date().toISOString()
-    });
-    await db.write();
-    res.json({ verified: true, details: result.data || result });
-  } catch (err) {
-    safeFail(res, err);
-  }
+    // Logged (transaction + stored result + evidence) by the Gridlines service.
+    const { result } = await gridlines.call({ api: 'dl', input: { dlNumber, dateOfBirth }, user: req.user, vendorId: c.vendorId, caseId: c.id });
+    res.json({ verified: true, details: result.data });
+  } catch (err) { safeFail(res, err); }
 });
 
 // ---------- Aadhaar OTP verification ----------
@@ -111,25 +100,10 @@ router.post('/pan-verify/:caseId', async (req, res) => {
   if (!panNumber || !nameOnPan || !dateOfBirth) {
     return res.status(400).json({ error: 'panNumber, nameOnPan and dateOfBirth are required' });
   }
-
   try {
-    const creds = await getPlatformCreds(c);
-    const result = await kyc.verifyPan(panNumber, nameOnPan, dateOfBirth, creds);
-    db.data.custody.push({
-      id: uid('cust'), caseId: c.id, event: `PAN ${maskId(panNumber)} verified`,
-      actor: 'kyc_check', timestamp: new Date().toISOString()
-    });
-    db.data.evidence.push({
-      id: uid('ev'), caseId: c.id, source: 'kyc_check', type: 'pan_verification',
-      caption: `PAN verification result for ${maskId(panNumber)}`,
-      analysis: { documentType: 'pan', visibleText: redactIdsInText(JSON.stringify(result.data || result)), notableDetails: '' },
-      receivedAt: new Date().toISOString()
-    });
-    await db.write();
-    res.json({ verified: true, details: result.data || result });
-  } catch (err) {
-    safeFail(res, err);
-  }
+    const { result } = await gridlines.call({ api: 'pan', input: { panNumber, nameOnPan, dateOfBirth }, user: req.user, vendorId: c.vendorId, caseId: c.id });
+    res.json({ verified: true, details: result.data });
+  } catch (err) { safeFail(res, err); }
 });
 
 // ---------- Phone number OTP (via the case's own connected WhatsApp) ----------

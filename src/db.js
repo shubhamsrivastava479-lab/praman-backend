@@ -36,6 +36,8 @@ const defaultData = () => ({
   billingSettings: {},   // Praman's own invoice details: legal name, GSTIN, bank, UPI, numbering
   aiUsage: {},           // Gemini calls per day: { 'YYYY-MM-DD': { text, tts, errors, ... } }
   demoRequests: [],      // 'Request a demo' form of the website (Super Admin sees them)
+  apiTransactions: [],   // one line per Gridlines check (PAN, DL, RC, CIBIL ...): who, what, result, price
+  apiResults: [],        // the data that came back from each check
   fileFacts: [],         // exact fingerprint + PDF / photo metadata of every stored file (file-facts.js)
   platformSettings: {} // Super Admin managed: geminiApiKey, gridlinesApiKey, R2, TURN ...
 });

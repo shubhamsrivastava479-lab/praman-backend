@@ -146,6 +146,21 @@
     <div id="settingsMsg" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
+  <div class="card" id="glCard">
+    <h2>Gridlines checks <span class="source-tag">one key per check</span></h2>
+    <div class="hint">Each check (CIBIL, Digital Footprint, PAN, DL, E-Challan, FASTag, RC, Chassis) has its own API key. Paste a key and press Save. Type <b>-</b> to remove a key. A check without a key stays switched off for vendors. Prices are set in Billing.</div>
+    <div id="glRows" style="margin-top:8px;"></div>
+    <button class="save" onclick="glSave()">Save Gridlines keys</button>
+    <div id="glMsg" style="font-size:12.5px;margin-top:8px;"></div>
+    <h3 style="margin:16px 0 6px;font-size:14px;">Every call made (all firms)</h3>
+    <div class="form-row"><select id="glFilterApi" onchange="glTxns()"><option value="">All checks</option></select>
+      <select id="glFilterStatus" onchange="glTxns()"><option value="">Any result</option><option value="success">Success</option><option value="failed">Failed</option><option value="blocked">Blocked</option></select>
+      <button class="link" onclick="glTxns()">Refresh</button></div>
+    <div id="glStats" style="font-size:12px;color:#555;margin:6px 0;"></div>
+    <div style="overflow:auto;"><table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="text-align:left;"><th>Time</th><th>Firm</th><th>Check</th><th>Case</th><th>Input</th><th>Result</th><th>ms</th><th>Data</th></tr></thead><tbody id="glTxnRows"></tbody></table></div>
+    <pre id="glData" style="display:none;background:#f6f6f6;padding:8px;font-size:11.5px;max-height:260px;overflow:auto;white-space:pre-wrap;"></pre>
+  </div>
+
   <div class="card">
     <h2>Evidence Storage <span class="source-tag" id="storageSourceTag"></span></h2>
     <p class="hint">By default, WhatsApp photos, documents, and call recordings save to this server's local disk — most hosts (including Render's free tier) wipe this on restart or redeploy. Connect S3-compatible object storage (Cloudflare R2 recommended — cheap, no egress fees) so evidence is never lost.</p>
@@ -592,6 +607,57 @@ async function bkRestore(id){
   const d = await r.json(); document.getElementById('bkMsg').textContent = r.ok ? 'Restored. Reload the page.' : d.error; bkLoad();
 }
 bkLoad();
+// ---- Gridlines checks ----
+let glList = [];
+async function glLoad(){
+  const d = await (await fetch('/api/super-admin/gridlines', { headers: authHeaders() })).json();
+  glList = d.apis || [];
+  document.getElementById('glRows').innerHTML = glList.map(a => `
+    <div style="border-bottom:1px solid #eee;padding:8px 0;">
+      <b>${esc(a.label)}</b> ${a.keySet ? '<span style="color:#1f7a6c">● key set ' + esc(a.keyMask) + ' (' + esc(a.keySource) + ')</span>' : '<span style="color:#b23a2c">○ no key</span>'}
+      ${a.confirmed ? '' : '<span style="color:#b26b00;font-size:11.5px"> — path not confirmed with Gridlines yet; check it below</span>'}
+      <div class="form-row" style="margin-top:4px;">
+        <input id="glk_${a.id}" type="password" placeholder="API key (blank = keep)" autocomplete="off">
+        <input id="glp_${a.id}" value="${esc(a.path)}" title="API path" placeholder="${esc(a.defaultPath)}">
+      </div>
+      <details><summary style="font-size:11.5px;cursor:pointer;">Request body (advanced)</summary>
+        <textarea id="glb_${a.id}" rows="3" style="width:100%;font-family:monospace;font-size:11.5px;">${esc(a.body)}</textarea>
+        <div class="hint">Use {{panNumber}}-style placeholders. Only change if Gridlines docs show different field names.</div></details>
+    </div>`).join('');
+  const sel = document.getElementById('glFilterApi');
+  if (sel.options.length <= 1) glList.forEach(a => sel.add(new Option(a.label, a.id)));
+  glTxns();
+}
+async function glSave(){
+  const m = document.getElementById('glMsg'), apis = {};
+  for (const a of glList) {
+    const key = document.getElementById('glk_' + a.id).value.trim(), path = document.getElementById('glp_' + a.id).value.trim(), body = document.getElementById('glb_' + a.id).value.trim();
+    const v = {};
+    if (key) v.key = key;
+    if (path !== a.path) v.path = path === a.defaultPath ? '' : path;
+    if (body !== a.body) v.body = body;
+    if (Object.keys(v).length) apis[a.id] = v;
+  }
+  const r = await fetch('/api/super-admin/gridlines', { method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ apis }) });
+  const d = await r.json();
+  m.style.color = r.ok ? '#1f7a6c' : '#b23a2c'; m.textContent = r.ok ? '✓ Saved.' : (d.error || 'Could not save.');
+  if (r.ok) glLoad();
+}
+async function glTxns(){
+  const q = new URLSearchParams({ api: document.getElementById('glFilterApi').value, status: document.getElementById('glFilterStatus').value });
+  const d = await (await fetch('/api/super-admin/gridlines/transactions?' + q, { headers: authHeaders() })).json();
+  document.getElementById('glStats').textContent = Object.entries(d.stats || {}).map(([k, s]) => (glList.find(a => a.id === k) || {label: k}).label + ': ' + s.total + ' calls (' + s.success + ' ok, ' + s.failed + ' not ok)').join('  •  ') || 'No calls yet.';
+  document.getElementById('glTxnRows').innerHTML = (d.transactions || []).map(t => `<tr style="border-top:1px solid #eee;">
+    <td>${esc(new Date(t.at).toLocaleString('en-IN'))}</td><td>${esc(t.firm)}</td><td>${esc(t.label)}</td><td>${esc(t.caseRef || '')}</td>
+    <td>${esc(Object.values(t.input || {}).join(' · '))}</td>
+    <td style="color:${t.status === 'success' ? '#1f7a6c' : '#b23a2c'}">${esc(t.status)}${t.refunded ? ' (refunded)' : ''}${t.error ? '<br><span style="color:#888">' + esc(t.error) + '</span>' : ''}</td>
+    <td>${t.ms == null ? '' : t.ms}</td><td>${t.resultId ? '<a href="#" onclick="glShow(\'' + t.id + '\');return false;">view</a>' : ''}</td></tr>`).join('');
+}
+async function glShow(id){
+  const r = await fetch('/api/super-admin/gridlines/transactions/' + id + '/result', { headers: authHeaders() }), d = await r.json(), p = document.getElementById('glData');
+  p.style.display = 'block'; p.textContent = r.ok ? JSON.stringify(d.data, null, 2) : (d.error || 'No data');
+}
+glLoad();
 </script>
 </body>
 </html>
