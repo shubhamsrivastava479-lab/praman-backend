@@ -82,3 +82,23 @@ test('login needs an email code; forgot password; register with an official emai
   assert.equal(u.signupMethod, 'email'); assert.equal(u.approved, false);
   assert.equal((await call('POST', '/api/auth/login', { email: 'boss@newfirm.in', password: 'Firm12345' })).s, 403); // waits for approval
 });
+
+test('email through Brevo web API', async () => {
+  const n = require('../src/services/notifications');
+  delete require.cache[require.resolve('../src/services/notifications')];
+  const fresh = require('../src/services/notifications');
+  process.env.BREVO_API_KEY = 'k'; process.env.MAIL_FROM = 'Praman <no-reply@pramanservices.space>';
+  const real = global.fetch; let seen;
+  global.fetch = async (url, o) => { seen = { url, o }; return { ok: true, text: async () => '' }; };
+  try {
+    assert.ok(fresh.transport());
+    assert.equal(await fresh.sendMail('a@b.in', 'Hi', 'Code 123456'), true);
+    assert.equal(seen.url, 'https://api.brevo.com/v3/smtp/email');
+    assert.equal(seen.o.headers['api-key'], 'k');
+    const b = JSON.parse(seen.o.body);
+    assert.deepEqual(b.sender, { name: 'Praman', email: 'no-reply@pramanservices.space' });
+    assert.deepEqual(b.to, [{ email: 'a@b.in' }]); assert.equal(b.textContent, 'Code 123456');
+    global.fetch = async () => ({ ok: false, status: 401, text: async () => 'bad key' });
+    assert.equal(await fresh.sendMail('a@b.in', 'Hi', 'x'), false);       // failure is reported, not thrown
+  } finally { global.fetch = real; delete process.env.BREVO_API_KEY; }
+});

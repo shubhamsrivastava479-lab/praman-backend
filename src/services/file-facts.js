@@ -26,14 +26,21 @@ function pdfString(txt, key) {
   const s = b[0] === 0xfe && b[1] === 0xff ? b.slice(2).swap16().toString('utf16le') : b.toString('latin1');
   return s.replace(/[^\x20-\x7E]/g, '').trim().slice(0, 120) || null;
 }
+function countEof(buf) {
+  let n = 0, i = -1;
+  while ((i = buf.indexOf('%%EOF', i + 1, 'latin1')) !== -1) n++;
+  return n;
+}
 function pdfFacts(buf) {
-  const txt = buf.toString('latin1');
+  // Big PDFs: only the start and the end are read as text (where the info lives), so memory stays small.
+  const BIG = 4 * 1024 * 1024;
+  const txt = buf.length <= BIG ? buf.toString('latin1') : buf.toString('latin1', 0, 1024 * 1024) + '\n' + buf.toString('latin1', buf.length - 3 * 1024 * 1024);
   return {
     producer: pdfString(txt, 'Producer'),
     creator: pdfString(txt, 'Creator'),
     created: pdfDate((/\/CreationDate\s*\(([^)]*)\)/.exec(txt) || [])[1]),
     modified: pdfDate((/\/ModDate\s*\(([^)]*)\)/.exec(txt) || [])[1]),
-    saves: Math.max(1, (txt.match(/%%EOF/g) || []).length) // more than 1 = saved again after it was made
+    saves: Math.max(1, countEof(buf)) // more than 1 = saved again after it was made
   };
 }
 
@@ -125,13 +132,13 @@ async function recordPath(url, filePath, mime) {
 }
 
 // Older files saved before this existed: fingerprint a few per run (big media skipped).
-async function backfill(limit = 25) {
+async function backfill(limit = 10) {
   const { db } = require('../db');
   const storage = require('./storage');
   const todo = (db.data.evidence || []).filter(e => e.fileUrl && !e.purgedAt && !factsFor(e.fileUrl) && !e.factsFailed && !/^(video|audio)/.test(e.mimeType || '')).slice(0, limit);
   let done = 0;
   for (const e of todo) {
-    try { const buf = await storage.readFile(e.fileUrl); if (buf.length <= 25 * 1024 * 1024) { recordBuffer(e.fileUrl, buf, e.mimeType); done++; } else e.factsFailed = 'too large'; }
+    try { const buf = await storage.readFile(e.fileUrl); if (buf.length <= 15 * 1024 * 1024) { recordBuffer(e.fileUrl, buf, e.mimeType); done++; } else e.factsFailed = 'too large'; }
     catch { e.factsFailed = 'unreadable'; }
   }
   if (todo.length) await db.write();

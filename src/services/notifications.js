@@ -7,7 +7,21 @@ const followup = require('./followup');
 
 const MAX_PER_FIRM = 300;
 let mailer = null;
+// Brevo by its web API (BREVO_API_KEY): works on the free plan without asking Brevo to switch SMTP on.
+const brevoOn = () => !!process.env.BREVO_API_KEY;
+function parseFrom(v) {
+  const m = String(v || '').match(/^\s*(?:"?([^"<]*?)"?\s*)?<([^>]+)>\s*$/);
+  return m ? { name: (m[1] || '').trim() || undefined, email: m[2].trim() } : { email: String(v || '').trim() };
+}
+async function brevoSend(list, subject, text, attachments) {
+  const body = { sender: parseFrom(process.env.MAIL_FROM || 'Praman <no-reply@praman.local>'), to: list.map(email => ({ email })), subject, textContent: text };
+  if (attachments && attachments.length) body.attachment = attachments.map(a => ({ name: a.filename || 'file', content: Buffer.from(a.content || '').toString('base64') }));
+  const r = await fetch('https://api.brevo.com/v3/smtp/email', { method: 'POST', headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error('Brevo ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 200));
+}
+
 function transport() {
+  if (brevoOn()) return { brevo: true };
   if (mailer !== null) return mailer;
   mailer = false;
   if (process.env.SMTP_URL) {
@@ -21,6 +35,7 @@ async function sendMail(to, subject, text, attachments) {
   const list = String(to || '').split(/[;,]/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+$/.test(x));
   if (!t || !list.length) return false;
   try {
+    if (t.brevo) { await brevoSend(list, subject, text, attachments); return true; }
     await t.sendMail({ from: process.env.MAIL_FROM || 'Praman <no-reply@praman.local>', to: list.join(','), subject, text, attachments });
     return true;
   } catch (e) { console.error('Email failed:', e.message); return false; }
