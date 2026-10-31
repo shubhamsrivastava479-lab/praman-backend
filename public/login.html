@@ -65,10 +65,15 @@
   .cbox{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:22px}
   .cbox small{display:block;color:#a9c0d6;font-size:12px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
   .cbox a{color:#fff;font-size:18px;font-weight:600;word-break:break-all}
+  .ind{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .ind .box h3{display:flex;gap:8px;align-items:center}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chips span{font-size:12.5px;background:#eef3f8;color:#2b4a66;border-radius:14px;padding:4px 10px}
+  .soon{margin-top:26px;background:#fff;border:1px dashed #b9c6d3;border-radius:12px;padding:18px 20px;color:var(--mut);font-size:14.5px}
   footer{background:#021f36;color:#9fb4c8;font-size:13px;padding:22px 0}
   footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   footer a{color:#cfe0ef}
-  @media(max-width:900px){.hero .wrap{grid-template-columns:1fr}.g3,.g2{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}h1.big{font-size:32px}nav a.hide{display:none}}
+  @media(max-width:900px){.hero .wrap{grid-template-columns:1fr}.g3,.g2,.ind{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}h1.big{font-size:32px}nav a.hide{display:none}}
   @media(max-width:520px){.steps{grid-template-columns:1fr}}
 </style>
 </head>
@@ -79,6 +84,7 @@
     <nav>
       <a class="hide" href="#features">Features</a>
       <a class="hide" href="#services">Services</a>
+      <a class="hide" href="#industries">Industries</a>
       <a class="hide" href="#how">How it works</a>
       <a class="hide" href="#contact">Contact us</a>
       <a class="btn" href="#login">Log in</a>
@@ -145,7 +151,17 @@
   </div>
 </section>
 
-<section id="how">
+<section id="industries">
+  <div class="wrap">
+    <div class="kicker">Industries</div>
+    <h2 class="t">One platform, many kinds of verification</h2>
+    <p class="intro">Wherever a person, a business or a claim has to be checked, and the proof has to hold up later, Praman can be used. Here is where our clients and partners can use it.</p>
+    <div class="ind" id="indGrid"></div>
+    <div class="soon">Do not see your industry? Tell us what you verify today. New services and question sets are being added step by step, and we build around real use cases. <a href="#contact" style="color:var(--navy);font-weight:600">Contact us</a>.</div>
+  </div>
+</section>
+
+<section id="how" class="alt">
   <div class="wrap">
     <div class="kicker">How it works</div>
     <h2 class="t">From case to report in four steps</h2>
@@ -159,7 +175,7 @@
   </div>
 </section>
 
-<section class="alt">
+<section>
   <div class="wrap">
     <div class="kicker">Trust and privacy</div>
     <h2 class="t">Evidence you can defend, data you can trust</h2>
@@ -229,6 +245,22 @@ async function submitForm(){
   location.href = data.user.role === 'super_admin' ? '/super-admin.html' : data.user.role === 'insurer' ? '/insurer.html' : '/index.html';
 }
 
+
+const INDUSTRIES = [
+ ['🏦','Banks, NBFCs and microfinance',['Home and business address checks','Income and job confirmation','Gold, vehicle and tractor loans','Property inspection','Collections and address trace','Merchant and shop verification']],
+ ['🛡️','Insurance',['Health and motor claims','Marine, fire and property claims','Crop and cattle claims','Death claim investigation','Travel and accident claims','Gadget and warranty claims','Agent and POSP onboarding','Verification before underwriting']],
+ ['🏥','Hospitals and TPAs',['Hospital existence and audit','Network empanelment checks','Patient identity checks','Clinic and medical college audit','Clinical trial participants']],
+ ['👷','Hiring and HR',['Blue-collar bulk hiring','Security, driver and delivery staff','Gig partner onboarding','Contract and manpower agencies','Domestic help and caregivers','Campus and fresher hiring','Franchise and dealer owners']],
+ ['🏠','Real estate and rentals',['Tenant verification','PG, hostel and co-living residents','Owner and possession checks','Builder project site visits','Property broker checks']],
+ ['🎓','Education',['Admission document checks','Scholarship beneficiary checks','Education loan student and institute checks','Overseas education consultants']],
+ ['🏛️','Government and welfare',['Pension and subsidy beneficiaries','Self-help group and micro-enterprise checks','Land and ground verification','Surveys and field data collection']],
+ ['⚖️','Legal and corporate',['Vendor and supplier due diligence','Dealer and distributor checks','Franchise audits','Video statements for legal matters','Recovery and asset verification']],
+ ['📦','Business and trade',['Supplier factory audits on video','Importer and exporter checks','Trade credit: is the business real','Godown and stock checks','E-commerce seller onboarding']],
+ ['📡','Telecom, utilities and mobility',['Customer and address verification','Electricity and gas connections','Driver checks for rental and fleet','Vehicle rental and car sharing']],
+ ['🌐','Marketplaces and communities',['Seller and high-value item proof','Second-hand vehicle and electronics inspection','Matrimonial profile verification','NGO and crowdfunding beneficiaries','Freelancer verification']],
+ ['📈','Investments and finance services',['Chit fund and co-operative members','Broker and advisor onboarding','Customer verification for investment platforms','Payment merchant onboarding']]
+];
+document.getElementById('indGrid').innerHTML = INDUSTRIES.map(i => '<div class="box"><div class="ic">' + i[0] + '</div><h3>' + i[1] + '</h3><div class="chips">' + i[2].map(x => '<span>' + x + '</span>').join('') + '</div></div>').join('');
 document.getElementById('yr').textContent = new Date().getFullYear();
 ['email','password','code','vendorName'].forEach(id => document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') submitForm(); }));
 try {
