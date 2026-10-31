@@ -142,7 +142,7 @@
     </div>
 
     <button class="save" onclick="saveSettings()">Save Settings</button>
-    <button class="save" style="background:#22307A;" onclick="testGemini()">Test Gemini key</button>
+    <button class="save" style="background:#22307A;" onclick="testGemini()">Test Gemini key</button> <button class="save" style="background:#22307A;" onclick="testEmail()">Send test email</button>
     <div id="settingsMsg" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
@@ -364,6 +364,14 @@ async function testStorage(){
     m.style.color = d.ok ? '#1f7a6c' : '#b23a2c';
     m.innerHTML = d.ok ? '✓ ' + esc(d.message) : '✗ Storage is not working. ' + (d.hint ? '<b>' + esc(d.hint) + '</b><br>' : '') + '<span style="color:#888">' + esc(d.error || '') + '</span>';
   } catch { m.textContent = 'Test failed — try again.'; }
+}
+
+async function testEmail(){
+  const to = prompt('Send the test email to which address?', (JSON.parse(localStorage.getItem('praman_user') || '{}').email) || '');
+  if (!to) return;
+  const r = await fetch('/api/super-admin/test-email', { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ to }) });
+  const d = await r.json();
+  alert((d.ok ? '✓ ' : '✗ ') + d.hint + '\n\nService: ' + d.mode + '\nFrom: ' + d.from + (d.error ? '\nError: ' + d.error : ''));
 }
 async function testGemini(){
   const m = document.getElementById('settingsMsg'); m.style.color = '#555'; m.textContent = 'Testing Gemini (text and voice)…';

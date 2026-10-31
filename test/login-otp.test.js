@@ -102,3 +102,17 @@ test('email through Brevo web API', async () => {
     assert.equal(await fresh.sendMail('a@b.in', 'Hi', 'x'), false);       // failure is reported, not thrown
   } finally { global.fetch = real; delete process.env.BREVO_API_KEY; }
 });
+
+test('failed email says why', async () => {
+  const fresh = require('../src/services/notifications');
+  process.env.BREVO_API_KEY = 'k'; process.env.MAIL_FROM = 'Praman <x@y.in>';
+  const real = global.fetch;
+  global.fetch = async () => ({ ok: false, status: 400, text: async () => '{"message":"Sender not valid"}' });
+  try {
+    const r = await fresh.sendMailDetailed('a@b.in', 's', 't');
+    assert.equal(r.ok, false); assert.match(r.error, /400/);
+    delete process.env.BREVO_API_KEY;
+    const r2 = await fresh.sendMailDetailed('a@b.in', 's', 't');
+    assert.match(r2.error, /No email service/);
+  } finally { global.fetch = real; delete process.env.BREVO_API_KEY; }
+});

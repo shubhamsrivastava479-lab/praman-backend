@@ -291,6 +291,22 @@ router.post('/test-storage', async (req, res) => {
     res.json({ ok: false, error: m, hint });
   }
 });
+// Sends a test email, and says plainly why it failed if it did.
+router.post('/test-email', async (req, res) => {
+  const n = require('../services/notifications');
+  const to = String((req.body || {}).to || req.user.email || '').trim();
+  const mode = process.env.BREVO_API_KEY ? 'Brevo (API key)' : process.env.SMTP_URL ? 'SMTP' : 'none';
+  const r = await n.sendMailDetailed(to, 'Praman test email', 'This is a test email from Praman. If you can read it, email codes will reach people.');
+  const e = r.error || '';
+  const hint = r.ok ? 'Sent to ' + to + '. Check the inbox and the spam folder.'
+    : mode === 'none' ? 'Add BREVO_API_KEY on Render (Environment), save and deploy.'
+    : /401|unauthor|key/i.test(e) ? 'Brevo did not accept the API key. Make a new one in Brevo (SMTP & API > API Keys) and paste it again, with no spaces.'
+    : /sender|400|not valid|verified|domain/i.test(e) ? 'The sender in MAIL_FROM is not verified in Brevo. Verify that sender (or domain) in Brevo > Senders, Domains & Dedicated IPs, and use the same address in MAIL_FROM.'
+    : /ENOTFOUND|ECONN|ETIMEDOUT|fetch failed/i.test(e) ? 'The server could not reach the email service. Try again in a minute.'
+    : 'See the error above.';
+  res.json({ ok: r.ok, mode, from: process.env.MAIL_FROM || '(not set)', error: e.slice(0, 300), hint });
+});
+
 router.post('/test-gemini', async (req, res) => {
   const gemini = require('../services/gemini');
   const out = {};

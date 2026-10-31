@@ -30,16 +30,23 @@ function transport() {
   return mailer;
 }
 
-async function sendMail(to, subject, text, attachments) {
+// Sends one email. Returns { ok, error }. The reason for a failure is also written to the Super Admin problem list.
+async function sendMailDetailed(to, subject, text, attachments) {
   const t = transport();
   const list = String(to || '').split(/[;,]/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+$/.test(x));
-  if (!t || !list.length) return false;
+  if (!t) return { ok: false, error: 'No email service is set up (BREVO_API_KEY or SMTP_URL is missing on the server).' };
+  if (!list.length) return { ok: false, error: 'No valid email address.' };
   try {
-    if (t.brevo) { await brevoSend(list, subject, text, attachments); return true; }
-    await t.sendMail({ from: process.env.MAIL_FROM || 'Praman <no-reply@praman.local>', to: list.join(','), subject, text, attachments });
-    return true;
-  } catch (e) { console.error('Email failed:', e.message); return false; }
+    if (t.brevo) await brevoSend(list, subject, text, attachments);
+    else await t.sendMail({ from: process.env.MAIL_FROM || 'Praman <no-reply@praman.local>', to: list.join(','), subject, text, attachments });
+    return { ok: true };
+  } catch (e) {
+    console.error('Email failed:', e.message);
+    try { require('./errlog').record('email', e); } catch { /* never block */ }
+    return { ok: false, error: e.message };
+  }
 }
+async function sendMail(to, subject, text, attachments) { return (await sendMailDetailed(to, subject, text, attachments)).ok; }
 
 // type: ai_review | handoff | overdue | second_review | data_request
 function notify(vendorId, { type, caseId, text }) {
@@ -74,4 +81,4 @@ function markRead(user, ids) {
   }
 }
 
-module.exports = { notify, listFor, markRead, sendMail, transport };
+module.exports = { notify, listFor, markRead, sendMail, sendMailDetailed, transport };
