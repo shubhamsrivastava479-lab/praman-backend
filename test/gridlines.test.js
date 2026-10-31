@@ -62,3 +62,13 @@ test('CIBIL runs with consent and Super Admin path override', async () => {
     assert.ok(r.txn.consentAt);
   } finally { undo(); }
 });
+
+test('key & path check reads the provider answer', async () => {
+  await db.read();
+  db.data.platformSettings.gridlinesKeys = { fastag: 'K' }; await db.write();
+  for (const [status, verdict] of [[401, 'bad_key'], [404, 'bad_path'], [400, 'ok'], [503, 'down']]) {
+    const undo = stub(async () => ({ ok: false, status, json: async () => ({ message: 'x' }) }));
+    try { assert.equal((await gl.probe('fastag')).verdict, verdict); } finally { undo(); }
+  }
+  assert.equal((await gl.probe('cibil')).verdict, 'no_key');
+});

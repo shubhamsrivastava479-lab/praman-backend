@@ -31,7 +31,14 @@ function buildChecklist(c) {
     if (s.type === 'ask') {
       item.label = s.kind === 'name' ? 'Customer states their full name' : short(s.text, 120);
       const said = ans && !['no_answer', 'unclear'].includes(ans.intent) && (ans.value || ans.english);
-      if (said) {
+      // The AI may have asked one follow-up question; a clear follow-up answer settles the item.
+      const fu = (a.answers || []).filter(x => x.key === s.key + '_fu').slice(-1)[0];
+      const fuSaid = fu && !['no_answer', 'unclear'].includes(fu.intent) && (fu.value || fu.english);
+      if (said && fuSaid) {
+        const first = short(ans.value || ans.english, 70), then = short(fu.value || fu.english, 90);
+        item.status = fu.concern ? 'partial' : 'done';
+        item.detail = fu.concern ? `Needs a look: ${short(fu.concern, 110)} (said: ${then})` : `${first} → clarified: ${then}`;
+      } else if (said) {
         item.status = ans.concern ? 'partial' : 'done';
         item.detail = ans.concern ? 'Needs a look: ' + short(ans.concern, 120) : short(ans.value || ans.english);
       } else { fallback(); if (item.status === 'not_done') item.detail = 'Asked, but no clear answer'; }
@@ -93,7 +100,10 @@ function buildChecklist(c) {
     item.mandatory = (a.mandatory || []).includes(s.id);
     out.push(item);
   });
-  return out;
+  // Keep each group together (questions of one group can be asked before and after the photos).
+  const order = [];
+  for (const x of out) if (!order.includes(x.group)) order.push(x.group);
+  return out.map((x, i) => [x, i]).sort((p, q) => order.indexOf(p[0].group) - order.indexOf(q[0].group) || p[1] - q[1]).map(p => p[0]);
 }
 
 function summarize(items) {

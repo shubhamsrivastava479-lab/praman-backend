@@ -120,6 +120,19 @@ async function api(path, opts = {}) {
   return d;
 }
 
+// Photo labels that fit the case: a life policy check needs no "Vehicle damage".
+function setPhotoLabels(service, caseType){
+  const sets = {
+    motor: ['Vehicle damage', 'Vehicle number plate', 'Chassis / engine number', 'Odometer', 'Place of incident', 'Driving licence', 'RC', 'Customer (face)', 'Document', 'Other'],
+    health: ['Hospital / patient', 'Hospital bills', 'Discharge summary', 'Prescription / reports', 'Customer (face)', 'Document', 'Other'],
+    policy: ['Customer (face)', 'Customer full body', 'Aadhaar card', 'PAN card', 'Proposal form / signature', 'Home / address', 'Income proof', 'Document', 'Other'],
+    other: ['Customer (face)', 'Document', 'Place / address', 'Other']
+  };
+  const k = caseType === 'policy_verification' ? 'policy' : /motor/.test(service || '') ? 'motor' : /health/.test(service || '') ? 'health' : 'other';
+  const sel = document.getElementById('lbl'); if (!sel) return;
+  sel.innerHTML = sets[k].map(x => '<option>' + x + '</option>').join('');
+}
+
 (async function init() {
   try {
     const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -127,6 +140,7 @@ async function api(path, opts = {}) {
     if (d.appUrl) $('linkMsg').textContent = 'Android app link (for customers who must share their phone screen): ' + d.appUrl;
     $('caseLine').textContent = `${d.caseRef ? d.caseRef + ' · ' : ''}${d.claimNo}${d.insuredName ? ' · ' + d.insuredName : ''}`;
     if (d.language) custState.language = d.language;
+    setPhotoLabels(d.service, d.caseType);
     ice = await api(`/api/live/case/${encodeURIComponent(caseId)}/ice`);
     if (!ice.turn) $('linkMsg').textContent = 'Note: no TURN relay is set up (Super Admin → Live Video Call Relay). Calls on some mobile networks may not connect.';
   } catch (e) { $('caseLine').textContent = e.message; return; }

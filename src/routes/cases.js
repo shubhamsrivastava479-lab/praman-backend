@@ -561,6 +561,22 @@ router.post('/:id/ai-review', async (req, res) => {
   res.json({ ok: true, review: c.aiReview, reviewState: c.reviewState });
 });
 
+// "Status: In progress → Completed; Notes changed" instead of a list of field names.
+const FIELD_NAMES = { status: 'Status', completedAt: null, insuredName: 'Insured name', claimNo: 'Claim / policy no.', policyValue: 'Policy / claim value', pivcChecklist: 'PIVC checklist', pivcResult: 'PIVC result', assignedAgentName: 'Assigned to', assignedAgentId: null, notes: 'Notes', dueAt: 'Due date', vehicleNo: 'Vehicle no.', district: 'District' };
+const STATUS_NAMES = { open: 'Open', in_progress: 'In progress', completed: 'Completed', found_discrepancy: 'Found discrepancy', verified: 'Verified', partially_verified: 'Partially verified', unverified: 'Unverified', pending_verification: 'Pending verification' };
+function describeChanges(before, patch) {
+  const parts = [];
+  for (const k of Object.keys(patch)) {
+    if (FIELD_NAMES[k] === null) continue;
+    const name = FIELD_NAMES[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, x => x.toUpperCase());
+    const show = v => v == null || v === '' ? '—' : typeof v === 'object' ? null : String(STATUS_NAMES[v] || v).slice(0, 60);
+    const a = show(before[k]), b = show(patch[k]);
+    if (a === b && a !== null) continue;
+    parts.push(a === null || b === null ? `${name} changed` : `${name}: ${a} → ${b}`);
+  }
+  return parts.length ? 'Case updated — ' + parts.join('; ') : 'Case updated';
+}
+
 router.patch('/:id', async (req, res) => {
   await db.read();
   const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
@@ -574,12 +590,14 @@ router.patch('/:id', async (req, res) => {
     if (!String(patch.claimNo).trim()) return res.status(400).json({ error: 'Claim/policy no. cannot be empty.' });
     if (d && d.id !== c.id) return res.status(409).json({ error: `Claim/policy no. ${patch.claimNo} is already used by case ${d.caseRef}.` });
   }
+  delete patch.actor;                      // who did it is recorded below, it is not a case field
+  const before = {}; for (const k of Object.keys(patch)) before[k] = c[k];
   Object.assign(c, patch);
   db.data.custody.push({
     id: uid('cust'),
     caseId: c.id,
-    event: `Case updated: ${Object.keys(patch).join(', ')}`,
-    actor: req.body.actor || 'agent',
+    event: describeChanges(before, patch),
+    actor: req.user.email || req.body.actor || 'agent',
     timestamp: new Date().toISOString()
   });
   await db.write();

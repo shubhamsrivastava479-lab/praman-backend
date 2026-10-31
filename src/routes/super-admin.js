@@ -330,7 +330,9 @@ router.get('/gridlines', async (req, res) => {
   res.json({ authType: (db.data.platformSettings || {}).gridlinesAuthType || process.env.GRIDLINES_AUTH_TYPE || 'API-Key',
     apis: Object.entries(gl.APIS).map(([id, a]) => { const k = gl.keyOf(id), c = gl.configOf(id);
       return { id, label: a.label, confirmed: c.confirmed, keySet: !!k.key, keySource: k.source, keyMask: mask(k.key), path: c.path, defaultPath: a.path,
-        body: JSON.stringify(c.body), customised: !!(mine[id] && (mine[id].path || mine[id].body)) }; }) });
+        body: JSON.stringify(c.body), customised: !!(mine[id] && (mine[id].path || mine[id].body)),
+        needsConsent: !!a.needsConsent, inputs: a.inputs.map(i => ({ key: i.key, label: i.label, required: !!i.required, hint: i.hint || '' })),
+        last: (() => { const t = (db.data.apiTransactions || []).filter(x => x.api === id && x.status !== 'started').slice(-1)[0]; return t ? { at: t.at, status: t.status, error: t.error || '' } : null; })() }; }) });
 });
 router.put('/gridlines', async (req, res) => {
   await db.read();
@@ -354,6 +356,23 @@ router.put('/gridlines', async (req, res) => {
   await db.write();
   res.json({ ok: true });
 });
+router.post('/gridlines/:id/probe', async (req, res) => {
+  await db.read();
+  try { res.json(await require('../services/gridlines').probe(req.params.id)); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+// A real lookup with details the Super Admin types (it is logged like any call; no firm wallet is charged).
+router.post('/gridlines/:id/test', async (req, res) => {
+  const gl = require('../services/gridlines');
+  if (!gl.APIS[req.params.id]) return res.status(404).json({ error: 'Unknown check.' });
+  try {
+    const { txn, result } = await gl.call({ api: req.params.id, input: (req.body || {}).input, user: req.user, vendorId: 'platform_test', consent: (req.body || {}).consent === true });
+    res.json({ ok: true, ms: txn.ms, transactionId: txn.id, data: result.data });
+  } catch (e) {
+    const t = e.txn || ((db.data.apiTransactions || []).slice(-1)[0] || {});
+    res.status(400).json({ ok: false, code: e.code, error: (t && t.error) || e.message, httpStatus: t && t.httpStatus });
+  }
+});
 router.get('/gridlines/transactions', async (req, res) => {
   await db.read();
   const q = req.query || {}, firms = new Map((db.data.users || []).filter(u => u.role === 'vendor_admin').map(u => [u.id, u.vendorName || u.email]));
@@ -362,7 +381,7 @@ router.get('/gridlines/transactions', async (req, res) => {
   if (q.api) list = list.filter(t => t.api === q.api);
   if (q.status) list = list.filter(t => t.status === q.status);
   if (q.vendorId) list = list.filter(t => t.vendorId === q.vendorId);
-  res.json({ stats, transactions: list.slice(-Math.min(+q.limit || 200, 1000)).reverse().map(t => ({ ...t, firm: firms.get(t.vendorId) || t.vendorId })) });
+  res.json({ stats, transactions: list.slice(-Math.min(+q.limit || 200, 1000)).reverse().map(t => ({ ...t, firm: t.vendorId === 'platform_test' ? 'Super Admin test' : (firms.get(t.vendorId) || t.vendorId) })) });
 });
 router.get('/gridlines/transactions/:id/result', async (req, res) => {
   await db.read();

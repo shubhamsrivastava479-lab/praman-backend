@@ -21,14 +21,25 @@ function addressOverlap(spoken, printed) {
   return hit / A.length;
 }
 
-// "5 lakh", "5,00,000", "10 lakhs", "1.2 crore", "50k", "500000" -> rupees. Returns null if no number found.
-function parseAmount(text) {
-  const t = String(text || '').toLowerCase().replace(/,/g, '').replace(/₹|rs\.?|rupees?|inr/g, ' ');
-  const m = t.match(/(\d+(?:\.\d+)?)\s*(crore|cr|lakhs?|lacs?|lac|l\b|thousand|k\b|hazar)?/);
-  if (!m) return null;
-  let n = parseFloat(m[1]); const u = m[2] || '';
-  if (/^cr/.test(u)) n *= 1e7; else if (/^(lakh|lac|l$)/.test(u)) n *= 1e5; else if (/^(thousand|k|hazar)/.test(u)) n *= 1e3;
-  return isFinite(n) && n > 0 ? Math.round(n) : null;
+// "5 lakh", "5,00,000", "10 lakhs", "1.2 crore", "50k", "1.5 million", "500000" -> rupees. Returns null if no number found.
+// When the answer has several numbers ("first 10,000 ... 15 lakh") the one with a unit (lakh, crore, million) wins,
+// otherwise the largest. "per month" answers are turned into a yearly figure only when asked (yearly: true).
+function parseAmount(text, { yearly = false, min = 0 } = {}) {
+  const t = String(text || '').toLowerCase().replace(/(\d),(?=\d)/g, '$1').replace(/₹|rs\.?|rupees?|inr/g, ' ');
+  const re = /(\d+(?:\.\d+)?)\s*(crores?|cr\b|lakhs?|lacs?|lac|l\b|million|mn\b|billion|thousand|k\b|hazaa?r)?/g;
+  const found = [];
+  for (let m; (m = re.exec(t));) {
+    let n = parseFloat(m[1]); const u = m[2] || '';
+    if (/^cr/.test(u)) n *= 1e7; else if (/^(lakh|lac|l$)/.test(u)) n *= 1e5; else if (/^(million|mn)/.test(u)) n *= 1e6;
+    else if (/^billion/.test(u)) n *= 1e9; else if (/^(thousand|k|hazaa?r)/.test(u)) n *= 1e3;
+    if (isFinite(n) && n > 0) found.push({ n, unit: !!u });
+  }
+  if (!found.length) return null;
+  const withUnit = found.filter(x => x.unit);
+  let n = withUnit.length ? withUnit[withUnit.length - 1].n : Math.max(...found.map(x => x.n));
+  if (yearly && /month|mahin|monthly|per mah|pm\b/.test(t)) n *= 12;
+  n = Math.round(n);
+  return n >= min ? n : null;
 }
 const inr = n => '₹' + Number(n).toLocaleString('en-IN');
 
@@ -53,7 +64,8 @@ function answerChecks(c, set, flag) {
     const yrs = new Date().getFullYear() - Number(nd.y), said = Number(ageSaid[1]);
     if (said >= 5 && said <= 110 && Math.abs(yrs - said) > 1) set('age_vs_dob', 'Age stated vs date of birth', 'partial', `Customer said ${said} years, the date of birth gives about ${yrs}`);
   }
-  const income = ans('income') && parseAmount(ans('income').value || ans('income').english);
+  const incAns = ans('income'), incFu = ans('income_fu');
+  const income = (incFu && parseAmount(incFu.value || incFu.english, { yearly: true, min: 1000 })) || (incAns && parseAmount(incAns.value || incAns.english, { yearly: true, min: 1000 }));
   const cover = parseAmount(c.policyValue);
   if (income && cover && c.caseType === 'policy_verification') {
     const x = cover / income;

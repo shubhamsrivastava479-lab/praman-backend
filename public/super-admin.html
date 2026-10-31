@@ -620,6 +620,12 @@ async function glLoad(){
         <input id="glk_${a.id}" type="password" placeholder="API key (blank = keep)" autocomplete="off">
         <input id="glp_${a.id}" value="${esc(a.path)}" title="API path" placeholder="${esc(a.defaultPath)}">
       </div>
+      <div style="font-size:11.5px;color:#666;margin:2px 0 4px;">${a.last ? 'Last call: <b style="color:' + (a.last.status === 'success' ? '#1f7a6c' : '#b23a2c') + '">' + esc(a.last.status) + '</b> · ' + esc(new Date(a.last.at).toLocaleString('en-IN')) + (a.last.error ? ' · ' + esc(a.last.error.slice(0, 90)) : '') : 'Never called yet.'}</div>
+      <div class="form-row" style="margin:4px 0;">
+        <button class="link" style="padding:5px 10px;font-size:11.5px;" onclick="glProbe('${a.id}')" ${a.keySet ? '' : 'disabled'} title="Free: sends an empty request to see if the key and path are accepted">Check key &amp; path</button>
+        <button class="secondary" style="padding:5px 10px;font-size:11.5px;" onclick="glTestOpen('${a.id}')" ${a.keySet ? '' : 'disabled'} title="A real lookup with sample details (Gridlines may charge for it)">Run real test</button>
+      </div>
+      <div id="glr_${a.id}" style="font-size:12px;"></div>
       <details><summary style="font-size:11.5px;cursor:pointer;">Request body (advanced)</summary>
         <textarea id="glb_${a.id}" rows="3" style="width:100%;font-family:monospace;font-size:11.5px;">${esc(a.body)}</textarea>
         <div class="hint">Use {{panNumber}}-style placeholders. Only change if Gridlines docs show different field names.</div></details>
@@ -652,6 +658,30 @@ async function glTxns(){
     <td>${esc(Object.values(t.input || {}).join(' · '))}</td>
     <td style="color:${t.status === 'success' ? '#1f7a6c' : '#b23a2c'}">${esc(t.status)}${t.refunded ? ' (refunded)' : ''}${t.error ? '<br><span style="color:#888">' + esc(t.error) + '</span>' : ''}</td>
     <td>${t.ms == null ? '' : t.ms}</td><td>${t.resultId ? '<a href="#" onclick="glShow(\'' + t.id + '\');return false;">view</a>' : ''}</td></tr>`).join('');
+}
+async function glProbe(id){
+  const box = document.getElementById('glr_' + id); box.style.color = '#555'; box.textContent = 'Checking…';
+  const d = await (await fetch('/api/super-admin/gridlines/' + id + '/probe', { method: 'POST', headers: authHeaders() })).json().catch(() => ({}));
+  box.style.color = d.ok ? '#1f7a6c' : '#b23a2c';
+  box.innerHTML = (d.ok ? '✓ ' : '✗ ') + esc(d.message || d.error || 'No answer') + (d.status ? ' <span style="color:#888">(HTTP ' + d.status + (d.ms != null ? ', ' + d.ms + ' ms' : '') + (d.providerSaid ? ', Gridlines said: ' + esc(d.providerSaid) : '') + ')</span>' : '');
+}
+function glTestOpen(id){
+  const a = glList.find(x => x.id === id), box = document.getElementById('glr_' + id);
+  box.style.color = '#333';
+  box.innerHTML = '<div style="background:#f6f7f9;border-radius:8px;padding:8px;margin:4px 0;">' + a.inputs.map(i => '<input id="glt_' + id + '_' + i.key + '" placeholder="' + esc(i.label + (i.required ? '' : ' (optional)') + (i.hint ? ' — ' + i.hint : '')) + '" style="margin:3px 0;width:100%;box-sizing:border-box;">').join('') +
+    (a.needsConsent ? '<label style="font-size:12px;display:block;margin:4px 0;"><input type="checkbox" id="glt_' + id + '_consent"> The person agreed to this check</label>' : '') +
+    '<button class="save" style="padding:6px 12px;font-size:12px;margin-top:4px;" onclick="glTestRun(\'' + id + '\')">Run</button> <span style="font-size:11.5px;color:#888;">Gridlines may charge for this lookup. It is saved in the call list below.</span><pre id="glt_' + id + '_out" style="display:none;background:#fff;border:1px solid #e6e8ec;padding:8px;font-size:11.5px;max-height:240px;overflow:auto;white-space:pre-wrap;margin-top:6px;"></pre></div>';
+}
+async function glTestRun(id){
+  const a = glList.find(x => x.id === id), input = {}, out = document.getElementById('glt_' + id + '_out');
+  a.inputs.forEach(i => input[i.key] = document.getElementById('glt_' + id + '_' + i.key).value);
+  const c = document.getElementById('glt_' + id + '_consent');
+  out.style.display = 'block'; out.textContent = 'Running…';
+  const r = await fetch('/api/super-admin/gridlines/' + id + '/test', { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ input, consent: !!(c && c.checked) }) });
+  const d = await r.json().catch(() => ({}));
+  out.style.color = r.ok ? '#1f7a6c' : '#b23a2c';
+  out.textContent = r.ok ? '✓ Worked (' + d.ms + ' ms). Data:\n' + JSON.stringify(d.data, null, 2) : '✗ ' + (d.error || 'Failed') + (d.httpStatus ? ' (HTTP ' + d.httpStatus + ')' : '');
+  glTxns();
 }
 async function glShow(id){
   const r = await fetch('/api/super-admin/gridlines/transactions/' + id + '/result', { headers: authHeaders() }), d = await r.json(), p = document.getElementById('glData');

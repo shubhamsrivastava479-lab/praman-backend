@@ -86,7 +86,7 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
     }
   }
   await db.write();
-  res.json({ token: c.liveCall.token, joinUrl, appUrl, message, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo, caseRef: c.caseRef || '', language: c.liveCall.language || null });
+  res.json({ token: c.liveCall.token, joinUrl, appUrl, message, sent, sendError, insuredName: c.insuredName || '', claimNo: c.claimNo, caseRef: c.caseRef || '', language: c.liveCall.language || null, caseType: c.caseType || '', service: require('../services/plans').serviceOfCase(c) || '' });
 });
 
 router.get('/case/:caseId/ice', requireAuth, async (req, res) => {

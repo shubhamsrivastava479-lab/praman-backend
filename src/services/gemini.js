@@ -97,7 +97,8 @@ async function generateSpeech(text, voiceName = 'Kore') {
 
 async function transcribeAndTranslateAudio(base64Audio, mimeType = 'audio/ogg') {
   const prompt = `Listen to this audio clip. Respond ONLY with JSON in this exact shape:
-{"language": "<detected language name>", "original": "<transcription in the original language>", "english": "<English translation>", "clear": true, "otherVoiceHeard": false}
+{"language": "<language name in English, e.g. Hindi, English, Marathi, Bengali, Tamil>", "original": "<transcription in the original language>", "english": "<English translation>", "clear": true, "otherVoiceHeard": false}
+The speaker is in India: the language is almost always English or an Indian language (Hindi, Hinglish counts as Hindi). Do not name a foreign language for a short word like "yes" or "no".
 Set "otherVoiceHeard" to true ONLY if a second person is clearly speaking or prompting the customer in the background (telling them what to say); ordinary background noise is false.
 Set "clear" to false, and leave "original" and "english" as empty strings, if the clip has no clear human speech (only silence, background noise, music, TV, or a voice too faint to understand). Never guess words that you cannot hear.`;
   const raw = await callGemini(
@@ -369,6 +370,10 @@ ${expected ? 'VALUE ON RECORD: ' + expected : ''}
 CUSTOMER ANSWER: "${answerEnglish}"
 TASK KIND: ${kind}
 
+CONTEXT: this call is in India. Money is always Indian rupees (1 lakh = 1,00,000; 1 crore = 1,00,00,000). Never ask about dollars or any other currency. "15 lakh", "1.5 million" or "15 lakh per year" are clear answers.
+A follow-up question is only for an answer that is truly missing or meaningless. Do not ask one when the answer is short but usable (for example an occupation like "private job" or a relationship like "wife").
+Write "concern" only for real warning signs (answer contradicts the record, the customer sounds coached or evasive, mis-selling such as a promise of guaranteed returns). An amount that seems high or low is NOT a concern by itself; it is compared with the record separately.
+
 Respond ONLY with JSON:
 {"intent":"yes|no|unclear",
  "value":"<${kind === 'name' ? 'the customer full name only' : kind === 'otp' ? 'only the digits spoken, no spaces' : 'the key fact the customer stated, short and plain; empty if none'}>",
@@ -403,7 +408,8 @@ Respond ONLY with JSON: {"fields":{"<field>":{"said":"<value or empty>","sameAsR
 // Final structured summary of an AI-run verification call.
 async function summarizeAiCall({ caseType, caseInfo, answers, checks, flags }) {
   const prompt = `You are summarising a fully automated AI verification call for an insurance company reviewer.
-Use ONLY the data below. Do not invent facts.
+Use ONLY the data below. Do not invent facts. The call is in India; amounts are Indian rupees (lakh / crore).
+If the record has "policyNo" call it the policy number (never "claim number"). When the customer clarified an answer in a follow-up, use the clarified answer.
 CASE TYPE: ${caseType}
 CASE RECORD: ${JSON.stringify(caseInfo)}
 Q&A (English): ${JSON.stringify(answers.map(a => ({ section: a.section, q: a.question, a: a.english, concern: a.concern })))}

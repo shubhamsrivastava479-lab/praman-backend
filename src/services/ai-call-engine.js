@@ -11,6 +11,7 @@
 // database gets masked numbers (last 4) plus the name / DOB / address text.
 
 const { db, uid } = require('../db');
+const { tidy: tidyFlags, langName } = require('./flag-tidy');
 const gemini = require('./gemini');
 const kyc = require('./kyc');
 const { getSetting } = require('./platform-settings');
@@ -94,7 +95,7 @@ function transcript(c, speaker, original, english, language) {
   if (!original && !english) return;
   db.data.transcripts.push({
     id: uid('tr'), caseId: c.id, source: 'ai_call', speaker,
-    original: original || english, english: english || original, language: language || 'English', timestamp: now()
+    original: original || english, english: english || original, language: langName(language, (c.aiCall && c.aiCall.language) || 'English'), timestamp: now()
   });
 }
 function setCheck(a, id, label, result, detail) {
@@ -448,7 +449,7 @@ function saveAnswer(c, step, input, extra = {}) {
   const a = c.aiCall;
   a.answers.push({
     key: step.key, section: step.section, question: step.text,
-    original: input.original || '', english: input.english || '', language: input.language || a.language,
+    original: input.original || '', english: input.english || '', language: langName(input.language, a.language),
     at: now(), ...extra
   });
   transcript(c, 'Customer', input.original, input.english, input.language);
@@ -544,6 +545,11 @@ function apply(c, input, prep) {
       a.flags.push(`Customer corrected a record detail: ${j.value || input.english}`);
     }
     if (j.concern && !a.flags.includes(j.concern)) a.flags.push(j.concern);
+    if (step.isFollowUp && !j.concern && (j.value || input.english)) {
+      // The customer cleared up the first answer: its "needs a look" note no longer stands.
+      const first = a.answers.filter(x => x.key === step.key.replace(/_fu$/, '')).slice(-1)[0];
+      if (first && first.concern) { a.flags = a.flags.filter(f => f !== first.concern); first.concernCleared = first.concern; first.concern = ''; first.clarified = j.value || input.english; }
+    }
     if (!j.clear && j.followUp && !step.isFollowUp) {
       a.queue.splice(a.i + 1, 0, { id: step.id + '_fu', type: 'ask', kind: 'free', key: step.key + '_fu', section: step.section, text: j.followUp, isFollowUp: true });
     }
@@ -860,7 +866,7 @@ async function prepareFinish(c) {
   const a = c.aiCall;
   runDerivedChecks(c);
   const d = c.details || {};
-  const caseInfo = { claimNo: c.claimNo, insuredName: c.insuredName, policyNo: c.policyNo, vehicleNo: c.vehicleNo, district: c.district, policyValue: c.policyValue };
+  const caseInfo = { [isPolicy(c) ? 'policyNo' : 'claimNo']: c.claimNo, insuredName: c.insuredName, ...(isPolicy(c) ? {} : { policyNo: c.policyNo }), vehicleNo: c.vehicleNo, district: c.district, policyValue: c.policyValue };
   for (const k of ['dob', 'gender', 'city', 'state', 'productName', 'claimType', 'claimAmount', 'incidentDate', 'incidentPlace', 'hospitalName', 'admissionDate', 'dischargeDate', 'diagnosis', 'vehicleMake']) if (d[k]) caseInfo[k] = d[k];
   const docs = { aadhaar: { name: a.docs.aadhaar.name, dob: a.docs.aadhaar.dob, gender: a.docs.aadhaar.gender, address: a.docs.aadhaar.address }, pan: { name: a.docs.pan.name, dob: a.docs.pan.dob } };
   const [sum, cons] = await Promise.allSettled([
@@ -925,6 +931,7 @@ function applyFinish(c, summary, opts = {}) {
   for (const m of missingMand) { const f = `Mandatory item not completed: ${m.label}`; if (!a.flags.includes(f)) a.flags.push(f); }
   if (missingMand.length) { a.liveCallReasons.push(...missingMand.map(m => 'Mandatory item not done: ' + m.label)); c.needsExecutive = true; if (!a.flags.some(x => /live call/i.test(x))) a.flags.push('A live call with an executive is recommended to finish the mandatory items'); }
   if (a.crossCase.length) a.liveCallReasons.push('The same identity details or device appear on another case');
+  a.flags = tidyFlags(a.flags);
   const photos = a.photos || {};
   const bodyMissing = isPolicy(c) && (!photos.stand || !photos.sit);
   const incomplete = !a.docs.aadhaar.received || !a.docs.pan.received || !a.facePhotoCaptured || !photos.blink || bodyMissing || a.answers.length < 3;

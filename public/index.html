@@ -11,7 +11,7 @@
 <style>
   body{font-family:system-ui,sans-serif;background:#f1f3f5;margin:0;color:#10151f;}
   .shell{display:grid;grid-template-columns:280px 1fr;min-height:100vh;}
-  .sidebar{background:#10151f;color:#e8eaf0;padding:20px;position:relative;}
+  .sidebar{background:#10151f;color:#e8eaf0;padding:20px 20px 64px;position:relative;}
   .sidebar h1{font-size:18px;margin:0 0 4px;}
   .navbtn{display:block;width:100%;text-align:left;background:#1a2130;color:#e8eaf0;border:none;padding:9px 10px;border-radius:7px;margin-bottom:8px;font-size:12.5px;cursor:pointer;}
   .navbtn.active{background:#c8781f;color:#fff;}
@@ -64,6 +64,31 @@
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
   .toolbar button{padding:9px 16px;font-size:13px;}
   details.help{margin:8px 0;font-size:12.5px;color:#555;} details.help summary{cursor:pointer;color:#1f6fd1;}
+  /* case list in the main area */
+  .ct-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
+  .ct-bar select,.ct-bar input{flex:0 1 auto;min-width:0;}
+  .ct-bar input[type=search]{flex:1 1 180px;}
+  .ct-chip{background:#fff;color:#10151f;border:1px solid #dde1e6;padding:6px 10px;font-size:12px;border-radius:999px;font-weight:600;}
+  .ct-chip.on{background:#10151f;color:#fff;border-color:#10151f;}
+  .ct-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .ct-table th{text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;padding:8px 6px;border-bottom:1px solid #e6e8ec;white-space:nowrap;}
+  .ct-table td{padding:9px 6px;border-bottom:1px solid #f0f1f3;vertical-align:top;}
+  .ct-table tbody tr{cursor:pointer;} .ct-table tbody tr:hover{background:#f7f8fa;}
+  .ct-ref{font-size:11px;color:#c8781f;font-weight:700;}
+  .st{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap;}
+  .st.open{background:#e2e8fb;color:#2b3a8c;} .st.done{background:#dcefec;color:#1f7a6c;} .st.rev{background:#f4e3cc;color:#8a5416;} .st.late{background:#f6e0db;color:#7a1f1f;}
+  .ct-more{font-size:12px;color:#6b7280;margin-top:8px;}
+  @media (max-width: 820px){ .ct-hide-m{display:none;} }
+  /* foldable case sections */
+  .fold-btn{background:#eef0f4;color:#10151f;border:1px solid #dde1e6;width:24px;height:24px;padding:0;line-height:20px;font-size:16px;border-radius:6px;margin-right:8px;flex:none;vertical-align:middle;}
+  .card.folded > .fold-body{display:none;}
+  .card.folded{padding-top:12px;padding-bottom:12px;}
+  .fold-head{cursor:pointer;}
+  .case-nav{display:flex;gap:6px;flex-wrap:wrap;margin:-6px 0 14px;position:sticky;top:0;z-index:5;background:#f1f3f5;padding:8px 0;}
+  .case-nav button{background:#fff;color:#10151f;border:1px solid #dde1e6;padding:5px 10px;font-size:11.5px;border-radius:999px;font-weight:600;}
+  .case-nav .act{background:#10151f;color:#fff;border-color:#10151f;}
+  .flag-list{margin:6px 0 0;padding-left:18px;font-size:12px;color:#8a2a1f;line-height:1.55;}
+  .kv{display:inline-block;background:#f1f3f5;border-radius:5px;padding:1px 6px;margin:2px 4px 2px 0;font-size:11.5px;font-style:normal;color:#333;}
   @media (max-width: 820px){
     .shell{grid-template-columns:1fr;}
     .sidebar{padding:16px;}
@@ -154,6 +179,7 @@
         <div id="bulkResults" style="margin-top:10px;"></div>
       </div>
       <div class="card" id="unassignedBox" style="display:none;"></div>
+      <div id="caseTable"></div>
       <div id="caseDetail"></div>
     </div>
 
@@ -449,6 +475,7 @@ async function loadCases(){
     const data = await res.json();
     if (!res.ok || !Array.isArray(data)) throw new Error((data && data.error) || ('server error ' + res.status));
     allCases = data.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    window._casesLoaded = true;
   } catch (e) {
     document.getElementById('caseList').innerHTML = `<div style="font-size:12px;color:#f0b3a8;">Could not load cases: ${escH(e.message)}<br><a href="#" style="color:#c8781f;" onclick="loadCases();return false;">Try again</a></div>`;
     return;
@@ -480,6 +507,7 @@ function renderStrip(){
   box.className = 'flow'; box.style.display = 'flex';
   box.innerHTML = `<button class="${flowFilter ? '' : 'on'}" onclick="setFlowFilter(null)"><b>${s.open}</b>Open cases</button>` +
     items.map(([k, label, n, cls]) => `<button class="${cls} ${flowFilter === k ? 'on' : ''}" onclick="setFlowFilter('${k}')"><b>${n}</b>${label}</button>`).join('') +
+    `<button class="${flowFilter === 'completed' ? 'on' : ''}" onclick="setFlowFilter('completed')" title="Finished cases and their reports"><b style="color:#1f7a6c;">${allCases.filter(c => c.status === 'completed').length}</b>Completed / reports</button>` +
     `<button class="on" style="background:#c8781f;color:#fff;" onclick="nextCase()" title="Opens the most urgent case that is waiting for you"><b>▶</b>Next case</button>`;
 }
 // The most urgent open case for this person: customers waiting for a person, then reviews, then late, then due soon.
@@ -491,9 +519,11 @@ function nextCase(){
   if (!open.length) { alert('Nothing is waiting for you right now.'); return; }
   openCase(open[0].id, true);
 }
-function setFlowFilter(k){ flowFilter = flowFilter === k ? null : k; renderStrip(); renderCaseList(); }
+function setFlowFilter(k){ flowFilter = flowFilter === k ? null : k; renderStrip(); showCaseList(); }
 function flowMatch(c){
   const f = flow[c.id] || {};
+  if (flowFilter === 'completed') return c.status === 'completed';
+  if (flowFilter === 'all') return true;
   if (c.status === 'completed') return false;
   return flowFilter === 'overdue' ? f.time === 'overdue' : flowFilter === 'soon' ? f.time === 'due_soon' :
     flowFilter === 'waiting' ? (c.verificationMode === 'full_automation' && (!c.aiCall || ['not_started', 'in_progress'].includes(c.aiCall.status))) :
@@ -541,22 +571,121 @@ async function flowStop(id, stop){ if (await flowPost(`/cases/${id}/reminders`, 
 async function flowHold(id, on){ if (await flowPost(`/cases/${id}/legal-hold`, { on })) { await loadCases(); openCase(id); } }
 
 function renderCaseList(){
-  if (!window._foldDone && Array.isArray(allCases)) { window._foldDone = true; if (!allCases.length) { const e = document.getElementById('newCaseCard'); if (e) e.classList.remove('fold-hide'); } }
+  if (!window._foldDone && window._casesLoaded) { window._foldDone = true; if (!allCases.length) { const e = document.getElementById('newCaseCard'); if (e) e.classList.remove('fold-hide'); } }
   const q = (document.getElementById('caseSearch').value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   // a follow-up filter (Overdue, Due soon…) looks across all services, like the numbers above it
   const inWs = flowFilter ? allCases.filter(flowMatch) : (ws === 'all' ? allCases : allCases.filter(c => c.service === ws));
-  const list = q ? inWs.filter(c => [c.caseRef, c.claimNo, c.policyNo, c.insuredName, c.whatsappNumber, c.vehicleNo].some(v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(q))) : inWs;
+  const list = (q ? inWs.filter(c => [c.caseRef, c.claimNo, c.policyNo, c.insuredName, c.whatsappNumber, c.vehicleNo].some(v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(q))) : inWs).filter(dateOk);
+  renderCaseTable(list);
   document.getElementById('caseList').innerHTML = list.map(c => `
     <div class="case-item" onclick="openCase('${c.id}', true)">
       <span style="font-size:10.5px;color:#c8781f;font-weight:700;">${escH(c.caseRef || '')}</span><br>
       <b>${escH(c.claimNo)}</b>${(ws === 'all' || flowFilter) && svcInfo(c.service) ? ` <span style="font-size:10.5px;opacity:.7;">${escH(svcInfo(c.service).icon + ' ' + svcInfo(c.service).short)}</span>` : ''}<br>${escH(c.insuredName || '—')}<br>
-      <span style="opacity:.6">${escH(c.status)}</span>${(flow[c.id] && flow[c.id].time === 'overdue') ? '<span class="pill over">late</span>' : (flow[c.id] && flow[c.id].time === 'due_soon') ? '<span class="pill soon">due soon</span>' : ''}
+      <span style="opacity:.6">${escH(caseStatus(c)[1])}</span>${(flow[c.id] && flow[c.id].time === 'overdue') ? '<span class="pill over">late</span>' : (flow[c.id] && flow[c.id].time === 'due_soon') ? '<span class="pill soon">due soon</span>' : ''}
       ${c.assignedAgentName ? `<br><span style="color:#c8781f;font-size:11px;">👤 ${escH(c.assignedAgentName)}</span>` : ''}
     </div>`).join('') || (() => {
       const elsewhere = (!q && !flowFilter && ws !== 'all') ? allCases.length : 0;
       if (elsewhere) return `<div style="opacity:.85;font-size:12px;">No cases in this service.<br><b>${elsewhere}</b> case${elsewhere > 1 ? 's are' : ' is'} in other services.<br><a href="#" style="color:#c8781f;" onclick="setWorkspace('all');return false;">Show all services</a></div>`;
       return `<div style="opacity:.6;font-size:12px;">${q ? 'No matching case' : 'No cases yet'}</div>`;
     })();
+}
+
+// ---------- case list in the main area: status chips, date / date range, search ----------
+let dRange = 'any', dFrom = '', dTo = '', dField = 'createdAt';
+try { const sv = JSON.parse(localStorage.getItem('praman_listf') || '{}'); dRange = sv.r || 'any'; dFrom = sv.f || ''; dTo = sv.t || ''; dField = sv.by || 'createdAt'; } catch {}
+function saveListPrefs(){ try { localStorage.setItem('praman_listf', JSON.stringify({ r: dRange, f: dFrom, t: dTo, by: dField })); } catch {} }
+function rangeBounds(){
+  const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+  const day = 864e5, t = d0.getTime();
+  switch (dRange) {
+    case 'today': return [t, t + day];
+    case 'yesterday': return [t - day, t];
+    case '7d': return [t - 6 * day, t + day];
+    case '30d': return [t - 29 * day, t + day];
+    case 'month': { const a = new Date(d0); a.setDate(1); return [a.getTime(), t + day]; }
+    case 'lastmonth': { const b = new Date(d0); b.setDate(1); const a = new Date(b); a.setMonth(a.getMonth() - 1); return [a.getTime(), b.getTime()]; }
+    case 'custom': {
+      const a = dFrom ? new Date(dFrom + 'T00:00:00').getTime() : -Infinity;
+      const b = dTo ? new Date(dTo + 'T00:00:00').getTime() + day : Infinity;
+      return [a, b];
+    }
+    default: return null;
+  }
+}
+function dateOk(c){
+  const b = rangeBounds(); if (!b) return true;
+  const v = c[dField]; if (!v) return false;
+  const t = new Date(v).getTime();
+  return t >= b[0] && t < b[1];
+}
+function setRange(v){ dRange = v; saveListPrefs(); renderListBar(); renderCaseList(); }
+function setDates(){ dFrom = document.getElementById('ctFrom').value; dTo = document.getElementById('ctTo').value; dRange = 'custom'; saveListPrefs(); renderCaseList(); }
+function setDateField(v){ dField = v; saveListPrefs(); renderCaseList(); }
+function caseStatus(c){
+  const f = flow[c.id] || {};
+  if (c.status === 'completed') return ['done', 'Completed'];
+  if (['awaiting_review', 'awaiting_second_review'].includes(c.reviewState)) return ['rev', c.reviewState === 'awaiting_second_review' ? 'Second review' : 'Awaiting review'];
+  if (c.aiCall && c.aiCall.status === 'handoff') return ['late', 'Asked for a person'];
+  if (f.time === 'overdue') return ['late', 'Overdue'];
+  return ['open', c.aiCall && c.aiCall.status === 'in_progress' ? 'Call going on' : c.verificationMode === 'full_automation' && (!c.aiCall || c.aiCall.status === 'not_started') ? 'Waiting for customer' : 'Open'];
+}
+const AI_RESULT = { verified: ['✅', 'Verified'], partially_verified: ['🟡', 'Partly verified'], found_discrepancy: ['🔴', 'Discrepancy'] };
+const FILTER_NAMES = { null: 'Cases', review: 'Awaiting review', mine: 'My cases', overdue: 'Overdue', soon: 'Due in 6 hours', waiting: 'Waiting for customer', handoff: 'Asked for a person', unassigned: 'Not assigned', completed: 'Completed / reports', all: 'All cases' };
+let lastList = [], listShown = true, listLimit = 50;
+function renderListBar(){
+  const bar = document.getElementById('ctBar'); if (!bar) return;
+  const R = [['any', 'Any date'], ['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'], ['month', 'This month'], ['lastmonth', 'Last month'], ['custom', 'Choose dates…']];
+  bar.innerHTML = `
+    <select onchange="setRange(this.value)" title="Date">${R.map(([v, l]) => `<option value="${v}" ${dRange === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    ${dRange === 'custom' ? `<input type="date" id="ctFrom" value="${escH(dFrom)}" onchange="setDates()" title="From"><span style="font-size:12px;">to</span><input type="date" id="ctTo" value="${escH(dTo)}" onchange="setDates()" title="To">` : ''}
+    <select onchange="setDateField(this.value)" title="Which date"><option value="createdAt" ${dField === 'createdAt' ? 'selected' : ''}>by created date</option><option value="completedAt" ${dField === 'completedAt' ? 'selected' : ''}>by completed date</option></select>
+    <input type="search" id="ctSearch" placeholder="Search case no., policy no., name, mobile" value="${escH(document.getElementById('caseSearch').value)}" oninput="document.getElementById('caseSearch').value=this.value;renderCaseList()">`;
+}
+function renderCaseTable(list){
+  lastList = list;
+  const box = document.getElementById('caseTable'); if (!box) return;
+  if (!listShown) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  if (!document.getElementById('ctBar')) {
+    box.innerHTML = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <b id="ctTitle" style="font-size:15px;"></b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="ct-chip ${flowFilter === 'all' ? 'on' : ''}" id="ctAll" onclick="setFlowFilter('all')">All cases</button><button class="ct-chip" onclick="downloadList()" title="Download this list as a CSV file (opens in Excel)">⬇ Download list</button></div></div>
+      <div class="ct-bar" id="ctBar"></div><div id="ctBody"></div></div>`;
+    renderListBar();
+  }
+  document.getElementById('ctAll').classList.toggle('on', flowFilter === 'all');
+  const svcName = ws !== 'all' && !flowFilter && svcInfo(ws) ? ' — ' + svcInfo(ws).short : '';
+  document.getElementById('ctTitle').textContent = (FILTER_NAMES[flowFilter] || 'Cases') + svcName + ` (${list.length})`;
+  const rows = list.slice(0, listLimit).map(c => {
+    const st = caseStatus(c), ai = c.aiCall && AI_RESULT[c.aiCall.decision], s = svcInfo(c.service);
+    const when = c[dField] || c.createdAt;
+    return `<tr onclick="openCase('${c.id}', true)">
+      <td><div class="ct-ref">${escH(c.caseRef || '')}</div><b>${escH(c.claimNo)}</b></td>
+      <td>${escH(c.insuredName || '—')}<div style="font-size:11px;color:#888;">${escH(c.whatsappNumber || '')}</div></td>
+      <td class="ct-hide-m">${s ? escH(s.icon + ' ' + s.short) : ''}</td>
+      <td><span class="st ${st[0]}">${escH(st[1])}</span>${ai ? `<div style="font-size:11px;margin-top:3px;">${ai[0]} ${ai[1]}</div>` : ''}</td>
+      <td class="ct-hide-m">${escH(c.assignedAgentName || '—')}</td>
+      <td style="white-space:nowrap;">${when ? escH(new Date(when).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })) : '—'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('ctBody').innerHTML = list.length ? `<div style="overflow-x:auto;"><table class="ct-table"><thead><tr><th>Case</th><th>Customer</th><th class="ct-hide-m">Service</th><th>Status</th><th class="ct-hide-m">Handled by</th><th>${dField === 'completedAt' ? 'Completed' : 'Created'}</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${list.length > listLimit ? `<div class="ct-more">Showing ${listLimit} of ${list.length}. <a href="#" onclick="listLimit+=100;renderCaseTable(lastList);return false;">Show more</a></div>` : ''}`
+    : `<div style="font-size:13px;color:#6b7280;padding:14px 0;">No case matches.${dRange !== 'any' ? ' <a href="#" onclick="setRange(\'any\');return false;">Show any date</a>' : ''}${flowFilter && flowFilter !== 'all' ? ' · <a href="#" onclick="setFlowFilter(\'all\');return false;">Show all cases</a>' : ''}</div>`;
+}
+function showCaseList(){
+  listShown = true; currentCaseId = null; listLimit = 50;
+  document.getElementById('caseDetail').innerHTML = '';
+  renderCaseList();
+  const el = document.getElementById('caseTable'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function downloadList(){
+  const head = ['Case no.', 'Claim / policy no.', 'Customer', 'Mobile', 'Service', 'Status', 'AI result', 'Handled by', 'Created', 'Completed'];
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const d = v => v ? new Date(v).toLocaleString('en-IN') : '';
+  const lines = [head.map(q).join(',')].concat(lastList.map(c => [c.caseRef, c.claimNo, c.insuredName, c.whatsappNumber, (svcInfo(c.service) || {}).label || c.service, caseStatus(c)[1], c.aiCall && AI_RESULT[c.aiCall.decision] ? AI_RESULT[c.aiCall.decision][1] : '', c.assignedAgentName, d(c.createdAt), d(c.completedAt)].map(q).join(',')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' }));
+  a.download = 'Praman_cases_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
 }
 
 // WhatsApp items from numbers with no case — kept, then attached to a case here.
@@ -745,12 +874,12 @@ function aiCard(c){
         return head + `<div class="evidence-item" style="font-size:12px;display:flex;gap:8px;align-items:flex-start;"><span title="${m[1]}">${m[0]}</span><span style="flex:1;">${escH(x.label)}${x.mandatory ? ' <span style="font-size:10px;color:#b23a2c;font-weight:700;">REQUIRED</span>' : ''}${x.detail ? `<div style="color:#666;">${escH(x.detail)}</div>` : ''}${ckBtn(c, x) ? `<div>${ckBtn(c, x)}</div>` : ''}</span><span style="color:${m[2]};white-space:nowrap;font-weight:600;">${x.byHuman ? 'Done by you' : m[1]}</span></div>`; }).join('')}</div>` : '';
   return `
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><b>🤖 Full-automation AI call</b>${['completed','handoff'].includes(a.status) ? `<button onclick="window.open('/ai-report.html?case=${encodeURIComponent(c.id)}','_blank')">Open AI verification report</button>` : ''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><b>🤖 Full-automation AI call</b>${['completed','handoff'].includes(a.status) && !(c.aiChecklist || []).length ? `<button onclick="window.open('/ai-report.html?case=${encodeURIComponent(c.id)}','_blank')">Open AI verification report</button>` : ''}</div>
       <div style="font-size:12px;color:#666;margin-top:4px;">${escH(stateLabel)}${a.startedAt ? ' · started ' + new Date(a.startedAt).toLocaleString() : ''}${a.completedAt ? ' · finished ' + new Date(a.completedAt).toLocaleString() : ''}</div>
       ${decision ? `<div style="margin-top:8px;font-weight:700;color:${decision[1]};">${decision[0]}</div>` : ''}
       ${checklistHtml}
       ${a.summary ? `<p style="font-size:12.5px;line-height:1.55;">${escH(a.summary)}</p>` : ''}
-      ${(a.flags || []).length ? `<div style="font-size:12px;color:#b23a2c;margin:6px 0;">⚠️ ${a.flags.map(escH).join('<br>⚠️ ')}</div>` : ''}
+      ${(c.verificationFlags || []).length ? '' : flagBox(a.flags, 'ai')}
       ${docs.aadhaar && (docs.aadhaar.name || docs.aadhaar.masked) ? `<div class="evidence-item" style="font-size:12px;"><b>Aadhaar (read by AI)</b><br>Name: ${escH(docs.aadhaar.name || '—')} · DOB: ${escH(docs.aadhaar.dob || '—')} · Gender: ${escH(docs.aadhaar.gender || '—')} · Number: ${escH(docs.aadhaar.masked || '—')}<br>Address: ${escH(docs.aadhaar.address || '—')}</div>` : ''}
       ${docs.pan && (docs.pan.name || docs.pan.masked) ? `<div class="evidence-item" style="font-size:12px;"><b>PAN (read by AI)</b><br>Name: ${escH(docs.pan.name || '—')} · DOB: ${escH(docs.pan.dob || '—')} · Number: ${escH(docs.pan.masked || '—')}</div>` : ''}
       ${photoGrid}
@@ -815,11 +944,105 @@ function toggleCard(id){
   el.classList.toggle('fold-hide');
   if (!el.classList.contains('fold-hide')) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+// ---------- case screen helpers: tidy red flags, readable evidence, foldable sections ----------
+const FLAG_TOPICS = [
+  t => /aadhaar/i.test(t) && /not (been )?(received|sent)/i.test(t) && 'aadhaar',
+  t => /\bpan\b/i.test(t) && /not (been )?(received|sent)/i.test(t) && 'pan',
+  t => /guarantee|cash ?back|cash payment|assured return/i.test(t) && 'promise',
+  t => /AI (answer check )?could not (check|run)|service busy/i.test(t) && 'aibusy'
+];
+function tidyFlags(list){
+  const seen = new Set(), out = [];
+  for (const f of list || []) {
+    const t = String(f || '').trim();
+    if (!t || /\b(us|american)\b.*\bcurrenc|\bdollars?\b/i.test(t)) continue;
+    const k = FLAG_TOPICS.map(fn => fn(t)).find(Boolean) || t.toLowerCase();
+    if (!seen.has(k)) { seen.add(k); out.push(t); }
+  }
+  return out;
+}
+function flagBox(list, id){
+  const f = tidyFlags(list); if (!f.length) return '';
+  const top = f.slice(0, 4), more = f.slice(4);
+  return `<div style="margin-top:8px;background:#fdf3f1;border:1px solid #f3d4ce;border-radius:8px;padding:8px 10px;">
+    <b style="font-size:12px;color:#8a2a1f;">⚠️ Red flags (${f.length})</b>
+    <ul class="flag-list">${top.map(x => `<li>${escH(x)}</li>`).join('')}</ul>
+    ${more.length ? `<ul class="flag-list" id="fm_${id}" style="display:none;">${more.map(x => `<li>${escH(x)}</li>`).join('')}</ul>
+      <a href="#" style="font-size:12px;" onclick="const m=document.getElementById('fm_${id}');const o=m.style.display==='none';m.style.display=o?'':'none';this.textContent=o?'Show less':'Show ${more.length} more';return false;">Show ${more.length} more</a>` : ''}
+  </div>`;
+}
+const LANG_CODES = { en: 'English', hi: 'Hindi', bn: 'Bengali', mr: 'Marathi', te: 'Telugu', ta: 'Tamil', gu: 'Gujarati', ur: 'Urdu', kn: 'Kannada', or: 'Odia', ml: 'Malayalam', pa: 'Punjabi' };
+function langLabel(l, fallback){
+  const s = String(l || '').trim(); if (!s) return fallback;
+  if (s.length <= 5 && LANG_CODES[s.toLowerCase().split(/[-_]/)[0]]) return LANG_CODES[s.toLowerCase().split(/[-_]/)[0]];
+  return /^(english|hindi|hinglish|bengali|marathi|telugu|tamil|gujarati|urdu|kannada|odia|malayalam|punjabi|assamese|bhojpuri|nepali)$/i.test(s) ? s : fallback;
+}
+const EV_SOURCE = { ai_call: 'AI call', live_call: 'Live video call', kyc_check: 'ID check', whatsapp: 'WhatsApp', whatsapp_voice_note: 'WhatsApp voice note', self_service_upload: 'Customer upload', external_call: 'Uploaded call recording', record: 'Case record' };
+const EV_NAMES = { liveness_selfie: 'Face photo', liveness_blink: 'Eye-blink photo', body_standing: 'Full body photo — standing', body_sitting: 'Full body photo — sitting', call_recording: 'Call recording', live_photo: 'Photo from live call', dl_verification: 'Driving licence check', pan_verification: 'PAN check', aadhaar_verification: 'Aadhaar check' };
+const evName = e => EV_NAMES[e.type] || (/_lookup$/.test(e.type) ? (e.caption || 'ID check result') : String(e.type || 'File').replace(/_/g, ' ').replace(/^./, x => x.toUpperCase()));
+const KV_NAMES = { faceVisible: 'Face visible', singleFace: 'One face only', eyesOpenFacingCamera: 'Looking at camera', possibleSpoof: 'Possible fake', samePersonOpinion: 'Same person as face photo', sameFaceAllFrames: 'Same face in all frames', eyesClosedInSomeFrame: 'Eyes closed seen', eyesOpenInSomeFrame: 'Eyes open seen', personVisible: 'Person visible', singlePerson: 'One person only', fullBodyVisible: 'Full body visible', pose: 'Pose', apparentAgeRange: 'Looks aged', visibleHealthIndicators: 'Visible health signs', guidance: 'AI note' };
+const KV_VAL = v => v === true ? 'yes' : v === false ? 'no' : ({ likely_same: 'likely same', likely_different: 'likely different', not_compared: 'not compared', uncertain: 'not sure' }[v] || String(v));
+function evAnalysis(e){
+  const a = e.analysis; if (!a) return '';
+  const txt = String(a.visibleText || '').trim();
+  let obj = null; if (/^\{[\s\S]*\}$/.test(txt)) { try { obj = JSON.parse(txt); } catch {} }
+  if (obj && typeof obj === 'object') {
+    const bad = v => v === false || v === 'likely_different' || (typeof v === 'string' && v && /spoof|fake/i.test(v));
+    const parts = Object.entries(obj).filter(([k, v]) => KV_NAMES[k] && v !== '' && v != null && k !== 'closedFrameIndex' && k !== 'openFrameIndex')
+      .map(([k, v]) => `<span class="kv" ${bad(v) && k !== 'possibleSpoof' ? 'style="background:#fbefd6;color:#8a5416;"' : ''}>${escH(KV_NAMES[k])}: <b>${escH(KV_VAL(v))}</b></span>`).join('');
+    return parts ? `<div style="margin-top:4px;">${parts}</div>` : '';
+  }
+  if (!txt && !a.notableDetails) return '';
+  return `<div style="margin-top:4px;color:#444;"><i>AI read: ${escH(txt.slice(0, 400))}${txt.length > 400 ? '…' : ''} ${escH(a.notableDetails || '')}</i></div>`;
+}
+
+// Each card of the case gets a + / − button; what you close stays closed next time (per section name).
+const FOLD_DEFAULT_CLOSED = /^(chain of custody|call transcript|phone verification|kyc verification|id, vehicle|written report)/i;
+function foldState(){ try { return JSON.parse(localStorage.getItem('praman_fold') || '{}'); } catch { return {}; } }
+function foldSave(st){ try { localStorage.setItem('praman_fold', JSON.stringify(st)); } catch {} }
+function sectionName(card){
+  const h = card.querySelector('b, h2, h3'); if (!h) return '';
+  return h.textContent.replace(/\(.*?\)/g, '').replace(/[^\p{L}\p{N} ,&\/-]/gu, '').replace(/\s+/g, ' ').trim();
+}
+function makeFoldable(c){
+  const box = document.getElementById('caseDetail'), st = foldState(), nav = [];
+  box.querySelectorAll(':scope > .card').forEach((card, i) => {
+    if (card.dataset.nofold) return;
+    const head = card.firstElementChild; if (!head) return;
+    const name = sectionName(card); if (!name) return;
+    const key = name.toLowerCase().slice(0, 40);
+    const body = document.createElement('div'); body.className = 'fold-body';
+    while (head.nextSibling) body.appendChild(head.nextSibling);
+    card.appendChild(body);
+    const btn = document.createElement('button'); btn.className = 'fold-btn'; btn.type = 'button';
+    head.classList.add('fold-head');
+    const tb = head.tagName === 'DIV' ? head.querySelector(':scope > b') : null;
+    if (tb) { const w = document.createElement('span'); w.style.cssText = 'display:inline-flex;align-items:center;'; head.insertBefore(w, tb); w.append(btn, tb); }
+    else head.insertBefore(btn, head.firstChild);
+    if (getComputedStyle(head).display === 'block' && head.tagName !== 'DIV') head.style.display = 'inline';
+    const closed = key in st ? st[key] : FOLD_DEFAULT_CLOSED.test(name);
+    const set = (cl, save) => { card.classList.toggle('folded', cl); btn.textContent = cl ? '+' : '−'; btn.title = cl ? 'Show this section' : 'Hide this section'; btn.setAttribute('aria-expanded', String(!cl)); if (save) { const s2 = foldState(); s2[key] = cl; foldSave(s2); } };
+    set(closed, false);
+    head.addEventListener('click', ev => { if (ev.target.closest('button:not(.fold-btn), a, input, select, textarea')) return; set(!card.classList.contains('folded'), true); });
+    card.id = card.id || 'sec_' + i;
+    card._fold = set;
+    nav.push([card.id, name.replace(/^(🤖|📹)\s*/, '').slice(0, 28)]);
+  });
+  const n = document.getElementById('caseNav');
+  if (n) n.innerHTML = `<button class="act" onclick="showCaseList()">← All cases</button>` +
+    nav.map(([id, nm]) => `<button onclick="jumpTo('${id}')">${escH(nm)}</button>`).join('') +
+    `<button onclick="foldAll(false)" title="Open every section">⊕ Open all</button><button onclick="foldAll(true)" title="Close every section">⊖ Close all</button>`;
+}
+function jumpTo(id){ const el = document.getElementById(id); if (!el) return; if (el._fold && el.classList.contains('folded')) el._fold(false, true); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function foldAll(cl){ document.querySelectorAll('#caseDetail > .card').forEach(card => card._fold && card._fold(cl, true)); }
+
 async function openCase(id, scroll){
   if (id !== currentCaseId || scroll) ['newCaseCard', 'bulkCard'].forEach(i => { const e = document.getElementById(i); if (e) e.classList.add('fold-hide'); });
   currentCaseId = id;
   const res = await fetch(API + '/api/cases/' + id, { headers: authHeaders() });
   const c = await res.json();
+  if (!res.ok) { alert(c.error || 'Could not open the case.'); return; }
+  listShown = false; const tb = document.getElementById('caseTable'); if (tb) tb.style.display = 'none';
   const roomId = 'room_' + c.id;
   const joinUrl = c.customerLink || `${location.origin}/verify.html?room=${roomId}&case=${c.id}&name=Insured`;
   const isAi = c.verificationMode === 'full_automation';
@@ -828,14 +1051,15 @@ async function openCase(id, scroll){
 
   if (scroll) setTimeout(() => { const el = document.getElementById('caseDetail'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   document.getElementById('caseDetail').innerHTML = `
-    <div class="card">
+    <div class="case-nav" id="caseNav"></div>
+    <div class="card" data-nofold="1">
       <div style="font-size:12px;color:#c8781f;font-weight:700;">Case no. ${escH(c.caseRef || '')} </div>
       <h2>${escH(c.claimNo)} <span class="tag">${escH(({ in_progress: 'In progress', completed: 'Completed', open: 'Open' }[c.status]) || String(c.status || '').replace(/_/g, ' '))}</span> ${isPivc ? `<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC · ${c.policyType === 'term' ? 'Term' : 'Life'}</span>` : ''} ${isAi ? '<span class="tag" style="background:#e2e8fb;color:#2b3a8c;">🤖 AI call</span>' : ''}</h2>
       <div style="font-size:12.5px;color:#555;">${escH(c.insuredName || '')} · WhatsApp: ${escH(c.whatsappNumber)}</div>
       ${caseDetailsHtml(c)}
       ${c.lastKnownLocation ? `<div style="font-size:11.5px;color:#888;margin-top:2px;">📍 Last captured location: ${c.lastKnownLocation.latitude.toFixed(5)}, ${c.lastKnownLocation.longitude.toFixed(5)} (±${Math.round(c.lastKnownLocation.accuracy||0)}m) — ${new Date(c.lastKnownLocation.capturedAt).toLocaleString()} <a href="https://maps.google.com/?q=${c.lastKnownLocation.latitude},${c.lastKnownLocation.longitude}" target="_blank">View on map</a></div>` : ''}
       ${c.spotCheckRequired ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f4e3cc;color:#8a5416;">🎯 Selected for spot-check review</span></div>` : ''}
-      ${c.verificationFlags && c.verificationFlags.length ? `<div style="font-size:11.5px;margin-top:4px;color:#b23a2c;">⚠️ ${c.verificationFlags.map(escH).join(' · ')}</div>` : ''}
+      ${flagBox(c.verificationFlags, 'hdr')}
       ${c.requiresMandatoryCall ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f6e0db;color:#7a1f1f;">High-value — video call required</span></div>` : ''}
       <div style="font-size:12.5px;margin-top:4px;display:flex;gap:10px;align-items:center;">
         ${c.assignedAgentName
@@ -910,11 +1134,11 @@ async function openCase(id, scroll){
       <div id="evidenceList">
         ${c.evidence.map(e => `
           <div class="evidence-item">
-            <b>${escH(e.type)}</b> from ${escH(e.senderName || e.sender || (e.source === 'ai_call' ? 'AI call' : '—'))} — ${escH(new Date(e.receivedAt).toLocaleString())}
+            <b>${escH(evName(e))}</b> <span style="color:#6b7280;">· ${escH(e.senderName || e.sender || EV_SOURCE[e.source] || 'Case')} · ${escH(new Date(e.receivedAt).toLocaleString('en-IN'))}</span>
             ${e.fileUrl ? `<br><a href="${escH(e.fileUrl)}" target="_blank" rel="noopener">Open file</a>` : ''}
             ${e.location && e.location.latitude != null ? `<br>📍 <a href="https://www.google.com/maps?q=${Number(e.location.latitude)},${Number(e.location.longitude)}" target="_blank" rel="noopener">${Number(e.location.latitude).toFixed(5)}, ${Number(e.location.longitude).toFixed(5)}</a>` : ''}
             ${e.caption ? `<br>Caption: ${escH(e.caption)}` : ''}
-            ${e.analysis ? `<br><i>Gemini: ${escH(e.analysis.documentType)} — ${escH(e.analysis.visibleText || '')} ${escH(e.analysis.notableDetails || '')}</i>` : ''}
+            ${evAnalysis(e)}
             ${e.needsReview ? `<div style="color:#8a5416;background:#fbefd6;padding:4px 8px;border-radius:6px;margin-top:4px;">⚠️ ${escH(e.needsReview)}</div>` : ''}
             <div style="font-size:11px;color:#999;margin-top:3px;">Document ID: ${escH(e.id)}${e.sha256 ? ' · SHA-256 ' + escH(String(e.sha256).slice(0, 12)) + '…' : ''}${e.movedFrom ? ' · moved here by ' + escH(e.movedBy || '') : ''}
               · <a href="#" onclick="moveItem('${c.id}','${e.id}');return false;">Move to another case</a></div>
@@ -924,7 +1148,7 @@ async function openCase(id, scroll){
 
     <div class="card">
       <b>Call Transcript (${c.transcripts.length} segments)</b>
-      ${c.transcripts.map(t => `<div class="evidence-item"><b>${escH(t.speaker)}</b> (${escH(t.language)}): ${escH(t.english)}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No call yet.</div>'}
+      ${c.transcripts.map(t => `<div class="evidence-item"><b>${escH(t.speaker)}</b> <span style="color:#888;font-size:11px;">${escH(langLabel(t.language, (c.aiCall && c.aiCall.language) || 'English'))}</span>: ${escH(t.english)}</div>`).join('') || '<div style="opacity:.6;font-size:12px;">No call yet.</div>'}
     </div>
 
     <div class="card">
@@ -934,13 +1158,14 @@ async function openCase(id, scroll){
 
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <b>AI Report</b>
-        <button onclick="generateReport('${c.id}')">Generate with Gemini</button>
+        <b>Written report (AI draft)</b>
+        <button onclick="generateReport('${c.id}')">${c.report ? 'Write again' : 'Write report with AI'}</button>
       </div>
-      <div id="reportBox" style="margin-top:10px;">${c.report ? c.report.html : '<span style="opacity:.6;">No report generated yet.</span>'}</div>
+      <div id="reportBox" style="margin-top:10px;">${c.report ? c.report.html : `<span style="opacity:.6;">No written report yet.${isAi ? ' The AI call report is ready — use “Open AI verification report” above.' : ''}</span>`}</div>
     </div>
   `;
   glInit();
+  makeFoldable(c);
 }
 
 async function sendPhoneOtp(caseId){

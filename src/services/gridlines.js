@@ -150,4 +150,32 @@ async function call({ api, input, user = {}, vendorId, caseId = null, consent = 
   return { txn, result };
 }
 
-module.exports = { call, catalog, configOf, keyOf, validate, fill, vendorReason, APIS };
+// Quick health check of one API without a real lookup: send an empty request and read the answer.
+//   401 / 403  the key is not accepted         404  the path is wrong
+//   400 / 422  key and path are fine (the empty request was refused, as expected)
+//   5xx / no answer  Gridlines is not answering
+async function probe(id) {
+  const def = APIS[id];
+  if (!def) throw fail('INVALID', 'Unknown check.');
+  const k = keyOf(id), cfg = configOf(id), t0 = Date.now();
+  if (!k.key) return { ok: false, verdict: 'no_key', message: 'No API key is saved for this check.' };
+  let status = null, body = {};
+  try {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const r = await fetch(BASE + cfg.path, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'X-API-Key': k.key, 'X-Auth-Type': authType() }, body: '{}' });
+      status = r.status; body = await r.json().catch(() => ({}));
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    return { ok: false, verdict: 'down', ms: Date.now() - t0, message: e.name === 'AbortError' ? 'Gridlines did not answer in 15 seconds.' : 'Could not reach Gridlines: ' + clean(e.message) };
+  }
+  const said = clean((body && (body.message || body.error || (body.error && body.error.message))) || '');
+  const out = { status, ms: Date.now() - t0, providerSaid: said, path: cfg.path };
+  if (status === 401 || status === 403) return { ...out, ok: false, verdict: 'bad_key', message: 'Gridlines did not accept this key (or the key is not enabled for this API).' };
+  if (status === 404) return { ...out, ok: false, verdict: 'bad_path', message: 'The path was not found. Check the API path in the Gridlines docs.' };
+  if (status >= 500) return { ...out, ok: false, verdict: 'down', message: 'Gridlines returned a server error. Try again later.' };
+  if (status === 200 || status === 400 || status === 422) return { ...out, ok: true, verdict: 'ok', message: 'Key and path are accepted. Run a real test with sample details to see the data.' };
+  return { ...out, ok: false, verdict: 'unknown', message: 'Unexpected answer (HTTP ' + status + ').' };
+}
+
+module.exports = { probe, call, catalog, configOf, keyOf, validate, fill, vendorReason, APIS };
