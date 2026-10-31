@@ -60,3 +60,28 @@ test('demo request form: validation, email code, saved for the Super Admin', asy
   // only the Super Admin can read them
   assert.equal((await call('GET', '/api/super-admin/demo-requests')).s, 401);
 });
+
+test('website chat box: contact details are saved for the Super Admin, bots are ignored', async () => {
+  const { app } = require('../src/server');
+  const server = http.createServer(app); await new Promise(r => server.listen(0, r));
+  test.after(() => server.close());
+  const port = server.address().port;
+  const post = body => new Promise(r => {
+    const data = JSON.stringify(body);
+    const req = http.request({ port, path: '/api/demo/chat-lead', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } }, res => { let b = ''; res.on('data', d => b += d); res.on('end', () => r({ s: res.statusCode, j: b ? JSON.parse(b) : {} })); });
+    req.end(data);
+  });
+  const ok = { name: 'Neha Rao', company: 'Fast Loans', email: 'neha@gmail.com', phone: '+91 98765 43210', interest: 'Loan / borrower verification', message: 'Need a quote', consent: true, page: '/', topics: ['price', 'bad topic!'], ms: 9000 };
+  assert.equal((await post({ ...ok, consent: false })).s, 400);
+  assert.equal((await post({ ...ok, email: 'x' })).s, 400);
+  assert.equal((await post({ ...ok, company: '' })).s, 400);
+  await db.read(); const before = (db.data.demoRequests || []).length;
+  assert.equal((await post({ ...ok, website: 'spam' })).s, 200);        // hidden field: ignored
+  assert.equal((await post({ ...ok, ms: 500 })).s, 200);                 // too fast: ignored
+  assert.equal((await post(ok)).s, 201);
+  assert.equal((await post(ok)).s, 200);                                  // double click: saved once
+  await db.read();
+  const added = db.data.demoRequests.slice(before);
+  assert.equal(added.length, 1);
+  assert.equal(added[0].source, 'chat'); assert.equal(added[0].freeEmail, true); assert.deepEqual(added[0].topics, ['price']);
+});

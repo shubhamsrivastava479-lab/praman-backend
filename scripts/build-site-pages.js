@@ -112,6 +112,7 @@ ${HEADER}
 ${demoBand}
 </main>
 ${FOOTER}
+<script src="/chat-widget.js" defer></script>
 </body>
 </html>
 `;
@@ -142,6 +143,7 @@ ${HEADER}
 ${demoBand}
 </main>
 ${FOOTER}
+<script src="/chat-widget.js" defer></script>
 </body>
 </html>
 `;

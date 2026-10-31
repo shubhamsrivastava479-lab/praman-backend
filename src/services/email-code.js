@@ -45,4 +45,4 @@ function check(kind, addr, code) {
   return { ok: true };
 }
 
-module.exports = { available, email, issue, check, clean };
+module.exports = { available, email, issue, check, clean, isFree: e => FREE.test(String(e || '').split('@')[1] || '') };

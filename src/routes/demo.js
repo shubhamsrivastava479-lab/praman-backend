@@ -65,4 +65,36 @@ router.post('/request', rateLimit({ windowMs: 60 * 60_000, max: Number(process.e
   res.status(201).json({ ok: true });
 });
 
+// Website chat box: a visitor leaves contact details. Saved with the demo requests (source: chat)
+// so the Super Admin sees every website enquiry in one list. Personal email is allowed here but marked.
+const TOPIC = /^[a-z_]{2,20}$/;
+router.post('/chat-lead', rateLimit({ windowMs: 60 * 60_000, max: Number(process.env.CHAT_RATE_MAX) || 10, name: 'chat-lead' }), async (req, res) => {
+  const b = req.body || {};
+  if (b.website) return res.json({ ok: true });                         // hidden field: only bots fill it
+  if (Number(b.ms) > 0 && Number(b.ms) < 2500) return res.json({ ok: true }); // filled faster than a person can
+  const e = emailCode.email(b.email, false);
+  if (e.error) return res.status(400).json({ error: e.error });
+  const name = clean(b.name, 80), company = clean(b.company, 120);
+  if (!name || !company) return res.status(400).json({ error: 'Please enter your name and company.' });
+  const phone = clean(b.phone, 20).replace(/[^\d+]/g, '');
+  if (phone && !/^\+?\d{8,15}$/.test(phone)) return res.status(400).json({ error: 'Please check the mobile number.' });
+  if (b.consent !== true) return res.status(400).json({ error: 'Please tick the box so we may contact you.' });
+  const free = emailCode.isFree(e.email);
+  await db.read();
+  const list = (db.data.demoRequests ||= []);
+  const recent = list.find(x => x.source === 'chat' && x.email === e.email && Date.now() - new Date(x.createdAt).getTime() < 10 * 60_000);
+  if (recent) return res.json({ ok: true });                            // same person pressed Send twice
+  list.push({ id: uid('demo'), source: 'chat', createdAt: new Date().toISOString(), name, company, email: e.email, emailVerified: false, freeEmail: free, phone,
+    interest: clean(b.interest, 60), message: clean(b.message, 500), page: clean(b.page, 120),
+    topics: (Array.isArray(b.topics) ? b.topics : []).filter(t => TOPIC.test(String(t))).slice(0, 15),
+    consentAt: new Date().toISOString(), status: 'new', note: '' });
+  if (list.length > 3000) list.splice(0, list.length - 3000);
+  await db.write();
+  const to = process.env.DEMO_NOTIFY_EMAIL || process.env.CONTACT_EMAIL || process.env.PRIVACY_CONTACT_EMAIL;
+  const last = list[list.length - 1];
+  if (to) notifications.sendMail(to, 'New website chat enquiry: ' + company,
+    `Name: ${name}\nCompany: ${company}\nEmail: ${e.email}${free ? ' (personal email)' : ''}\nPhone: ${phone || '-'}\nInterest: ${last.interest || '-'}\nMessage: ${last.message || '-'}\nPage: ${last.page || '-'}\nAsked about: ${last.topics.join(', ') || '-'}`).catch(() => {});
+  res.status(201).json({ ok: true });
+});
+
 module.exports = router;

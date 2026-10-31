@@ -324,7 +324,7 @@
   <div class="wrap">
     <div class="kicker" style="color:#f2c58a">Contact us</div>
     <h2 class="t">Let us run a pilot on your own cases</h2>
-    <p class="intro">Write to us for a pilot or a question, or use the demo form above. We will get back to you soon.</p>
+    <p class="intro">Write to us for a pilot or a question, use the demo form above, or <a href="#chat" style="color:#f2c58a;font-weight:600">chat with us</a>. We will get back to you within one working day.</p>
     <div class="grid g2">
       <div class="cbox"><small>Email</small><a id="cEmail" href="#">…</a></div>
       <div class="cbox" id="cPhoneBox" style="display:none"><small>Phone</small><a id="cPhone" href="#">…</a></div>
@@ -450,5 +450,6 @@ fetch('/api/site-info').then(r => r.json()).then(i => {
   if (i.phone) { document.getElementById('cPhoneBox').style.display = 'block'; const p = document.getElementById('cPhone'); p.textContent = i.phone; p.href = 'tel:' + i.phone.replace(/[^+\d]/g, ''); }
 }).catch(() => { const e = document.getElementById('cEmail'); e.textContent = 'info@pramanservices.space'; e.href = 'mailto:info@pramanservices.space'; });
 </script>
+<script src="/chat-widget.js" defer></script>
 </body>
 </html>
