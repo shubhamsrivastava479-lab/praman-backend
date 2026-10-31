@@ -88,7 +88,7 @@ app.get('/api/site-info', (req, res) => res.json({ email: process.env.CONTACT_EM
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'login.html')));
 app.use('/media', express.static(path.join(__dirname, '..', 'media')));
 // pages are revalidated (ETag) every time so a new deploy shows at once; images/fonts can be cached
-app.use(express.static(path.join(__dirname, '..', 'public'), { etag: true, maxAge: 0, setHeaders: (res, f) => { if (/\.(png|jpe?g|svg|ico|woff2?)$/i.test(f)) res.setHeader('Cache-Control', 'public, max-age=86400'); } }));
+app.use(express.static(path.join(__dirname, '..', 'public'), { etag: true, maxAge: 0, extensions: ['html'], setHeaders: (res, f) => { if (/\.(png|jpe?g|svg|ico|woff2?)$/i.test(f)) res.setHeader('Cache-Control', 'public, max-age=86400'); } }));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

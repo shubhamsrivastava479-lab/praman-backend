@@ -21,3 +21,13 @@ Set `SMTP_URL` and `MAIL_FROM` on Render. Without them the demo form still works
 - "Forgot password?" on the home page works for every account except the Super Admin (the Super Admin keeps the setup-key reset).
 - New firms can register with Google or with their official email (a code confirms the email, and they choose a password).
 - The picture code (captcha) is built in. No outside service is needed.
+
+## Website pages for Google (SEO)
+
+The public pages are made from `scripts/site-content.js`:
+`/` (home), `/instant-checks`, `/industries/<name>`, `/sitemap.xml`, `/robots.txt`.
+To change the text, edit `scripts/site-content.js`, then run `node scripts/build-site-pages.js` and push.
+App pages (dashboard, admin, customer call links) are blocked for search engines in `robots.txt`.
+
+Google Search Console: add the domain `pramanservices.space`, verify with the DNS TXT record Google gives
+(add it at your domain registrar), then in Sitemaps submit `https://pramanservices.space/sitemap.xml`.

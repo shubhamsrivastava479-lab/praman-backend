@@ -1,0 +1,30 @@
+# Public website pages can be indexed. The app, links sent to customers and the API cannot.
+User-agent: *
+Allow: /$
+Allow: /industries/
+Allow: /instant-checks
+Allow: /privacy.html
+Disallow: /api/
+Disallow: /index.html
+Disallow: /super-admin.html
+Disallow: /platform-access.html
+Disallow: /vendor-access.html
+Disallow: /setup-super-admin.html
+Disallow: /reset-super-admin.html
+Disallow: /settings.html
+Disallow: /billing-admin.html
+Disallow: /fraud.html
+Disallow: /insurer.html
+Disallow: /report.html
+Disallow: /ai-report.html
+Disallow: /shared-report.html
+Disallow: /verify.html
+Disallow: /call.html
+Disallow: /ai-call.html
+Disallow: /join.html
+Disallow: /live.html
+Disallow: /live-join.html
+Disallow: /check.html
+Disallow: /media/
+
+Sitemap: https://pramanservices.space/sitemap.xml
