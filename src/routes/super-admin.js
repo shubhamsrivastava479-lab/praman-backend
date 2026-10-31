@@ -372,7 +372,10 @@ router.get('/health', async (req, res) => {
       gridlines: !!(await getSetting('gridlinesApiKey', 'GRIDLINES_API_KEY')),
       storage: await storage.isS3Configured(),
       publicBaseUrl: !!process.env.PUBLIC_BASE_URL && !/your-deployed/i.test(process.env.PUBLIC_BASE_URL),
-      alertWebhook: !!process.env.ALERT_WEBHOOK_URL
+      alertWebhook: !!process.env.ALERT_WEBHOOK_URL,
+      email: !!require('../services/notifications').transport(),
+      loginOtp: require('../services/login-otp').enabled(),
+      loginOtpOff: String(process.env.LOGIN_OTP || '').toLowerCase() === 'off'
     },
     webhooks: { pending: wh.filter(d => d.status === 'pending').length, failed: wh.filter(d => d.status === 'failed').length },
     jobs: scheduler.status,
