@@ -14,6 +14,8 @@ const { redactIdsInText } = require('./security');
 
 let sharp = null;
 try { sharp = require('sharp'); } catch { sharp = null; }
+// Photo handling can use a lot of memory on a small server: one picture at a time, small cache.
+try { if (sharp) { sharp.cache({ memory: 32, files: 0, items: 20 }); sharp.concurrency(1); } } catch { /* older sharp */ }
 
 const GEMINI_INLINE_MAX = 18 * 1024 * 1024; // keep the request under Gemini's inline limit
 const r = t => redactIdsInText(String(t || '').trim());

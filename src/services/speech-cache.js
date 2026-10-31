@@ -3,7 +3,7 @@
 // the voice and translation of those lines cost nothing. Lines that carry a customer's own
 // details (name, number) are cached too, but only matter for that customer.
 // Kept in memory with a size limit (oldest dropped first); empty after a restart.
-const MAX_BYTES = (parseInt(process.env.SPEECH_CACHE_MB, 10) || 60) * 1024 * 1024;
+const MAX_BYTES = (parseInt(process.env.SPEECH_CACHE_MB, 10) || 25) * 1024 * 1024;
 const map = new Map(); // key -> { value, size }
 let bytes = 0;
 const stats = { hits: 0, misses: 0 };

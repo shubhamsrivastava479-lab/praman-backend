@@ -74,7 +74,7 @@ async function sync(pool, data) {
       for (const r of rows[table]) {
         if (!r.id) continue;
         const k = table + '\0' + r.id; seen.add(k);
-        const s = JSON.stringify(r);
+        const s = require('crypto').createHash('sha1').update(JSON.stringify(r)).digest('base64'); // a fingerprint, not a second copy
         if (state.sig.get(k) !== s) { changed.push(r); state.sig.set(k, s); }
       }
       for (let i = 0; i < changed.length; i += 500) {

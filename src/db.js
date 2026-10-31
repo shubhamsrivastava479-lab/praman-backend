@@ -44,6 +44,10 @@ const dataDir = process.env.PRAMAN_DATA_DIR || path.join(__dirname, '..', 'data'
 const jsonFile = path.join(dataDir, 'db.json');
 const TABLE = (process.env.PRAMAN_TABLE || 'praman_records').replace(/[^a-z0-9_]/gi, '');
 const SEP = '\u0000';
+// What was last saved is remembered as "length|fingerprint" of each record, not as a second full copy of its text.
+// This halves the memory the saved data needs, and a save never holds the whole database as text at once.
+const crypto = require('crypto');
+const mark = json => json.length + '|' + crypto.createHash('sha1').update(json).digest('base64');
 
 // ---------------------------------------------------------------- Postgres
 class PgStore {
@@ -58,7 +62,7 @@ class PgStore {
       connectionTimeoutMillis: 15_000
     });
     this.pool.on('error', e => console.error('Postgres pool error:', e.message));
-    this.snap = new Map(); // "collection\0id" -> JSON text last saved
+    this.snap = new Map(); // "collection\0id" -> mark() of the JSON last saved
   }
 
   async ensureTable() {
@@ -80,38 +84,41 @@ class PgStore {
     const { rows } = await this.pool.query(`select collection, id, data from ${TABLE} order by collection, seq`);
     const data = {};
     for (const r of rows) {
-      this.snap.set(r.collection + SEP + r.id, JSON.stringify(r.data));
+      this.snap.set(r.collection + SEP + r.id, mark(JSON.stringify(r.data)));
       if (r.id === '_' && !Array.isArray(data[r.collection])) data[r.collection] = r.data; // object collections
       else (data[r.collection] ||= []).push(r.data);
     }
     return { data, count: rows.length };
   }
 
-  // Turns db.data into rows: key -> JSON text.
-  static rows(data) {
-    const out = new Map();
+  // Walks db.data and gives [key, json] one record at a time (nothing is collected, so memory stays small).
+  static *entries(data) {
     for (const [col, val] of Object.entries(data || {})) {
       if (Array.isArray(val)) {
         const used = new Set();
-        val.forEach((rec, i) => {
-          if (rec == null) return;
+        let i = -1;
+        for (const rec of val) {
+          i++;
+          if (rec == null) continue;
           let id = String(rec.id ?? rec.caseId ?? `idx_${i}`);
           if (used.has(id)) { let n = 2; while (used.has(`${id}#${n}`)) n++; id = `${id}#${n}`; }
           used.add(id);
-          out.set(col + SEP + id, JSON.stringify(rec));
-        });
+          yield [col + SEP + id, JSON.stringify(rec)];
+        }
       } else if (val && typeof val === 'object') {
-        out.set(col + SEP + '_', JSON.stringify(val));
+        yield [col + SEP + '_', JSON.stringify(val)];
       }
     }
-    return out;
   }
 
   async flush(data) {
-    const now = PgStore.rows(data);
-    const up = [], del = [];
-    for (const [k, json] of now) if (this.snap.get(k) !== json) up.push([k, json]);
-    for (const k of this.snap.keys()) if (!now.has(k)) del.push(k);
+    const seen = new Set(), up = [], del = [];
+    for (const [k, json] of PgStore.entries(data)) {
+      seen.add(k);
+      const m = mark(json);
+      if (this.snap.get(k) !== m) up.push([k, json, m]);
+    }
+    for (const k of this.snap.keys()) if (!seen.has(k)) del.push(k);
     if (!up.length && !del.length) return { upserted: 0, deleted: 0 };
 
     const client = await this.pool.connect();
@@ -141,7 +148,7 @@ class PgStore {
     } finally {
       client.release();
     }
-    for (const [k, json] of up) this.snap.set(k, json);
+    for (const [k, , m] of up) this.snap.set(k, m);
     for (const k of del) this.snap.delete(k);
     return { upserted: up.length, deleted: del.length };
   }
@@ -259,4 +266,4 @@ async function init() {
 
 const { uid, backfill } = require('./services/ids');
 
-module.exports = { db, init, uid };
+module.exports = { db, init, uid, PgStore };

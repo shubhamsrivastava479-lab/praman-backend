@@ -364,6 +364,12 @@ router.get('/health', async (req, res) => {
     time: now.toISOString(),
     uptimeMinutes: Math.round(process.uptime() / 60),
     memoryMb: Math.round(mem.rss / 1048576),
+    memoryDetail: {
+      heapMb: Math.round(mem.heapUsed / 1048576), externalMb: Math.round((mem.external + (mem.arrayBuffers || 0)) / 1048576),
+      // size of all saved records as text (the data kept in memory is of about this size)
+      dataMb: db.store && db.store.snap ? Math.round([...db.store.snap.values()].reduce((a, m) => a + (parseInt(m, 10) || 0), 0) / 1048576) : null,
+      biggest: Object.entries(db.data).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length]).sort((a, b) => b[1] - a[1]).slice(0, 4)
+    },
     database: { mode: db.mode, persistent: db.mode === 'postgres', lastSavedAt: db.lastWriteAt || null, lastSaveError: db.lastWriteError || null },
     records: Object.fromEntries(Object.entries(db.data).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length])),
     cases: { open, overdue },
