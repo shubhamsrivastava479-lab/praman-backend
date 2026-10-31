@@ -2,41 +2,201 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Praman — Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Praman by SatyaSakshi — Investigation &amp; Verification Platform</title>
+<meta name="description" content="Praman is a verification and claim-investigation platform by SatyaSakshi LLP for insurers, lenders and employers. Video verification, evidence reports and fraud checks.">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#04345a">
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body{font-family:system-ui,sans-serif;background:#10151f;min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;}
-  .card{background:#fff;border-radius:12px;padding:30px;width:340px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
-  h1{font-family:Georgia,serif;font-size:22px;margin:0 0 4px;}
-  .sub{font-size:12px;color:#888;margin-bottom:20px;}
-  input{width:100%;padding:10px 12px;border:1px solid #dde1e6;border-radius:7px;margin-bottom:10px;font-size:13.5px;box-sizing:border-box;}
-  button{width:100%;padding:11px;border:none;border-radius:7px;background:#c8781f;color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;}
-  .toggle{text-align:center;margin-top:14px;font-size:12.5px;color:#555;cursor:pointer;text-decoration:underline;}
-  .err{color:#b23a2c;font-size:12.5px;margin-bottom:10px;min-height:16px;}
+  :root{--navy:#04345a;--navy2:#0a4a7c;--amber:#c8781f;--ink:#1c2733;--mut:#5b6773;--bg:#f5f7fa;--line:#e1e6ec}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#fff;line-height:1.55}
+  a{color:inherit}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+  header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;gap:12px}
+  header img{height:34px;width:auto;display:block}
+  nav{display:flex;gap:22px;align-items:center;font-size:14px}
+  nav a{text-decoration:none;color:var(--mut);font-weight:500}
+  nav a:hover{color:var(--navy)}
+  .btn{display:inline-block;border:none;border-radius:8px;padding:11px 20px;font-weight:600;font-size:14px;cursor:pointer;text-decoration:none;background:var(--amber);color:#fff}
+  .btn.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5)}
+  nav .btn{color:#fff;padding:9px 16px}
+  .hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;padding:56px 0 64px}
+  .hero .wrap{display:grid;grid-template-columns:1.25fr 1fr;gap:48px;align-items:center}
+  .eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#f2c58a;font-weight:700}
+  h1.big{font-family:Georgia,serif;font-size:42px;line-height:1.15;margin:12px 0 16px}
+  .hero p.lead{font-size:17px;color:#d6e3f0;max-width:560px;margin:0 0 24px}
+  .hero .cta{display:flex;gap:12px;flex-wrap:wrap}
+  .badges{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+  .badges span{font-size:12.5px;border:1px solid rgba(255,255,255,.28);border-radius:20px;padding:5px 12px;color:#e6eef7}
+  .card{background:#fff;color:var(--ink);border-radius:14px;padding:26px;box-shadow:0 18px 44px rgba(0,0,0,.3)}
+  .card h2{margin:0 0 2px;font-size:20px;font-family:Georgia,serif}
+  .sub{font-size:12.5px;color:#888;margin-bottom:16px}
+  .card input{width:100%;padding:11px 12px;border:1px solid #dde1e6;border-radius:8px;margin-bottom:10px;font-size:14px}
+  .card button.main{width:100%;padding:12px;border:none;border-radius:8px;background:var(--amber);color:#fff;font-weight:600;font-size:14px;cursor:pointer}
+  .card .alt{display:block;text-align:center;margin-top:12px;padding:10px;border:1px solid #dde1e6;border-radius:8px;font-size:13px;color:#333;text-decoration:none;font-weight:600}
+  .toggle{text-align:center;margin-top:14px;font-size:12.5px;color:#555;cursor:pointer;text-decoration:underline}
+  .err{color:#b23a2c;font-size:12.5px;margin-bottom:10px;min-height:16px}
+  .note{font-size:11.5px;color:#8a949e;text-align:center;margin-top:12px}
+  section{padding:64px 0}
+  section.alt{background:var(--bg)}
+  .kicker{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);font-weight:700}
+  h2.t{font-family:Georgia,serif;font-size:30px;margin:8px 0 10px;color:var(--navy)}
+  .intro{color:var(--mut);max-width:680px;margin:0 0 32px}
+  .grid{display:grid;gap:18px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px}
+  .box .ic{font-size:26px;margin-bottom:6px}
+  .box h3{margin:0 0 6px;font-size:16.5px;color:var(--navy)}
+  .box p{margin:0;color:var(--mut);font-size:14.5px}
+  .box ul{margin:8px 0 0;padding-left:18px;color:var(--mut);font-size:14px}
+  .steps{counter-reset:s;display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .steps div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;position:relative}
+  .steps div:before{counter-increment:s;content:counter(s);display:inline-flex;width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;align-items:center;justify-content:center;font-weight:700;margin-bottom:8px}
+  .steps h3{margin:0 0 4px;font-size:15.5px;color:var(--navy)}
+  .steps p{margin:0;font-size:14px;color:var(--mut)}
+  .contact{background:var(--navy);color:#fff}
+  .contact h2.t{color:#fff}
+  .contact .intro{color:#c8d8e8}
+  .cbox{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:22px}
+  .cbox small{display:block;color:#a9c0d6;font-size:12px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+  .cbox a{color:#fff;font-size:18px;font-weight:600;word-break:break-all}
+  footer{background:#021f36;color:#9fb4c8;font-size:13px;padding:22px 0}
+  footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  footer a{color:#cfe0ef}
+  @media(max-width:900px){.hero .wrap{grid-template-columns:1fr}.g3,.g2{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}h1.big{font-size:32px}nav a.hide{display:none}}
+  @media(max-width:520px){.steps{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<div class="card">
-  <h1 style="margin:0;text-align:center;"><img src="/logo.png" alt="Praman" style="display:block;width:230px;max-width:75%;height:auto;margin:0 auto 10px;"></h1>
-  <div class="sub" id="modeSub">Vendor login</div>
-  <div class="err" id="err"></div>
-  <input id="vendorName" placeholder="Vendor / company name" style="display:none;">
-  <input id="email" placeholder="Email" type="email">
-  <input id="password" placeholder="Password" type="password">
-  <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code from your authenticator app" style="display:none;">
-  <button id="submitBtn" onclick="submitForm()">Log in</button>
-  <a href="/vendor-access.html" style="display:block;text-align:center;margin-top:14px;padding:10px;border:1px solid #dde1e6;border-radius:7px;font-size:13px;color:#333;text-decoration:none;font-weight:600;">Sign in / Register with Google</a>
+<header>
+  <div class="wrap">
+    <a href="/"><img src="/logo.png" alt="Praman by SatyaSakshi"></a>
+    <nav>
+      <a class="hide" href="#features">Features</a>
+      <a class="hide" href="#services">Services</a>
+      <a class="hide" href="#how">How it works</a>
+      <a class="hide" href="#contact">Contact us</a>
+      <a class="btn" href="#login">Log in</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Truth Revealed, Trust Restored</div>
+      <h1 class="big">Verification and claim investigation, done on a phone call.</h1>
+      <p class="lead">Praman, by SatyaSakshi LLP, helps insurers, lenders and employers verify people and investigate claims faster. The customer joins a short video call from a WhatsApp link. You get a clear report with the evidence behind it.</p>
+      <div class="cta"><a class="btn" href="#login">Log in</a><a class="btn ghost" href="#contact">Book a demo</a></div>
+      <div class="badges"><span>DPIIT-recognised startup</span><span>Startup India</span><span>In partnership with IM BHU, Varanasi</span></div>
+    </div>
+
+    <div class="card" id="login">
+      <h2 id="modeTitle">Welcome back</h2>
+      <div class="sub" id="modeSub">Vendor, insurer and Super Admin log in here</div>
+      <div id="already" style="display:none;margin-bottom:12px"><a class="btn" style="display:block;text-align:center" id="goDash" href="/index.html">Open my dashboard</a></div>
+      <div class="err" id="err"></div>
+      <input id="vendorName" placeholder="Vendor / company name" style="display:none;">
+      <input id="email" placeholder="Email" type="email" autocomplete="username">
+      <input id="password" placeholder="Password" type="password" autocomplete="current-password">
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code from your authenticator app" style="display:none;">
+      <button class="main" id="submitBtn" onclick="submitForm()">Log in</button>
+      <a class="alt" href="/vendor-access.html">Sign in / Register with Google</a>
+      <div class="toggle" id="toggleMode" onclick="toggleMode()">New vendor? Create an account</div>
+      <div class="note">New accounts are approved by our team before first use.</div>
+    </div>
+  </div>
 </div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="kicker">Features</div>
+    <h2 class="t">Everything a verification case needs, in one place</h2>
+    <p class="intro">From the first message to the final report, each step is recorded, time-stamped and easy to show to a reviewer.</p>
+    <div class="grid g3">
+      <div class="box"><div class="ic">💬</div><h3>WhatsApp link, no app needed</h3><p>The customer gets a personal link with their name and the reason for the call. They join from their phone browser.</p></div>
+      <div class="box"><div class="ic">🎥</div><h3>Live video with an executive</h3><p>A trained executive can verify face, documents and surroundings on a live call, with consent, location and recording.</p></div>
+      <div class="box"><div class="ic">🤖</div><h3>Automated AI call</h3><p>Questions are asked in the customer's own language. Answers are written down and checked against the record you hold.</p></div>
+      <div class="box"><div class="ic">📱</div><h3>Screen sharing from Android</h3><p>Our Android app lets the customer share their screen when the case needs it, for example to show a message or a document.</p></div>
+      <div class="box"><div class="ic">📍</div><h3>Location and time proof</h3><p>Each call stores where and when it took place, who was present and what was agreed.</p></div>
+      <div class="box"><div class="ic">📄</div><h3>Clear evidence report</h3><p>A first page shows the key findings at a glance. The rest lists checks, answers, photos and documents, with a fingerprint so changes can be spotted.</p></div>
+      <div class="box"><div class="ic">🔎</div><h3>Fraud and consistency checks</h3><p>Fixed rules look at edited PDFs, photo details, repeated numbers, vehicles, policies, hospitals and garages across cases.</p></div>
+      <div class="box"><div class="ic">⏱️</div><h3>Deadlines and reminders</h3><p>Every case has a due time. Customers get WhatsApp reminders, and late cases are flagged for your team.</p></div>
+      <div class="box"><div class="ic">🏢</div><h3>Built for teams and partners</h3><p>Separate access for each client, roles for agents and viewers, an insurer view, bulk upload from Excel and an API for your own systems.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="services" class="alt">
+  <div class="wrap">
+    <div class="kicker">Services</div>
+    <h2 class="t">Where Praman is used</h2>
+    <p class="intro">Each service has its own question set and its own report, so the result fits the job.</p>
+    <div class="grid g3">
+      <div class="box"><div class="ic">🛡️</div><h3>Insurance</h3><ul><li>Health and motor claim investigation</li><li>Verification before underwriting</li><li>Digital PIVC and PLVC for life, term and health</li></ul></div>
+      <div class="box"><div class="ic">🏦</div><h3>Loan verification</h3><ul><li>Borrower identity and consent</li><li>Residence and business checks with live location</li><li>Income and employment confirmation</li></ul></div>
+      <div class="box"><div class="ic">👷</div><h3>Employee background verification</h3><ul><li>White-collar and blue-collar staff</li><li>Identity, address, education and past jobs</li><li>Candidate declarations on record</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="kicker">How it works</div>
+    <h2 class="t">From case to report in four steps</h2>
+    <p class="intro">No visit is needed for most cases. Field work is added only where it is really needed.</p>
+    <div class="steps">
+      <div><h3>Add the case</h3><p>Enter it, or upload many from Excel or the API.</p></div>
+      <div><h3>Customer gets the link</h3><p>One WhatsApp message with the reason and the call link.</p></div>
+      <div><h3>Verification call</h3><p>Identity, answers, documents and photos are collected on the call.</p></div>
+      <div><h3>Report and decision</h3><p>Checks and evidence are put together. A person signs off the final verdict.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="kicker">Trust and privacy</div>
+    <h2 class="t">Evidence you can defend, data you can trust</h2>
+    <p class="intro">Consent is taken before recording, location or screen share. Each client sees only its own cases. Every action is logged with who did it and when.</p>
+    <div class="grid g2">
+      <div class="box"><h3>Human sign-off</h3><p>Automated checks help, but an investigator approves every final verdict.</p></div>
+      <div class="box"><h3>Retention control</h3><p>Files are deleted after the period you set, and deletion requests are tracked. Read our <a href="/privacy.html">privacy policy</a>.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="contact">
+  <div class="wrap">
+    <div class="kicker" style="color:#f2c58a">Contact us</div>
+    <h2 class="t">Let us run a pilot on your own cases</h2>
+    <p class="intro">Write to us for a demo, a pilot or a question. We will get back to you soon.</p>
+    <div class="grid g2">
+      <div class="cbox"><small>Email</small><a id="cEmail" href="#">…</a></div>
+      <div class="cbox" id="cPhoneBox" style="display:none"><small>Phone</small><a id="cPhone" href="#">…</a></div>
+      <div class="cbox"><small>Company</small><div style="font-size:18px;font-weight:600">SatyaSakshi LLP</div><div style="color:#a9c0d6;font-size:14px;margin-top:2px">Praman: automated verification software</div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© <span id="yr"></span> SatyaSakshi LLP · Praman. All rights reserved.</div>
+    <div><a href="/privacy.html">Privacy policy</a></div>
+  </div>
+</footer>
 <script>
 let mode = 'login';
 function toggleMode(){
   mode = mode === 'login' ? 'signup' : 'login';
   document.getElementById('vendorName').style.display = mode === 'signup' ? 'block' : 'none';
-  document.getElementById('modeSub').textContent = mode === 'signup' ? 'Create vendor account' : 'Vendor login';
+  document.getElementById('modeSub').textContent = mode === 'signup' ? 'Create a vendor account' : 'Vendor, insurer and Super Admin log in here';
+  document.getElementById('modeTitle').textContent = mode === 'signup' ? 'Create account' : 'Welcome back';
   document.getElementById('submitBtn').textContent = mode === 'signup' ? 'Create account' : 'Log in';
   if(document.getElementById('toggleMode')) document.getElementById('toggleMode').textContent = mode === 'signup' ? 'Already have an account? Log in' : 'New vendor? Create an account';
   document.getElementById('err').textContent = '';
@@ -69,6 +229,19 @@ async function submitForm(){
   location.href = data.user.role === 'super_admin' ? '/super-admin.html' : data.user.role === 'insurer' ? '/insurer.html' : '/index.html';
 }
 
+document.getElementById('yr').textContent = new Date().getFullYear();
+['email','password','code','vendorName'].forEach(id => document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') submitForm(); }));
+try {
+  const u = JSON.parse(localStorage.getItem('praman_user') || 'null');
+  if (u && localStorage.getItem('praman_token')) {
+    document.getElementById('already').style.display = 'block';
+    document.getElementById('goDash').href = u.role === 'super_admin' ? '/super-admin.html' : u.role === 'insurer' ? '/insurer.html' : '/index.html';
+  }
+} catch {}
+fetch('/api/site-info').then(r => r.json()).then(i => {
+  const e = document.getElementById('cEmail'); e.textContent = i.email; e.href = 'mailto:' + i.email;
+  if (i.phone) { document.getElementById('cPhoneBox').style.display = 'block'; const p = document.getElementById('cPhone'); p.textContent = i.phone; p.href = 'tel:' + i.phone.replace(/[^+\d]/g, ''); }
+}).catch(() => { const e = document.getElementById('cEmail'); e.textContent = 'info@pramanservices.space'; e.href = 'mailto:info@pramanservices.space'; });
 </script>
 </body>
 </html>

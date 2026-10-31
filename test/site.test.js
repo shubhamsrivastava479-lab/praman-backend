@@ -1,0 +1,20 @@
+const { test } = require('node:test');
+const assert = require('node:assert');
+require('./helpers');
+test('home page is the public site and old address redirects', async () => {
+  process.env.PUBLIC_BASE_URL = 'https://pramanservices.space';
+  const { app } = require('../src/server');
+  const http = require('http');
+  const server = http.createServer(app); await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+  const get = (path, host) => new Promise(r => http.get({ port, path, headers: { host } }, res => { let b = ''; res.on('data', d => b += d); res.on('end', () => r({ s: res.statusCode, loc: res.headers.location, b })); }));
+  const home = await get('/', 'pramanservices.space');
+  assert.equal(home.s, 200); assert.match(home.b, /Contact us/);
+  const old = await get('/login.html?x=1', 'praman-backend-vtbz.onrender.com');
+  assert.equal(old.s, 301); assert.equal(old.loc, 'https://pramanservices.space/login.html?x=1');
+  const api = await get('/health', 'praman-backend-vtbz.onrender.com');
+  assert.equal(api.s, 200);
+  const info = JSON.parse((await get('/api/site-info', 'pramanservices.space')).b);
+  assert.ok(info.email);
+  server.close();
+});

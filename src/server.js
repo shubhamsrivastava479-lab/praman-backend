@@ -22,6 +22,15 @@ const scheduler = require('./services/scheduler');
 
 const app = express();
 app.set('trust proxy', 1);
+// The site lives on PUBLIC_BASE_URL. Page visits on the old *.onrender.com address are sent there,
+// so login happens on one address only. API calls, webhooks and sockets are left alone so nothing already set up breaks.
+app.use((req, res, next) => {
+  const base = process.env.PUBLIC_BASE_URL;
+  if (!base || /your-deployed/i.test(base) || !['GET', 'HEAD'].includes(req.method)) return next();
+  if (!/\.onrender\.com$/i.test(req.hostname || '')) return next();
+  if (/^\/(api|webhooks|health|socket\.io)(\/|$)/.test(req.path)) return next();
+  res.redirect(301, base.replace(/\/$/, '') + req.originalUrl);
+});
 const server = http.createServer(app);
 app.disable('x-powered-by');
 // Sockets are same-origin; only an explicitly configured site may connect from elsewhere.
@@ -72,6 +81,9 @@ app.use('/api/gemini', geminiRouter);
 app.use('/f', require('./routes/files'));
 app.use('/api/live', require('./routes/live'));
 
+app.get('/api/site-info', (req, res) => res.json({ email: process.env.CONTACT_EMAIL || process.env.PRIVACY_CONTACT_EMAIL || 'info@pramanservices.space', phone: process.env.CONTACT_PHONE || '' }));
+// The home address is the public site (with the login form); the dashboard stays at /index.html.
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'login.html')));
 app.use('/media', express.static(path.join(__dirname, '..', 'media')));
 // pages are revalidated (ETag) every time so a new deploy shows at once; images/fonts can be cached
 app.use(express.static(path.join(__dirname, '..', 'public'), { etag: true, maxAge: 0, setHeaders: (res, f) => { if (/\.(png|jpe?g|svg|ico|woff2?)$/i.test(f)) res.setHeader('Cache-Control', 'public, max-age=86400'); } }));
