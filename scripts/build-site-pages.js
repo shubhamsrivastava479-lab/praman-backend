@@ -149,12 +149,12 @@ ${FOOTER}
 
 // ---- home page blocks ----
 function homeBlocks() {
-  const desc = 'Praman by SatyaSakshi LLP: insurance claim investigation, digital PIVC, loan, employee, tenant and vendor verification on a WhatsApp video call, with instant PAN, Aadhaar, RC, e-challan, GST, bank and court record checks.';
+  const desc = 'Praman by SatyaSakshi LLP is verification software for every industry: people, businesses, vehicles and claims verified on a WhatsApp video call, with instant PAN, Aadhaar, RC, GST, bank and court record checks and an evidence report.';
   const headBlock = `<link rel="canonical" href="${SITE}/">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Praman by SatyaSakshi">
-<meta property="og:title" content="Praman: Verification and Claim Investigation Software">
+<meta property="og:title" content="Praman: Verification and Investigation Software for Every Industry">
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${SITE}/">
 <meta property="og:image" content="${SITE}/logo.png">

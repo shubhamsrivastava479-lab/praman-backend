@@ -157,8 +157,8 @@ const PAGES = [
 
 // Questions for the home page (also sent to Google as FAQ data).
 const HOME_FAQ = [
-  ['What is Praman?', 'Praman is verification and claim-investigation software by SatyaSakshi LLP. A customer joins a recorded video call from a WhatsApp link, and the result comes back as an evidence report with instant ID, vehicle, business, bank and court checks.'],
-  ['Who uses Praman?', 'Insurers, TPAs, investigation agencies, banks and NBFCs, employers and background verification firms, and businesses that onboard vendors, dealers, drivers or tenants.'],
+  ['What is Praman?', 'Praman is verification and investigation software by SatyaSakshi LLP for any industry that has to check a person, a business, an asset or a claim. The person joins a recorded video call from a WhatsApp link, and the result comes back as an evidence report with instant ID, vehicle, business, bank and court checks.'],
+  ['Who uses Praman?', 'Banks, NBFCs and fintechs, insurers and TPAs, employers and HR firms, real estate and co-living operators, hospitals, marketplaces and e-commerce, fleet and mobility companies, businesses onboarding vendors and dealers, and government and welfare programmes.'],
   ['Does the customer need to install an app?', 'No. The customer opens a WhatsApp link in their phone browser. An Android app is available only when screen sharing is needed.'],
   ['Which instant checks are available?', 'PAN, Aadhaar through DigiLocker, Voter ID, driving licence, passport, face match and liveness, RC, e-challan, FASTag, EPFO employment history, GST, Udyam, company and director, bank account and UPI name, credit score with consent, and court records.'],
   ['Is personal data safe?', 'Checks run only with consent. Full Aadhaar numbers are never stored, each client sees only its own cases, every action is logged, and files are deleted after the period you set.']
