@@ -17,7 +17,7 @@
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="Praman Call"
+        android:label="Praman"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
@@ -27,7 +27,8 @@
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
-            android:resizeableActivity="true">
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -36,8 +37,14 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="pramanservices.space" android:pathPrefix="/live-join.html" />
-                <data android:scheme="https" android:host="praman-backend-vtbz.onrender.com" android:pathPrefix="/live-join.html" />
+                <data android:scheme="https" />
+                <data android:host="pramanservices.space" />
+                <data android:host="praman-backend-vtbz.onrender.com" />
+                <data android:pathPrefix="/live-join.html" />
+                <data android:pathPrefix="/ai-call.html" />
+                <data android:pathPrefix="/verify.html" />
+                <data android:pathPrefix="/app-join.html" />
+                <data android:pathPrefix="/app.html" />
             </intent-filter>
         </activity>
 

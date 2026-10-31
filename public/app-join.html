@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Join your verification call | Praman</title>
+<meta name="description" content="Customers: enter your mobile number, confirm the code sent on WhatsApp and join your Praman verification call.">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#04345a">
+<style>
+  :root{--navy:#04345a;--amber:#c8781f;--ink:#1c2733;--mut:#5b6773;--line:#e1e6ec}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:#f5f7fa;min-height:100vh}
+  .top{background:linear-gradient(135deg,#04345a,#0a4a7c);color:#fff;padding:22px 20px 60px;text-align:center}
+  .top img{height:30px;background:#fff;border-radius:8px;padding:4px 8px}
+  .top h1{font-family:Georgia,serif;font-size:24px;margin:14px 0 4px}
+  .top p{margin:0;color:#d6e3f0;font-size:14px}
+  .card{background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.12);max-width:420px;margin:-40px auto 20px;padding:22px 20px}
+  label{display:block;font-size:13px;font-weight:600;color:#44505c;margin:0 0 6px}
+  .ph{display:flex;border:1px solid #dde1e6;border-radius:10px;overflow:hidden}
+  .ph span{background:#f1f3f5;padding:13px 12px;font-weight:600;color:#44505c}
+  input{width:100%;padding:13px 12px;border:1px solid #dde1e6;border-radius:10px;font-size:18px;letter-spacing:.04em}
+  .ph input{border:none;border-radius:0}
+  input:focus{outline:2px solid #0a4a7c33}
+  button{width:100%;margin-top:14px;padding:14px;border:none;border-radius:10px;background:var(--amber);color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+  button:disabled{opacity:.6}
+  button.ghost{background:none;color:#0a4a7c;font-size:14px;font-weight:600;margin-top:8px;padding:8px}
+  .msg{font-size:13.5px;margin-top:10px;min-height:18px}
+  .err{color:#b23a2c}.ok{color:#1f7a6c}
+  .hint{font-size:12.5px;color:var(--mut);margin-top:12px;line-height:1.5}
+  .call{border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px}
+  .call b{display:block;color:var(--navy);font-size:15.5px}
+  .call small{color:var(--mut)}
+  .call a{display:block;text-align:center;margin-top:10px;padding:12px;border-radius:10px;background:#1f7a6c;color:#fff;text-decoration:none;font-weight:700}
+  .hide{display:none}
+  .foot{text-align:center;font-size:12px;color:var(--mut);padding:10px 20px 30px}
+  .foot a{color:#0a4a7c}
+</style>
+</head>
+<body>
+<div class="top">
+  <img src="/logo-compact.png" alt="Praman">
+  <h1>Join your verification call</h1>
+  <p>अपनी वेरिफिकेशन कॉल से जुड़ें</p>
+</div>
+
+<div class="card">
+  <div id="s1">
+    <label for="mob">Mobile number (the one on WhatsApp) / मोबाइल नंबर</label>
+    <div class="ph"><span>+91</span><input id="mob" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel-national" placeholder="98XXXXXXXX"></div>
+    <button id="b1" onclick="sendCode()">Send code on WhatsApp / कोड भेजें</button>
+    <div class="msg" id="m1" role="alert"></div>
+    <div class="hint">We send a 6-digit code on WhatsApp from the company that asked for your verification. हम WhatsApp पर 6 अंकों का कोड भेजेंगे।</div>
+  </div>
+
+  <div id="s2" class="hide">
+    <label for="code">Code received on WhatsApp / WhatsApp पर आया कोड</label>
+    <input id="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code">
+    <button id="b2" onclick="verify()">Continue / आगे बढ़ें</button>
+    <div class="msg" id="m2" role="alert"></div>
+    <button class="ghost" onclick="back()">Change number / नंबर बदलें</button>
+    <button class="ghost" id="again" onclick="sendCode(true)">Send the code again / कोड फिर भेजें</button>
+  </div>
+
+  <div id="s3" class="hide">
+    <b style="font-size:16px;">Your calls / आपकी कॉल</b>
+    <div id="calls"></div>
+    <div class="hint">The call is recorded with your consent. Keep your ID card ready. कॉल आपकी सहमति से रिकॉर्ड होगी। अपना पहचान पत्र साथ रखें।</div>
+  </div>
+</div>
+<div class="foot">Already have the link? Just open it. · <a href="/privacy.html">Privacy</a> · SatyaSakshi LLP</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = () => $('mob').value.replace(/\D/g, '').slice(-10);
+function show(n){ ['s1','s2','s3'].forEach((id, i) => $(id).classList.toggle('hide', i + 1 !== n)); }
+function back(){ show(1); $('m1').textContent = ''; }
+async function post(path, body){
+  const r = await fetch('/api/public/customer/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  return { ok: r.ok, d };
+}
+async function sendCode(again){
+  const m = again ? $('m2') : $('m1'), b = again ? $('again') : $('b1');
+  if (!/^[6-9]\d{9}$/.test(num())) { m.className = 'msg err'; m.textContent = 'Please enter your 10-digit mobile number. / 10 अंकों का मोबाइल नंबर डालें।'; return; }
+  b.disabled = true; m.className = 'msg'; m.textContent = 'Sending… / भेज रहे हैं…';
+  try {
+    const { ok, d } = await post('otp', { mobile: num() });
+    if (!ok) { m.className = 'msg err'; m.textContent = d.error || 'Could not send. Please try again.'; return; }
+    show(2); $('m2').className = 'msg ok'; $('m2').textContent = d.message + ' / अगर इस नंबर पर कोई कॉल बाकी है तो WhatsApp पर कोड भेज दिया गया है।';
+    $('code').value = ''; $('code').focus();
+  } catch { m.className = 'msg err'; m.textContent = 'No internet. Please try again. / इंटरनेट जांचें।'; }
+  finally { b.disabled = false; }
+}
+async function verify(){
+  const code = $('code').value.replace(/\D/g, ''), m = $('m2');
+  if (code.length !== 6) { m.className = 'msg err'; m.textContent = 'Enter the 6-digit code. / 6 अंकों का कोड डालें।'; return; }
+  $('b2').disabled = true; m.className = 'msg'; m.textContent = 'Checking… / जांच रहे हैं…';
+  try {
+    const { ok, d } = await post('verify', { mobile: num(), code });
+    if (!ok) { m.className = 'msg err'; m.textContent = d.error || 'Could not check the code.'; return; }
+    show(3);
+    const KIND = { ai: 'Video call with our AI assistant, any time / AI सहायक के साथ वीडियो कॉल', live: 'Video call with an officer / अधिकारी के साथ वीडियो कॉल', self: 'Video verification / वीडियो वेरिफिकेशन' };
+    $('calls').innerHTML = (d.calls || []).length ? d.calls.map(c => `<div class="call"><b>${esc(c.purpose)}</b><small>${esc(c.firm)} · ${esc(c.ref)}</small><br><small>${esc(KIND[c.kind] || '')}</small><a href="${esc(c.url)}">Join now / अभी जुड़ें</a></div>`).join('')
+      : '<div class="hint">No call is waiting for this number right now. If you got a message from us, please open the link in it. / इस नंबर पर अभी कोई कॉल बाकी नहीं है।</div>';
+  } catch { m.className = 'msg err'; m.textContent = 'No internet. Please try again. / इंटरनेट जांचें।'; }
+  finally { $('b2').disabled = false; }
+}
+$('mob').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') verify(); });
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 // nothing internal can ever be shared. Unknown or internal questions get a polite "our team will help".
 (function () {
   if (window.__pramanChat) return; window.__pramanChat = true;
+  if (/PramanApp/i.test(navigator.userAgent)) return;   // not inside the Praman app
   var EMAIL = 'info@pramanservices.space';
   var opened = 0, topics = [], leadSent = false, startedAt = 0;
   try { leadSent = localStorage.getItem('pmc_lead') === '1'; } catch (e) {}

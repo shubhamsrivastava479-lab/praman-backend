@@ -24,6 +24,7 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://pramanservices.space/#org","name":"SatyaSakshi LLP","alternateName":"Praman","url":"https://pramanservices.space/","logo":"https://pramanservices.space/logo.png","slogan":"Truth Revealed, Trust Restored"},{"@type":"WebSite","@id":"https://pramanservices.space/#site","url":"https://pramanservices.space/","name":"Praman","publisher":{"@id":"https://pramanservices.space/#org"},"inLanguage":"en-IN"},{"@type":"SoftwareApplication","name":"Praman","applicationCategory":"BusinessApplication","operatingSystem":"Web, Android","description":"Praman by SatyaSakshi LLP is verification software for every industry: people, businesses, vehicles and claims verified on a WhatsApp video call, with instant PAN, Aadhaar, RC, GST, bank and court record checks and an evidence report.","publisher":{"@id":"https://pramanservices.space/#org"},"url":"https://pramanservices.space/"}]}</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is Praman?","acceptedAnswer":{"@type":"Answer","text":"Praman is verification and investigation software by SatyaSakshi LLP for any industry that has to check a person, a business, an asset or a claim. The person joins a recorded video call from a WhatsApp link, and the result comes back as an evidence report with instant ID, vehicle, business, bank and court checks."}},{"@type":"Question","name":"Who uses Praman?","acceptedAnswer":{"@type":"Answer","text":"Banks, NBFCs and fintechs, insurers and TPAs, employers and HR firms, real estate and co-living operators, hospitals, marketplaces and e-commerce, fleet and mobility companies, businesses onboarding vendors and dealers, and government and welfare programmes."}},{"@type":"Question","name":"Does the customer need to install an app?","acceptedAnswer":{"@type":"Answer","text":"No. The customer opens a WhatsApp link in their phone browser. An Android app is available only when screen sharing is needed."}},{"@type":"Question","name":"Which instant checks are available?","acceptedAnswer":{"@type":"Answer","text":"PAN, Aadhaar through DigiLocker, Voter ID, driving licence, passport, face match and liveness, RC, e-challan, FASTag, EPFO employment history, GST, Udyam, company and director, bank account and UPI name, credit score with consent, and court records."}},{"@type":"Question","name":"Is personal data safe?","acceptedAnswer":{"@type":"Answer","text":"Checks run only with consent. Full Aadhaar numbers are never stored, each client sees only its own cases, every action is logged, and files are deleted after the period you set."}}]}</script>
 <!--/SEO:HEAD-->
+<script>/* Inside the Praman Android app: show only the login */ try { if (/PramanApp/i.test(navigator.userAgent) || window.PramanAndroid) document.documentElement.classList.add('inapp'); } catch (e) {}</script>
 <style>
   :root{--navy:#04345a;--navy2:#0a4a7c;--amber:#c8781f;--ink:#1c2733;--mut:#5b6773;--bg:#f5f7fa;--line:#e1e6ec}
   *{box-sizing:border-box}
@@ -117,6 +118,13 @@
   .hchips{display:flex;flex-wrap:wrap;gap:6px;margin:-8px 0 22px;max-width:600px}
   .hchips span,.hchips a{font-size:12.5px;background:rgba(255,255,255,.12);color:#e6eef7;border-radius:14px;padding:4px 10px;text-decoration:none}
   .hchips a{color:#f2c58a;font-weight:600}
+  .apponly{display:none}
+  html.inapp .apponly{display:block}
+  html.inapp header nav, html.inapp .hero .wrap > div:first-child, html.inapp section, html.inapp footer, html.inapp .pmc-btn,
+  html.inapp .card .or, html.inapp .card a.alt, html.inapp .card .note{display:none!important}
+  html.inapp .hero{padding:22px 0 40px;min-height:calc(100vh - 64px)}
+  html.inapp .hero .wrap{grid-template-columns:1fr;max-width:460px}
+  html.inapp header .wrap{justify-content:center}
 </style>
 </head>
 <body>
@@ -162,6 +170,8 @@
       <button class="main" id="submitBtn" onclick="submitForm()">Log in</button>
       <div class="or">or</div>
       <a class="alt" href="/vendor-access.html"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 010-9.4l-7.9-6.1a24 24 0 000 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Sign in / Register with Google</a>
+      <div class="apponly" style="font-size:12.5px;color:#5b6773;margin-top:14px;line-height:1.5">Google sign-in works on the website only. In the app, log in with your email and password. Registered with Google? Use <b>Forgot password?</b> once to set a password.</div>
+      <a href="/app-join.html" style="display:block;margin-top:12px;text-align:center;padding:11px;border:1px solid #dde1e6;border-radius:8px;color:#04345a;font-weight:600;text-decoration:none;font-size:14px">📞 Customer? Join your call</a>
       <div class="note">New vendors register with Google or with their official email, and are approved by our team before first use.</div>
       <div class="note" style="margin-top:6px"><a href="/platform-access.html" style="color:#0a4a7c;font-weight:600;text-decoration:none">Super Admin? Sign in with Google here</a></div>
     </div>

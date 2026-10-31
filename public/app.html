@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Praman</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#04345a">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:linear-gradient(160deg,#04345a,#0a4a7c);color:#fff;min-height:100vh;display:flex;flex-direction:column}
+  .in{flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px 20px;max-width:440px;margin:0 auto;width:100%}
+  .logo{background:#fff;border-radius:12px;padding:8px 12px;align-self:center}
+  .logo img{height:40px;display:block}
+  .tag{text-align:center;color:#f2c58a;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin:14px 0 26px}
+  a.opt{display:flex;gap:14px;align-items:center;background:#fff;color:#1c2733;border-radius:14px;padding:18px;margin-bottom:14px;text-decoration:none;box-shadow:0 10px 26px rgba(0,0,0,.2)}
+  a.opt .ic{font-size:30px;width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#eef3f8;flex:none}
+  a.opt b{display:block;font-size:17px;color:#04345a}
+  a.opt small{color:#5b6773;font-size:13px;line-height:1.4;display:block;margin-top:2px}
+  .foot{text-align:center;font-size:12px;color:#b9cde0;padding:14px}
+  .foot a{color:#dce8f3}
+</style>
+</head>
+<body>
+<div class="in">
+  <div class="logo"><img src="/logo.png" alt="Praman by SatyaSakshi"></div>
+  <div class="tag">Truth Revealed, Trust Restored</div>
+  <a class="opt" href="/app-join.html"><span class="ic">📞</span><span><b>Join my verification call</b><small>For customers. Mobile number + WhatsApp code.<br>ग्राहक: अपनी वीडियो कॉल से जुड़ें</small></span></a>
+  <a class="opt" href="/login.html"><span class="ic">🏢</span><span><b>Team login</b><small>Vendor, agent, insurer, viewer and admin</small></span></a>
+</div>
+<div class="foot"><a href="/">About Praman</a> · <a href="/privacy.html">Privacy</a> · SatyaSakshi LLP</div>
+<script>
+// Already logged in on this phone: go straight to the right screen.
+try {
+  const t = localStorage.getItem('praman_token'), u = JSON.parse(localStorage.getItem('praman_user') || 'null');
+  if (t && u && u.role) location.replace(u.role === 'super_admin' ? '/super-admin.html' : u.role === 'insurer' ? '/insurer.html' : '/index.html');
+} catch {}
+</script>
+</body>
+</html>
