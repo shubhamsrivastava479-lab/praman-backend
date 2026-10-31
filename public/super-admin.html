@@ -49,6 +49,20 @@
     <div id="perfTrend" style="margin-top:10px;"></div>
   </div>
 
+  <div class="card" id="demoCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <h2 style="margin:0;">Demo requests <span id="demoBadge" style="display:none;background:#c8781f;color:#fff;border-radius:10px;padding:1px 9px;font-size:12px;vertical-align:middle;"></span></h2>
+      <span><select id="demoFilter" onchange="renderDemos()"><option value="">All</option><option value="new">New</option><option value="contacted">Contacted</option><option value="demo_done">Demo done</option><option value="closed">Closed</option></select>
+      <button class="save" onclick="demoCsv()">Download CSV</button></span>
+    </div>
+    <div class="hint" style="font-size:12.5px;color:#666;margin:6px 0;">Sent from the website's "Request a demo" form. A tick means the person proved the email address with a code.</div>
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px;">
+      <tr style="text-align:left;color:#888;font-size:11px;text-transform:uppercase;"><th style="padding:6px;">When</th><th>Company</th><th>Contact</th><th>Email / phone</th><th>GST / PAN</th><th>City</th><th>Status</th><th>Note</th></tr>
+      <tbody id="demoRows"></tbody>
+    </table></div>
+    <div id="demoEmpty" class="hint" style="font-size:12.5px;color:#888;margin-top:8px;display:none;">No demo requests yet.</div>
+  </div>
+
   <div class="card">
     <b>Top Vendors by Case Volume</b>
     <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;">
@@ -513,6 +527,40 @@ async function runRetention(dry){
   m.style.color = '#1f7a6c';
   m.textContent = dry ? `${d.files} file(s) in ${d.cases} case(s) are past their retention period${d.files ? ' and would be deleted.' : '.'}` : `Deleted ${d.deleted} file(s)${d.failed ? `, ${d.failed} could not be deleted yet` : ''}.`;
 }
+
+let demoList = [];
+async function loadDemos(){
+  const r = await fetch('/api/super-admin/demo-requests', { headers: authHeaders() }); if (!r.ok) return;
+  demoList = await r.json(); renderDemos();
+}
+function renderDemos(){
+  const f = document.getElementById('demoFilter').value;
+  const n = demoList.filter(d => d.status === 'new').length;
+  const b = document.getElementById('demoBadge'); b.style.display = n ? 'inline-block' : 'none'; b.textContent = n + ' new';
+  const rows = demoList.filter(d => !f || d.status === f);
+  document.getElementById('demoEmpty').style.display = rows.length ? 'none' : 'block';
+  const td = 'style="padding:6px;border-top:1px solid #f0f1f3;vertical-align:top;"';
+  document.getElementById('demoRows').innerHTML = rows.map(d => `<tr>
+    <td ${td}>${esc(new Date(d.createdAt).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }))}</td>
+    <td ${td}><b>${esc(d.company)}</b></td>
+    <td ${td}>${esc(d.name)}<br><span style="color:#888;">${esc(d.designation)}</span></td>
+    <td ${td}><a href="mailto:${esc(d.email)}">${esc(d.email)}</a> ${d.emailVerified ? '<span title="Email verified with a code" style="color:#1f7a6c;">✓</span>' : '<span title="Email not verified" style="color:#b07a00;">?</span>'}<br><a href="tel:${esc(d.phone)}">${esc(d.phone)}</a></td>
+    <td ${td}>${esc(d.idType)}<br>${esc(d.idNumber)}</td>
+    <td ${td}>${esc(d.city)}, ${esc(d.country)}</td>
+    <td ${td}><select onchange="demoSave('${esc(d.id)}',{status:this.value})">${[['new','New'],['contacted','Contacted'],['demo_done','Demo done'],['closed','Closed']].map(o => `<option value="${o[0]}" ${d.status === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select></td>
+    <td ${td}><input value="${esc(d.note || '')}" placeholder="Add a note" style="width:150px;" onchange="demoSave('${esc(d.id)}',{note:this.value})"></td></tr>`).join('');
+}
+async function demoSave(id, body){
+  const r = await fetch('/api/super-admin/demo-requests/' + id, { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify(body) });
+  if (r.ok) { const u = await r.json(); const i = demoList.findIndex(x => x.id === id); if (i >= 0) demoList[i] = u; renderDemos(); }
+}
+function demoCsv(){
+  const cols = ['createdAt','company','name','designation','email','emailVerified','phone','idType','idNumber','city','country','status','note'];
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const csv = [cols.join(',')].concat(demoList.map(d => cols.map(c => q(d[c])).join(','))).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' })); a.download = 'praman-demo-requests.csv'; a.click();
+}
+loadDemos();
 
 loadVendors();
 loadSettings();

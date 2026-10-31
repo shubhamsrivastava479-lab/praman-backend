@@ -35,6 +35,7 @@ const defaultData = () => ({
   walletTxns: [],        // wallet ledger: top-ups, report and ID-check charges, refunds
   billingSettings: {},   // Praman's own invoice details: legal name, GSTIN, bank, UPI, numbering
   aiUsage: {},           // Gemini calls per day: { 'YYYY-MM-DD': { text, tts, errors, ... } }
+  demoRequests: [],      // 'Request a demo' form of the website (Super Admin sees them)
   fileFacts: [],         // exact fingerprint + PDF / photo metadata of every stored file (file-facts.js)
   platformSettings: {} // Super Admin managed: geminiApiKey, gridlinesApiKey, R2, TURN ...
 });

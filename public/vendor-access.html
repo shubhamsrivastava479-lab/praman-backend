@@ -35,7 +35,20 @@
     <div class="sub">Vendor access. Sign in with your Google account. New here? You will be asked for your firm details, and the platform admin approves your account before you can log in.</div>
     <div class="err" id="err1"></div>
     <div id="gBtn" style="display:flex;justify-content:center;"></div>
-    <a class="back" href="/login.html">← Back to email login</a>
+    <div style="text-align:center;color:#9aa5b0;font-size:12px;margin:16px 0 4px;">or</div>
+    <button type="button" id="showEmailReg" style="margin-top:6px;background:#fff;color:#04345a;border:1px solid #c8d3de;" onclick="$('emailReg').style.display='block';this.style.display='none';">Register with my official email</button>
+    <div id="emailReg" style="display:none;">
+      <div class="sub" style="margin-top:12px;">No Google account needed. Use your company email. We will send a code to confirm it, and you will log in later with this email and a password.</div>
+      <div class="err" id="errE"></div>
+      <label>Official email *</label><input id="regEmail" type="email" maxlength="120" placeholder="name@yourcompany.com">
+      <label>Picture code *</label><div id="regCap"></div>
+      <button type="button" id="regSend" onclick="regSend()">Send code</button>
+      <div id="regCodeBox" style="display:none;">
+        <label>Code sent to your email *</label><input id="regCode" inputmode="numeric" maxlength="6" placeholder="6-digit code">
+        <button type="button" id="regVerify" onclick="regVerify()">Verify email</button>
+      </div>
+    </div>
+    <a class="back" href="/login.html">← Back to login</a>
   </div>
 
   <div id="stepForm" style="display:none;">
@@ -59,6 +72,12 @@
     </div>
     <label>State</label>
     <select id="state"><option value="">Select state</option></select>
+    <div id="pwBox" style="display:none;">
+      <div class="row">
+        <div><label>Create a password *</label><input id="pw1" type="password" autocomplete="new-password" maxlength="100"><div class="hint">At least 8 characters, with letters and numbers.</div></div>
+        <div><label>Repeat password *</label><input id="pw2" type="password" autocomplete="new-password" maxlength="100"></div>
+      </div>
+    </div>
     <label>Which services do you need? *</label>
     <div id="svcList" style="display:grid;gap:8px;margin-top:4px;"></div>
     <button id="submitBtn" onclick="submitForm()">Submit for approval</button>
@@ -66,11 +85,14 @@
 
   <div id="stepDone" style="display:none;"></div>
 </div>
+<script src="/otp-modal.js"></script>
+<script src="/captcha.js"></script>
 <script>
 const STATES=['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi','Jammu and Kashmir','Ladakh','Chandigarh','Puducherry','Andaman and Nicobar Islands','Dadra and Nagar Haveli and Daman and Diu','Lakshadweep'];
 document.getElementById('state').innerHTML += STATES.map(s=>`<option>${s}</option>`).join('');
 const $ = id => document.getElementById(id);
-let onboardToken = null;
+let onboardToken = null, emailMode = false, regCap = null;
+regCap = PramanCaptcha.mount($('regCap'));
 
 function show(step){ ['stepSignin','stepForm','stepDone'].forEach(s => $(s).style.display = s === step ? 'block' : 'none'); }
 function done(cls, html){ $('stepDone').innerHTML = `<div class="${cls}">${html}</div><a class="back" href="/login.html">← Back to login</a>`; show('stepDone'); }
@@ -79,8 +101,9 @@ async function onGoogle(resp){
   $('err1').textContent = '';
   try{
     const res = await fetch('/api/auth/vendor-google-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
-    const d = await res.json();
+    let d = await res.json();
     if(d.error){ $('err1').textContent = d.error; return; }
+    if(d.otpRequired){ try { d = await PramanOtp.ask(d); } catch { return; } }
     if(d.status === 'ok'){
       localStorage.setItem('praman_token', d.token);
       localStorage.setItem('praman_user', JSON.stringify(d.user));
@@ -96,6 +119,29 @@ async function onGoogle(resp){
       show('stepForm'); return;
     }
   }catch(e){ $('err1').textContent = 'Server not reachable (it may be waking up). Try again in 30 seconds.'; }
+}
+function emsg(t, ok){ const e = $('errE'); e.style.color = ok ? '#1f7a6c' : '#b23a2c'; e.textContent = t; }
+async function regSend(){
+  emsg(''); const b = $('regSend'); b.disabled = true;
+  try {
+    const r = await fetch('/api/auth/register-email/code', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: $('regEmail').value, ...regCap.value() }) });
+    const d = await r.json();
+    if (!r.ok) { emsg(d.error || 'Could not send the code.'); regCap.refresh(); return; }
+    emsg('Code sent. Please check your inbox (and spam folder).', true); $('regCodeBox').style.display = 'block'; $('regCode').focus(); regCap.refresh();
+  } catch { emsg('Server not reachable. Try again in 30 seconds.'); }
+  finally { b.disabled = false; }
+}
+async function regVerify(){
+  emsg(''); const b = $('regVerify'); b.disabled = true;
+  try {
+    const r = await fetch('/api/auth/register-email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: $('regEmail').value, code: $('regCode').value }) });
+    const d = await r.json();
+    if (!r.ok) { emsg(d.error || 'That code is not correct.'); return; }
+    onboardToken = d.onboardToken; emailMode = true;
+    $('who').textContent = 'Email confirmed: ' + d.email; $('contactEmail').value = d.email; $('pwBox').style.display = 'block';
+    show('stepForm');
+  } catch { emsg('Server not reachable. Try again in 30 seconds.'); }
+  finally { b.disabled = false; }
 }
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -114,12 +160,16 @@ async function submitForm(){
   ['firmName','contactName','contactEmail','mobile','pan','gst','address','city','state','pincode'].forEach(k => body[k] = $(k).value.trim());
   body.services = [...document.querySelectorAll('#svcList input:checked')].map(x => x.value);
   if (!body.services.length) { $('err2').textContent = 'Choose at least one service.'; return; }
+  if (emailMode) {
+    if ($('pw1').value !== $('pw2').value) { $('err2').textContent = 'The two passwords are not the same.'; return; }
+    body.password = $('pw1').value;
+  }
   const btn = $('submitBtn'); btn.disabled = true;
   try{
     const res = await fetch('/api/auth/vendor-register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d = await res.json();
     if(d.error){ $('err2').textContent = d.error; return; }
-    done('ok', '<b>Request submitted.</b><br>The platform admin will review your firm details. After approval, come back to this page and sign in with the same Google account.');
+    done('ok', '<b>Request submitted.</b><br>The platform admin will review your firm details. After approval, ' + (emailMode ? 'log in on the home page with your email and password.' : 'come back to this page and sign in with the same Google account.'));
   }catch(e){ $('err2').textContent = 'Server not reachable. Try again in 30 seconds.'; }
   finally{ btn.disabled = false; }
 }

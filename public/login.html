@@ -70,6 +70,24 @@
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
   .chips span{font-size:12.5px;background:#eef3f8;color:#2b4a66;border-radius:14px;padding:4px 10px}
   .soon{margin-top:26px;background:#fff;border:1px dashed #b9c6d3;border-radius:12px;padding:18px 20px;color:var(--mut);font-size:14.5px}
+  .card .lbl{display:block;font-size:12px;font-weight:600;color:#44505c;margin:0 0 5px}
+  .card input:focus,.dform input:focus,.dform select:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 3px rgba(10,74,124,.15)}
+  .pw{position:relative}.pw input{padding-right:62px}
+  .pw button{position:absolute;right:6px;top:6px;width:auto;padding:6px 10px;border:none;background:none;color:var(--navy2);font-size:12.5px;font-weight:600;cursor:pointer}
+  .roles{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+  .roles span{font-size:11.5px;background:#eef3f8;color:#2b4a66;border-radius:12px;padding:3px 10px}
+  .or{display:flex;align-items:center;gap:10px;color:#9aa5b0;font-size:12px;margin:14px 0 2px}.or:before,.or:after{content:"";flex:1;height:1px;background:#e4e8ec}
+  .card .alt{display:flex;align-items:center;justify-content:center;gap:9px}
+  .card button.main:disabled{opacity:.65;cursor:wait}
+  .dform{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:26px;max-width:860px}
+  .dform .full{grid-column:1/-1}
+  .dform label{display:block;font-size:12.5px;font-weight:600;color:#44505c;margin-bottom:5px}
+  .dform input,.dform select{width:100%;padding:11px 12px;border:1px solid #dde1e6;border-radius:8px;font-size:14px;background:#fff;font-family:inherit}
+  .dform .row{display:flex;gap:8px}.dform .row .btn{white-space:nowrap;padding:10px 14px}
+  .dform .hp{position:absolute;left:-9999px;opacity:0}
+  .dform .msg{font-size:13.5px;min-height:18px}
+  .dform small{display:block;color:#8a949e;font-size:11.5px;margin-top:4px}
+  @media(max-width:700px){.dform{grid-template-columns:1fr}}
   footer{background:#021f36;color:#9fb4c8;font-size:13px;padding:22px 0}
   footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   footer a{color:#cfe0ef}
@@ -86,6 +104,7 @@
       <a class="hide" href="#services">Services</a>
       <a class="hide" href="#industries">Industries</a>
       <a class="hide" href="#how">How it works</a>
+      <a class="hide" href="#demo">Request a demo</a>
       <a class="hide" href="#contact">Contact us</a>
       <a class="btn" href="#login">Log in</a>
     </nav>
@@ -98,24 +117,51 @@
       <div class="eyebrow">Truth Revealed, Trust Restored</div>
       <h1 class="big">Verification and claim investigation, done on a phone call.</h1>
       <p class="lead">Praman, by SatyaSakshi LLP, helps insurers, lenders and employers verify people and investigate claims faster. The customer joins a short video call from a WhatsApp link. You get a clear report with the evidence behind it.</p>
-      <div class="cta"><a class="btn" href="#login">Log in</a><a class="btn ghost" href="#contact">Book a demo</a></div>
+      <div class="cta"><a class="btn" href="#login">Log in</a><a class="btn ghost" href="#demo">Request a demo</a></div>
       <div class="badges"><span>DPIIT-recognised startup</span><span>Startup India</span><span>In partnership with IM BHU, Varanasi</span></div>
     </div>
 
     <div class="card" id="login">
       <h2 id="modeTitle">Welcome back</h2>
-      <div class="sub" id="modeSub">Vendor, insurer and Super Admin log in here</div>
+      <div class="sub">One login for everyone</div>
+      <div class="roles"><span>Vendor</span><span>Agent</span><span>Insurer</span><span>Super Admin</span></div>
       <div id="already" style="display:none;margin-bottom:12px"><a class="btn" style="display:block;text-align:center" id="goDash" href="/index.html">Open my dashboard</a></div>
-      <div class="err" id="err"></div>
-      <input id="vendorName" placeholder="Vendor / company name" style="display:none;">
-      <input id="email" placeholder="Email" type="email" autocomplete="username">
-      <input id="password" placeholder="Password" type="password" autocomplete="current-password">
-      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code from your authenticator app" style="display:none;">
+      <div class="err" id="err" role="alert"></div>
+      <label class="lbl" for="email">Email</label>
+      <input id="email" placeholder="you@company.com" type="email" autocomplete="username">
+      <label class="lbl" for="password">Password</label>
+      <div class="pw"><input id="password" placeholder="Your password" type="password" autocomplete="current-password"><button type="button" id="pwToggle" onclick="togglePw()">Show</button></div>
+      <div style="text-align:right;margin:-4px 0 10px"><a href="#" onclick="showReset(true);return false" style="font-size:12.5px;color:#0a4a7c;font-weight:600;text-decoration:none">Forgot password?</a></div>
+      <div id="codeBox" style="display:none"><label class="lbl" for="code">Authenticator code</label>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code from your authenticator app"></div>
       <button class="main" id="submitBtn" onclick="submitForm()">Log in</button>
-      <a class="alt" href="/vendor-access.html">Sign in / Register with Google</a>
-      <div class="toggle" id="toggleMode" onclick="toggleMode()">New vendor? Create an account</div>
-      <div class="note">New accounts are approved by our team before first use.</div>
+      <div class="or">or</div>
+      <a class="alt" href="/vendor-access.html"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 010-9.4l-7.9-6.1a24 24 0 000 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Sign in / Register with Google</a>
+      <div class="note">New vendors register with Google or with their official email, and are approved by our team before first use.</div>
     </div>
+    <div class="card" id="resetCard" style="display:none">
+      <h2>Reset your password</h2>
+      <div class="sub">Use the email you log in with. This also works to set a password if you first registered with Google.</div>
+      <div class="err" id="rErr" role="alert"></div>
+      <div id="rStep1">
+        <label class="lbl" for="rEmail">Email</label>
+        <input id="rEmail" type="email" placeholder="you@company.com" autocomplete="username">
+        <label class="lbl">Picture code</label>
+        <div id="rCap" style="margin-bottom:12px"></div>
+        <button class="main" id="rSend" onclick="resetSend()">Send code to my email</button>
+      </div>
+      <div id="rStep2" style="display:none">
+        <label class="lbl" for="rCode">Code from your email</label>
+        <input id="rCode" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code">
+        <label class="lbl" for="rPw">New password</label>
+        <input id="rPw" type="password" placeholder="At least 8 characters, letters and numbers" autocomplete="new-password">
+        <label class="lbl" for="rPw2">Repeat new password</label>
+        <input id="rPw2" type="password" autocomplete="new-password">
+        <button class="main" id="rDo" onclick="resetDo()">Change password</button>
+      </div>
+      <div class="toggle" onclick="showReset(false)">← Back to log in</div>
+    </div>
+
   </div>
 </div>
 
@@ -187,11 +233,35 @@
   </div>
 </section>
 
+<section id="demo" class="alt">
+  <div class="wrap">
+    <div class="kicker">Request a demo</div>
+    <h2 class="t">See Praman on your own kind of case</h2>
+    <p class="intro">Tell us about your company. We will contact you to set up a short live demo.</p>
+    <form class="dform" id="demoForm" onsubmit="return sendDemo(event)" novalidate>
+      <div class="full"><label for="d_email">Official email</label>
+        <div class="row"><input id="d_email" type="email" autocomplete="email" placeholder="name@yourcompany.com"><button type="button" class="btn" id="d_send" style="display:none" onclick="sendCode()">Send code</button></div>
+        <small id="d_emailHint">Please use your company email address.</small></div>
+      <div class="full"><label>Picture code</label><div id="d_cap"></div><small>This keeps robots out. Type the letters you see.</small></div>
+      <div class="full" id="d_codeBox" style="display:none"><label for="d_code">Code sent to your email</label><input id="d_code" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code"></div>
+      <div><label for="d_name">Contact person name</label><input id="d_name" autocomplete="name"></div>
+      <div><label for="d_designation">Designation</label><input id="d_designation" placeholder="e.g. Head of Claims"></div>
+      <div><label for="d_company">Company name</label><input id="d_company" autocomplete="organization"></div>
+      <div><label for="d_phone">Mobile number</label><input id="d_phone" type="tel" autocomplete="tel" placeholder="+91 98XXXXXXXX"></div>
+      <div class="full"><label for="d_id">GST number or PAN</label><input id="d_id" maxlength="15" placeholder="15-character GST or 10-character PAN" style="text-transform:uppercase"><small>Used only to know which company we are speaking with.</small></div>
+      <div><label for="d_city">City</label><input id="d_city" autocomplete="address-level2"></div>
+      <div><label for="d_country">Country</label><input id="d_country" value="India" autocomplete="country-name"></div>
+      <input class="hp" id="d_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <div class="full"><div class="msg" id="d_msg" role="alert"></div><button class="btn" id="d_submit" type="submit" style="padding:13px 26px">Request a demo</button></div>
+    </form>
+  </div>
+</section>
+
 <section id="contact" class="contact">
   <div class="wrap">
     <div class="kicker" style="color:#f2c58a">Contact us</div>
     <h2 class="t">Let us run a pilot on your own cases</h2>
-    <p class="intro">Write to us for a demo, a pilot or a question. We will get back to you soon.</p>
+    <p class="intro">Write to us for a pilot or a question, or use the demo form above. We will get back to you soon.</p>
     <div class="grid g2">
       <div class="cbox"><small>Email</small><a id="cEmail" href="#">…</a></div>
       <div class="cbox" id="cPhoneBox" style="display:none"><small>Phone</small><a id="cPhone" href="#">…</a></div>
@@ -206,45 +276,99 @@
     <div><a href="/privacy.html">Privacy policy</a></div>
   </div>
 </footer>
+<script src="/otp-modal.js"></script>
+<script src="/captcha.js"></script>
 <script>
-let mode = 'login';
-function toggleMode(){
-  mode = mode === 'login' ? 'signup' : 'login';
-  document.getElementById('vendorName').style.display = mode === 'signup' ? 'block' : 'none';
-  document.getElementById('modeSub').textContent = mode === 'signup' ? 'Create a vendor account' : 'Vendor, insurer and Super Admin log in here';
-  document.getElementById('modeTitle').textContent = mode === 'signup' ? 'Create account' : 'Welcome back';
-  document.getElementById('submitBtn').textContent = mode === 'signup' ? 'Create account' : 'Log in';
-  if(document.getElementById('toggleMode')) document.getElementById('toggleMode').textContent = mode === 'signup' ? 'Already have an account? Log in' : 'New vendor? Create an account';
-  document.getElementById('err').textContent = '';
-}
+function togglePw(){ const p = document.getElementById('password'); const show = p.type === 'password'; p.type = show ? 'text' : 'password'; document.getElementById('pwToggle').textContent = show ? 'Hide' : 'Show'; }
 async function submitForm(){
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  const vendorName = document.getElementById('vendorName').value.trim();
-  const errBox = document.getElementById('err');
+  const errBox = document.getElementById('err'), btn = document.getElementById('submitBtn');
   errBox.textContent = '';
-  if(!email || !password){ errBox.textContent = 'Email and password required'; return; }
-  if(mode === 'signup' && !vendorName){ errBox.textContent = 'Vendor name required'; return; }
-
-  const url = mode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
-  const body = mode === 'signup' ? { email, password, vendorName } : { email, password, code: document.getElementById('code').value.trim() };
-  const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  const data = await res.json();
-  if(data.needCode){ document.getElementById('code').style.display = 'block'; document.getElementById('code').focus(); }
-  if(data.error){ errBox.textContent = data.error; return; }
-
-  if (data.pending) {
-    errBox.style.color = '#1f7a6c';
-    errBox.textContent = data.message || 'Account created — awaiting approval.';
-    toggleMode(); // flip back to the login form
-    return;
-  }
-
-  localStorage.setItem('praman_token', data.token);
-  localStorage.setItem('praman_user', JSON.stringify(data.user));
-  location.href = data.user.role === 'super_admin' ? '/super-admin.html' : data.user.role === 'insurer' ? '/insurer.html' : '/index.html';
+  if(!email || !password){ errBox.textContent = 'Email and password are required.'; return; }
+  btn.disabled = true; btn.textContent = 'Logging in…';
+  try {
+    const res = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, code: document.getElementById('code').value.trim() }) });
+    let data = await res.json();
+    if(data.needCode){ document.getElementById('codeBox').style.display = 'block'; document.getElementById('code').focus(); }
+    if(data.error){ errBox.textContent = data.error; return; }
+    if(data.otpRequired){ try { data = await PramanOtp.ask(data); } catch { return; } }
+    localStorage.setItem('praman_token', data.token);
+    localStorage.setItem('praman_user', JSON.stringify(data.user));
+    location.href = data.user.role === 'super_admin' ? '/super-admin.html' : data.user.role === 'insurer' ? '/insurer.html' : '/index.html';
+  } catch { errBox.textContent = 'Could not reach the server. Please try again.'; }
+  finally { btn.disabled = false; btn.textContent = 'Log in'; }
 }
 
+const $ = id => document.getElementById(id);
+// ---- Request a demo
+let otpOn = false;
+const dCap = PramanCaptcha.mount($('d_cap'));
+// ---- Forgot password
+let rCap = null;
+function showReset(on){
+  $('resetCard').style.display = on ? 'block' : 'none'; $('login').style.display = on ? 'none' : 'block';
+  if (on) { if (!rCap) rCap = PramanCaptcha.mount($('rCap')); $('rEmail').value = $('email').value; $('rEmail').focus(); }
+}
+function rmsg(t, ok){ const e = $('rErr'); e.style.color = ok ? '#1f7a6c' : '#b23a2c'; e.textContent = t; }
+async function resetSend(){
+  rmsg(''); const b = $('rSend'); b.disabled = true;
+  try {
+    const r = await fetch('/api/auth/forgot', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: $('rEmail').value, ...rCap.value() }) });
+    const d = await r.json();
+    if (!r.ok) { rmsg(d.error || 'Could not send the code.'); rCap.refresh(); return; }
+    rmsg('If this email is registered, a code has been sent. Please check your inbox (and spam folder).', true);
+    $('rStep1').style.display = 'none'; $('rStep2').style.display = 'block'; $('rCode').focus();
+  } catch { rmsg('Could not reach the server.'); }
+  finally { b.disabled = false; }
+}
+async function resetDo(){
+  rmsg('');
+  if ($('rPw').value !== $('rPw2').value) { rmsg('The two passwords are not the same.'); return; }
+  const b = $('rDo'); b.disabled = true;
+  try {
+    const r = await fetch('/api/auth/reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: $('rEmail').value, code: $('rCode').value, password: $('rPw').value }) });
+    const d = await r.json();
+    if (!r.ok) { rmsg(d.error || 'Could not change the password.'); return; }
+    $('rStep1').style.display = 'block'; $('rStep2').style.display = 'none'; $('rPw').value = $('rPw2').value = $('rCode').value = ''; rCap.refresh();
+    showReset(false); $('password').value = ''; $('err').style.color = '#1f7a6c'; $('err').textContent = 'Password changed. Please log in with the new password.';
+  } catch { rmsg('Could not reach the server.'); }
+  finally { b.disabled = false; }
+}
+
+fetch('/api/demo/config').then(r => r.json()).then(c => {
+  otpOn = !!c.otp;
+  if (otpOn) { $('d_send').style.display = ''; $('d_codeBox').style.display = ''; $('d_emailHint').textContent = 'We will send a 6-digit code to this address to confirm it.'; }
+}).catch(() => {});
+function dmsg(t, ok){ const m = $('d_msg'); m.textContent = t; m.style.color = ok ? '#1f7a6c' : '#b23a2c'; }
+async function sendCode(){
+  const b = $('d_send'); dmsg('');
+  b.disabled = true;
+  try {
+    const r = await fetch('/api/demo/otp', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: $('d_email').value, ...dCap.value() }) });
+    const d = await r.json();
+    if (!r.ok) { dmsg(d.error || 'Could not send the code.'); dCap.refresh(); b.disabled = false; return; }
+    dmsg('Code sent. Please check your inbox (and spam folder).', true); $('d_code').focus(); dCap.refresh();
+    let n = 30; b.textContent = 'Resend in ' + n + 's';
+    const t = setInterval(() => { n--; if (n <= 0) { clearInterval(t); b.disabled = false; b.textContent = 'Resend code'; } else b.textContent = 'Resend in ' + n + 's'; }, 1000);
+  } catch { dmsg('Could not reach the server.'); b.disabled = false; }
+}
+async function sendDemo(ev){
+  ev.preventDefault(); dmsg('');
+  const body = { email: $('d_email').value, code: $('d_code').value, name: $('d_name').value, designation: $('d_designation').value, company: $('d_company').value,
+    phone: $('d_phone').value, idNumber: $('d_id').value, city: $('d_city').value, country: $('d_country').value, website: $('d_website').value, ...dCap.value() };
+  if (!otpOn && !body.captchaAnswer) { dmsg('Please type the letters from the picture.'); return false; }
+  if (otpOn && !/^\d{6}$/.test(body.code.trim())) { dmsg('Please enter the 6-digit code sent to your email.'); return false; }
+  const b = $('d_submit'); b.disabled = true; b.textContent = 'Sending…';
+  try {
+    const r = await fetch('/api/demo/request', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) { dmsg(d.error || 'Something went wrong.'); if (d.captcha) dCap.refresh(); }
+    else { $('demoForm').innerHTML = '<div class="full" style="grid-column:1/-1;padding:18px 4px"><h3 style="margin:0 0 6px;color:#1f7a6c;font-family:Georgia,serif;font-size:22px">Thank you. We have your request.</h3><p style="margin:0;color:#5b6773">Our team will contact you on your email or phone to set up the demo.</p></div>'; return false; }
+  } catch { dmsg('Could not reach the server. Please try again.'); }
+  b.disabled = false; b.textContent = 'Request a demo';
+  return false;
+}
 
 const INDUSTRIES = [
  ['🏦','Banks, NBFCs and microfinance',['Home and business address checks','Income and job confirmation','Gold, vehicle and tractor loans','Property inspection','Collections and address trace','Merchant and shop verification']],
@@ -262,7 +386,7 @@ const INDUSTRIES = [
 ];
 document.getElementById('indGrid').innerHTML = INDUSTRIES.map(i => '<div class="box"><div class="ic">' + i[0] + '</div><h3>' + i[1] + '</h3><div class="chips">' + i[2].map(x => '<span>' + x + '</span>').join('') + '</div></div>').join('');
 document.getElementById('yr').textContent = new Date().getFullYear();
-['email','password','code','vendorName'].forEach(id => document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') submitForm(); }));
+['email','password','code'].forEach(id => document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') submitForm(); }));
 try {
   const u = JSON.parse(localStorage.getItem('praman_user') || 'null');
   if (u && localStorage.getItem('praman_token')) {

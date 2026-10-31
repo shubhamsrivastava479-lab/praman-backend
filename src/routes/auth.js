@@ -4,8 +4,48 @@ const { hashPassword, comparePassword, signToken } = require('../services/auth')
 const { requireAuth } = require('../middleware/auth');
 const totp = require('../services/totp');
 const audit = require('../services/audit');
+const loginOtp = require('../services/login-otp');
+const emailCode = require('../services/email-code');
+const captcha = require('../services/captcha');
+const { rateLimit: ipLimit } = require('../services/security');
+const roles = require('../services/roles');
+const BAD_PIC = 'The picture code is not correct. Please try the new one.';
+const PW_OK = p => typeof p === 'string' && p.length >= 8 && p.length <= 100 && /[A-Za-z]/.test(p) && /\d/.test(p);
+const PW_RULE = 'Password must be at least 8 characters, with letters and numbers.';
+
+// Same rule everywhere a login is completed: the firm (or the person's company) must be approved.
+function approvalError(user) {
+  if (user.role === 'vendor_admin' && user.approved === false) return user.status === 'suspended' ? 'Your account is suspended. Contact the platform admin.' : 'Your account is pending approval by a platform admin.';
+  if (roles.isTeam(user.role)) {
+    const parent = db.data.users.find(u => u.id === user.parentVendorId);
+    if (!parent || parent.approved === false) return 'Your company account is pending approval by a platform admin.';
+  }
+  return null;
+}
+const sessionOf = (user, how) => {
+  const vendorRootId = roles.isTeam(user.role) ? user.parentVendorId : user.id;
+  audit.log({ ...user, vendorRootId }, 'login', how || '');
+  return { token: signToken({ ...user, vendorRootId }), user: { id: user.id, email: user.email, vendorName: user.vendorName, role: user.role || 'vendor_admin' } };
+};
+// After the password / Google step: either finish the login or ask for the email code.
+async function finishLogin(res, user, how, shape) {
+  if (loginOtp.needed(user)) {
+    const o = await loginOtp.start(user);
+    if (o.error) return res.status(502).json({ error: o.error });
+    return res.json({ otpRequired: true, challenge: o.challenge, email: o.email });
+  }
+  await db.write().catch(() => {});
+  const ses = sessionOf(user, how);
+  res.json(shape === 'status' ? { status: 'ok', ...ses } : ses);
+}
 
 const router = express.Router();
+
+router.get('/captcha', ipLimit({ windowMs: 60_000, max: 40, name: 'captcha' }), (req, res) => {
+  const c = captcha.create();
+  res.set('Cache-Control', 'no-store').json({ id: c.id, image: c.image });
+});
+
 
 // Self-service signup now happens only through Google (vendor-access.html),
 // where firm details are collected and the Super Admin approves each vendor.
@@ -57,23 +97,83 @@ router.post('/login', async (req, res) => {
     twoFaOk(user.id);
   }
 
-  // Approval gate: a vendor_admin must be approved; an agent's whole company
-  // must be approved (their parent vendor_admin's status governs them).
-  if (user.role === 'vendor_admin' && user.approved === false) {
-    return res.status(403).json({ error: user.status === 'suspended' ? 'Your account is suspended. Contact the platform admin.' : 'Your account is pending approval by a platform admin.' });
-  }
-  if (require('../services/roles').isTeam(user.role)) {
-    const parent = db.data.users.find(u => u.id === user.parentVendorId);
-    if (!parent || parent.approved === false) {
-      return res.status(403).json({ error: 'Your company account is pending approval by a platform admin.' });
-    }
-  }
+  const blocked = approvalError(user);
+  if (blocked) return res.status(403).json({ error: blocked });
+  return finishLogin(res, user, user.totpEnabled ? 'with two-step code' : 'password');
+});
 
-  const vendorRootId = require('../services/roles').isTeam(user.role) ? user.parentVendorId : user.id;
-  const token = signToken({ ...user, vendorRootId });
-  audit.log({ ...user, vendorRootId }, 'login', user.totpEnabled ? 'with two-step code' : '');
+// ---------- Email code at login (second step) ----------
+router.post('/login-otp/verify', ipLimit({ windowMs: 10 * 60_000, max: 30, name: 'login-otp' }), async (req, res) => {
+  const r = loginOtp.verify((req.body || {}).challenge, (req.body || {}).code);
+  if (r.error) return res.status(r.status).json({ error: r.error });
+  await db.read();
+  const user = db.data.users.find(u => u.id === r.userId);
+  if (!user) return res.status(401).json({ error: 'Account not found. Please log in again.' });
+  const blocked = approvalError(user);
+  if (blocked) return res.status(403).json({ error: blocked });
+  const ses = sessionOf(user, 'password or Google, and email code');
   await db.write().catch(() => {});
-  res.json({ token, user: { id: user.id, email: user.email, vendorName: user.vendorName, role: user.role || 'vendor_admin' } });
+  res.json({ status: 'ok', ...ses });
+});
+router.post('/login-otp/resend', ipLimit({ windowMs: 10 * 60_000, max: 12, name: 'login-otp-resend' }), async (req, res) => {
+  await db.read();
+  const r = await loginOtp.resend((req.body || {}).challenge, id => db.data.users.find(u => u.id === id));
+  if (r.error) return res.status(r.status).json({ error: r.error });
+  res.json({ ok: true });
+});
+
+// ---------- Forgot / reset password (for every account with an email address) ----------
+router.post('/forgot', ipLimit({ windowMs: 15 * 60_000, max: 8, name: 'forgot' }), async (req, res) => {
+  const b = req.body || {};
+  if (!captcha.check(b.captchaId, b.captchaAnswer)) return res.status(400).json({ error: BAD_PIC, captcha: true });
+  if (!emailCode.available()) return res.status(503).json({ error: 'Password reset by email is not switched on yet. Please contact the platform admin.' });
+  const e = emailCode.email(b.email, false);
+  if (e.error) return res.status(400).json({ error: e.error });
+  await db.read();
+  const user = db.data.users.find(u => String(u.email || '').toLowerCase() === e.email && u.role !== 'super_admin');
+  // The answer is the same whether or not the address is registered.
+  if (user) await emailCode.issue('reset', e.email, 'Reset your Praman password',
+    'Your Praman password reset code is {code}.\nIt is valid for 10 minutes. If you did not ask for it, ignore this email: your password stays as it is.\n\nSatyaSakshi LLP · Praman');
+  res.json({ ok: true });
+});
+router.post('/reset', ipLimit({ windowMs: 15 * 60_000, max: 15, name: 'reset' }), async (req, res) => {
+  const b = req.body || {};
+  const e = emailCode.email(b.email, false);
+  if (e.error) return res.status(400).json({ error: e.error });
+  if (!PW_OK(b.password)) return res.status(400).json({ error: PW_RULE });
+  await db.read();
+  const user = db.data.users.find(u => String(u.email || '').toLowerCase() === e.email && u.role !== 'super_admin');
+  const r = emailCode.check('reset', e.email, b.code);
+  if (r.error || !user) return res.status(r.status || 400).json({ error: r.error || 'That code is not correct or has expired.' });
+  user.passwordHash = await hashPassword(b.password);
+  loginFails.delete(loginKey('em', e.email));
+  audit.log(user, 'password_reset', 'with email code', user.parentVendorId || user.id);
+  await db.write();
+  res.json({ ok: true });
+});
+
+// ---------- Register a firm with an official email (no Google account needed) ----------
+router.post('/register-email/code', ipLimit({ windowMs: 15 * 60_000, max: 10, name: 'reg-code' }), async (req, res) => {
+  const b = req.body || {};
+  if (!captcha.check(b.captchaId, b.captchaAnswer)) return res.status(400).json({ error: BAD_PIC, captcha: true });
+  if (!emailCode.available()) return res.status(503).json({ error: 'Registration by email is not switched on yet. Please use Google, or contact us.' });
+  const e = emailCode.email(b.email, true);
+  if (e.error) return res.status(400).json({ error: e.error });
+  await db.read();
+  if (db.data.users.find(u => String(u.email || '').toLowerCase() === e.email)) return res.status(409).json({ error: 'This email is already registered. Log in, or use "Forgot password".' });
+  const r = await emailCode.issue('register', e.email, 'Your Praman registration code',
+    'Your Praman registration code is {code}.\nIt is valid for 10 minutes. If you did not ask for it, you can ignore this email.\n\nSatyaSakshi LLP · Praman');
+  if (r.error) return res.status(r.status).json({ error: r.error });
+  res.json({ ok: true });
+});
+router.post('/register-email/verify', ipLimit({ windowMs: 15 * 60_000, max: 20, name: 'reg-verify' }), async (req, res) => {
+  const b = req.body || {};
+  const e = emailCode.email(b.email, true);
+  if (e.error) return res.status(400).json({ error: e.error });
+  const r = emailCode.check('register', e.email, b.code);
+  if (r.error) return res.status(r.status).json({ error: r.error });
+  const onboardToken = jwtLib.sign({ purpose: 'vendor_onboard', method: 'email', email: e.email, name: '' }, process.env.JWT_SECRET, { expiresIn: '30m' });
+  res.json({ status: 'new', email: e.email, name: '', onboardToken });
 });
 
 // ---------- Two-step login (optional, per person) ----------
@@ -243,8 +343,7 @@ router.post('/google-login', async (req, res) => {
       db.data.users.push(admin);
       await db.write();
     }
-    const token = signToken({ ...admin, vendorRootId: admin.id });
-    res.json({ token, user: { id: admin.id, email: admin.email, vendorName: admin.vendorName, role: admin.role } });
+    return finishLogin(res, admin, 'Google');
   } catch (e) {
     res.status(502).json({ error: 'Could not reach Google. Try again.' });
   }
@@ -300,13 +399,11 @@ router.post('/vendor-google-login', async (req, res) => {
   if (user.role === 'vendor_admin' && user.approved === false) {
     return res.json({ status: user.status === 'suspended' ? 'suspended' : 'pending', firmName: user.vendorName });
   }
-  if (require('../services/roles').isTeam(user.role)) {
+  if (roles.isTeam(user.role)) {
     const parent = db.data.users.find(u => u.id === user.parentVendorId);
     if (!parent || parent.approved === false) return res.json({ status: 'pending', firmName: parent ? parent.vendorName : '' });
   }
-  const vendorRootId = require('../services/roles').isTeam(user.role) ? user.parentVendorId : user.id;
-  const token = signToken({ ...user, vendorRootId });
-  res.json({ status: 'ok', token, user: { id: user.id, email: user.email, vendorName: user.vendorName, role: user.role || 'vendor_admin' } });
+  return finishLogin(res, user, 'Google', 'status');
 });
 
 const GST_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -342,13 +439,15 @@ router.post('/vendor-register', async (req, res) => {
   if (gst && gst.slice(2, 12) !== pan) return res.status(400).json({ error: 'GST number does not match the PAN entered.' });
   if (address.length < 10) return res.status(400).json({ error: 'Enter the full address.' });
   if (!/^\d{6}$/.test(pincode)) return res.status(400).json({ error: 'Enter a valid 6-digit pincode.' });
+  const byEmail = ob.method === 'email';
+  if (byEmail && !PW_OK(b.password)) return res.status(400).json({ error: PW_RULE });
   const { SERVICES } = require('../services/plans');
   const requestedServices = [...new Set((Array.isArray(b.services) ? b.services : []).filter(x => SERVICES[x]))];
   if (!requestedServices.length) return res.status(400).json({ error: 'Choose at least one service.' });
 
   await db.read();
   if (db.data.users.find(u => u.email.toLowerCase() === ob.email)) {
-    return res.status(409).json({ error: 'This Google account is already registered. Sign in instead.' });
+    return res.status(409).json({ error: 'This email is already registered. Sign in instead.' });
   }
   if (db.data.users.find(u => u.role === 'vendor_admin' && u.profile && u.profile.pan === pan)) {
     return res.status(409).json({ error: 'A firm with this PAN is already registered. Contact the platform admin.' });
@@ -362,10 +461,10 @@ router.post('/vendor-register', async (req, res) => {
     parentVendorId: null,
     approved: false,
     status: 'pending',
-    signupMethod: 'google',
+    signupMethod: byEmail ? 'email' : 'google',
     profile: { firmName, contactName: contactName || ob.name || '', contactEmail, mobile, gst: gst || null, pan, address, city, state, pincode, submittedAt: new Date().toISOString() },
     requestedServices,
-    passwordHash: await hashPassword(require('crypto').randomBytes(24).toString('hex')),
+    passwordHash: await hashPassword(byEmail ? b.password : require('crypto').randomBytes(24).toString('hex')),
     createdAt: new Date().toISOString()
   };
   db.data.users.push(user);

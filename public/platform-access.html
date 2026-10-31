@@ -24,13 +24,15 @@
   <div class="err" id="err"></div>
   <div id="gBtn" style="display:flex;justify-content:center;"></div>
 </div>
+<script src="/otp-modal.js"></script>
 <script>
 async function onGoogle(resp){
   const errBox = document.getElementById('err'); errBox.style.color='#b23a2c'; errBox.textContent='';
   try{
     const res = await fetch('/api/auth/google-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
-    const data = await res.json();
+    let data = await res.json();
     if(data.error){ errBox.textContent = data.error; return; }
+    if(data.otpRequired){ try { data = await PramanOtp.ask(data); } catch { return; } }
     localStorage.setItem('praman_token', data.token);
     localStorage.setItem('praman_user', JSON.stringify(data.user));
     location.href = '/super-admin.html';

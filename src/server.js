@@ -66,6 +66,7 @@ app.use('/api/whatsapp-accounts', whatsappAccountsRouter);
 app.use('/api/kyc', kycRouter);
 app.use('/api/cases', casesRouter);
 app.use('/api/public', publicRouter);
+app.use('/api/demo', require('./routes/demo'));
 app.use('/api/participant', participantRouter);
 app.use('/api/super-admin', superAdminRouter);
 app.use('/api/analytics', analyticsRouter);

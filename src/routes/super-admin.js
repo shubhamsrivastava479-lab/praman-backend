@@ -14,6 +14,23 @@ function requireSuperAdmin(req, res, next) {
 router.use(requireSuperAdmin);
 router.use('/billing', require('./billing-admin'));
 
+
+// "Request a demo" form of the website.
+router.get('/demo-requests', async (req, res) => {
+  await db.read();
+  res.json((db.data.demoRequests || []).slice().reverse());
+});
+router.post('/demo-requests/:id', async (req, res) => {
+  await db.read();
+  const r = (db.data.demoRequests || []).find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: 'Not found' });
+  const { status, note } = req.body || {};
+  if (status !== undefined) { if (!['new', 'contacted', 'demo_done', 'closed'].includes(status)) return res.status(400).json({ error: 'Bad status' }); r.status = status; }
+  if (note !== undefined) r.note = String(note).slice(0, 500);
+  await db.write();
+  res.json(r);
+});
+
 // List every vendor company with quick stats, for the Super Admin overview.
 router.get('/vendors', async (req, res) => {
   await db.read();
