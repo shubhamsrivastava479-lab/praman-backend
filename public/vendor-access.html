@@ -102,6 +102,15 @@ async function onGoogle(resp){
   try{
     const res = await fetch('/api/auth/vendor-google-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
     let d = await res.json();
+    // The platform (Super Admin) Google account signs in here too: pass it on to the platform sign-in.
+    if(d.platform){
+      const r2 = await fetch('/api/auth/google-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
+      d = await r2.json();
+      if(d.error){ $('err1').textContent = d.error; return; }
+      if(d.otpRequired){ try { d = await PramanOtp.ask(d); } catch { return; } }
+      localStorage.setItem('praman_token', d.token); localStorage.setItem('praman_user', JSON.stringify(d.user));
+      location.href = '/super-admin.html'; return;
+    }
     if(d.error){ $('err1').textContent = d.error; return; }
     if(d.otpRequired){ try { d = await PramanOtp.ask(d); } catch { return; } }
     if(d.status === 'ok'){

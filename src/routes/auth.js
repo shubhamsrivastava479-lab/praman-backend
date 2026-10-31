@@ -385,7 +385,7 @@ router.post('/vendor-google-login', async (req, res) => {
     return res.status(502).json({ error: 'Could not reach Google. Try again.' });
   }
   if (g.email === googleAdminEmail()) {
-    return res.status(403).json({ error: 'This account is for platform access. Use the platform access page.' });
+    return res.status(403).json({ error: 'This account is for platform access. Use the platform access page.', platform: true });
   }
 
   await db.read();
