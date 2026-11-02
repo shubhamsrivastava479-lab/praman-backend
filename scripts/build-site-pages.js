@@ -11,7 +11,7 @@ const { SITE, CHECKS, STEPS, PAGES, HOME_FAQ, INDUSTRIES, IND_LINK } = require('
 const PUB = path.join(__dirname, '..', 'public');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const ld = o => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, '\\u003c')}</script>`;
-const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'SatyaSakshi LLP', alternateName: 'Praman', url: SITE + '/', logo: SITE + '/logo.png', slogan: 'Truth Revealed, Trust Restored' };
+const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'SatyaSakshi LLP', alternateName: 'Praman', url: SITE + '/', logo: SITE + '/logo.png', slogan: 'Truth Revealed, Trust Restored', telephone: '+91-7065567277', email: 'info@pramanservices.space', contactPoint: { '@type': 'ContactPoint', telephone: '+91-7065567277', contactType: 'sales', areaServed: 'IN', availableLanguage: ['English', 'Hindi'] } };
 const faqLd = list => ({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: list.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) });
 
 function head({ title, desc, url, extra = '' }) {
@@ -72,7 +72,7 @@ footer{background:#021f36;color:#9fb4c8;font-size:13px;padding:22px 0}footer .wr
 
 const HEADER = `<header><div class="wrap"><a href="/"><img src="/logo.png" alt="Praman by SatyaSakshi" width="150" height="34"></a>
 <nav><a class="hide" href="/#industries">Industries</a><a class="hide" href="/instant-checks">Instant checks</a><a class="hide" href="/#demo">Request a demo</a><a class="btn" href="/#login">Log in</a></nav></div></header>`;
-const FOOTER = `<footer><div class="wrap"><div>© ${new Date().getFullYear()} SatyaSakshi LLP · Praman. All rights reserved.</div><div><a href="/">Home</a> · <a href="/instant-checks">Instant checks</a> · <a href="/privacy.html">Privacy policy</a></div></div></footer>`;
+const FOOTER = `<footer><div class="wrap"><div>© ${new Date().getFullYear()} SatyaSakshi LLP · Praman · <a href="tel:+917065567277">+91 70655 67277</a> (Call / <a href="https://wa.me/917065567277">WhatsApp</a>)</div><div><a href="/">Home</a> · <a href="/instant-checks">Instant checks</a> · <a href="/privacy.html">Privacy policy</a></div></div></footer>`;
 const checkBoxes = keys => keys.map(k => CHECKS[k]).map(g => `<div class="box"><h3>${g.icon} ${esc(g.name)}</h3><ul>${g.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('');
 const stepsHtml = `<ol class="steps">${STEPS.map(([t, d]) => `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('')}</ol>`;
 const faqHtml = list => list.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('');

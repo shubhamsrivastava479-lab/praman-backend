@@ -84,7 +84,7 @@ app.use('/api/gemini', geminiRouter);
 app.use('/f', require('./routes/files'));
 app.use('/api/live', require('./routes/live'));
 
-app.get('/api/site-info', (req, res) => res.json({ email: process.env.CONTACT_EMAIL || process.env.PRIVACY_CONTACT_EMAIL || 'info@pramanservices.space', phone: process.env.CONTACT_PHONE || '' }));
+app.get('/api/site-info', (req, res) => res.json({ email: process.env.CONTACT_EMAIL || process.env.PRIVACY_CONTACT_EMAIL || 'info@pramanservices.space', phone: process.env.CONTACT_PHONE || '+91 70655 67277', whatsapp: process.env.CONTACT_WHATSAPP || process.env.CONTACT_PHONE || '+91 70655 67277' }));
 // The home address is the public site (with the login form); the dashboard stays at /index.html.
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'login.html')));
 app.use('/media', express.static(path.join(__dirname, '..', 'media')));

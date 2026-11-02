@@ -166,6 +166,7 @@ test('simulate, access rules, and overdue blocking', async () => {
 
 test('monthly job drafts last month once and reminds about overdue invoices', async () => {
   await db.read(); const f = firm('b1'); f.billing = billing.validateConfig({ model: 'per_case', gstPercent: 0 }).config;
+  db.data.invoices.find(i => i.vendorId === 'b1' && i.number).dueAt = '2026-10-15T00:00:00.000Z';   // fixed, so the test does not depend on today's date
   const seen = [];
   const r1 = await billing.tick({ now: new Date('2026-11-02T10:00:00+05:30'), notify: (v, n) => seen.push([v, n.text]), write: async () => {} });
   assert.ok(r1.drafted >= 1);                       // October draft for Alpha (1 case)

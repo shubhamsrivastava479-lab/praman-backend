@@ -4,7 +4,7 @@
 (function () {
   if (window.__pramanChat) return; window.__pramanChat = true;
   if (/PramanApp/i.test(navigator.userAgent)) return;   // not inside the Praman app
-  var EMAIL = 'info@pramanservices.space';
+  var EMAIL = 'info@pramanservices.space', PHONE = '+91 70655 67277';
   var opened = 0, topics = [], leadSent = false, startedAt = 0;
   try { leadSent = localStorage.getItem('pmc_lead') === '1'; } catch (e) {}
 
@@ -101,7 +101,7 @@
     setTimeout(function () {
       if (hit === 'internal') { say('Sorry, I can’t share internal or technical details here. Our team will be glad to answer on a call.', 'bot'); if (!leadSent) form('question'); else moreChips(); return; }
       if (hit) { ask(hit, false); return; }
-      say('I can answer a few common questions. For anything else, leave your details and our team will reply, or write to ' + EMAIL + '.', 'bot');
+      say('I can answer a few common questions. For anything else, leave your details and our team will reply, write to ' + EMAIL + ', or call / WhatsApp ' + PHONE + '.', 'bot');
       if (!leadSent) form('question', text); else moreChips();
     }, 250);
   }
@@ -159,7 +159,7 @@
   box.querySelector('.pmc-x').onclick = function () { box.classList.remove('on'); btn.style.display = ''; };
   box.querySelector('.pmc-in').onsubmit = function (ev) { ev.preventDefault(); var i = box.querySelector('.pmc-in input'); var t = i.value.trim(); if (!t) return; i.value = ''; typed(t.slice(0, 300)); };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && box.classList.contains('on')) box.querySelector('.pmc-x').click(); });
-  fetch('/api/site-info').then(function (r) { return r.json(); }).then(function (d) { if (d && d.email) EMAIL = d.email; }).catch(function () {});
+  fetch('/api/site-info').then(function (r) { return r.json(); }).then(function (d) { if (d && d.email) EMAIL = d.email; if (d && d.phone) PHONE = d.phone; }).catch(function () {});
   // Any link to #chat opens the chat box.
   document.addEventListener('click', function (e) { var a = e.target.closest && e.target.closest('a[href="#chat"]'); if (a) { e.preventDefault(); open(); } });
 })();
