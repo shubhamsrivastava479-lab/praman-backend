@@ -3,6 +3,7 @@ User-agent: *
 Allow: /$
 Allow: /industries/
 Allow: /instant-checks
+Allow: /blog
 Allow: /privacy.html
 Disallow: /api/
 Disallow: /index.html

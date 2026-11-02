@@ -22,7 +22,8 @@ test('website pages are built for search engines and served on clean URLs', asyn
     assert.match(r.b, /<h1>/); assert.match(r.b, /rel="canonical"/); assert.ok(!/gridlines/i.test(r.b));
   }
   const sm = await get('/sitemap.xml');
-  assert.equal(sm.s, 200); assert.equal((sm.b.match(/<loc>/g) || []).length, PAGES.length + 3);
+  assert.equal(sm.s, 200); const locs = (sm.b.match(/<loc>/g) || []).length; assert.ok(locs >= PAGES.length + 3, 'sitemap ' + locs);
+  for (const p of PAGES) assert.match(sm.b, new RegExp('/industries/' + p.slug + '<'));
   assert.match((await get('/robots.txt')).b, /Disallow: \/api\//);
   assert.equal((await get('/instant-checks')).s, 200);
 });

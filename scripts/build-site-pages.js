@@ -71,8 +71,8 @@ footer{background:#021f36;color:#9fb4c8;font-size:13px;padding:22px 0}footer .wr
 </style>`;
 
 const HEADER = `<header><div class="wrap"><a href="/"><img src="/logo.png" alt="Praman by SatyaSakshi" width="150" height="34"></a>
-<nav><a class="hide" href="/#industries">Industries</a><a class="hide" href="/instant-checks">Instant checks</a><a class="hide" href="/#demo">Request a demo</a><a class="btn" href="/#login">Log in</a></nav></div></header>`;
-const FOOTER = `<footer><div class="wrap"><div>© ${new Date().getFullYear()} SatyaSakshi LLP · Praman · <a href="tel:+917065567277">+91 70655 67277</a> (Call / <a href="https://wa.me/917065567277">WhatsApp</a>)</div><div><a href="/">Home</a> · <a href="/instant-checks">Instant checks</a> · <a href="/privacy.html">Privacy policy</a></div></div></footer>`;
+<nav><a class="hide" href="/#industries">Industries</a><a class="hide" href="/instant-checks">Instant checks</a><a class="hide" href="/blog">Blog</a><a class="hide" href="/#demo">Request a demo</a><a class="btn" href="/#login">Log in</a></nav></div></header>`;
+const FOOTER = `<footer><div class="wrap"><div>© ${new Date().getFullYear()} SatyaSakshi LLP · Praman · <a href="tel:+917065567277">+91 70655 67277</a> (Call / <a href="https://wa.me/917065567277">WhatsApp</a>)</div><div><a href="/">Home</a> · <a href="/instant-checks">Instant checks</a> · <a href="/blog">Blog</a> · <a href="/privacy.html">Privacy policy</a></div></div></footer>`;
 const checkBoxes = keys => keys.map(k => CHECKS[k]).map(g => `<div class="box"><h3>${g.icon} ${esc(g.name)}</h3><ul>${g.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('');
 const stepsHtml = `<ol class="steps">${STEPS.map(([t, d]) => `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('')}</ol>`;
 const faqHtml = list => list.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('');
@@ -187,7 +187,7 @@ ${ld(faqLd(HOME_FAQ))}`;
     <div class="faq">${HOME_FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</div>
   </div>
 </section>`;
-  const foot = `<nav class="flinks" aria-label="Industries">${PAGES.map(p => `<a href="/industries/${p.slug}">${esc(p.nav)}</a>`).join('')}<a href="/instant-checks">Instant checks</a></nav>`;
+  const foot = `<nav class="flinks" aria-label="Industries">${PAGES.map(p => `<a href="/industries/${p.slug}">${esc(p.nav)}</a>`).join('')}<a href="/instant-checks">Instant checks</a><a href="/blog">Blog</a></nav>`;
   return { HEAD: headBlock, INDUSTRIES: ind, CHECKS: checks, FAQ: faq, FOOTLINKS: foot, DESC: `<meta name="description" content="${esc(desc)}">` };
 }
 
@@ -209,6 +209,7 @@ User-agent: *
 Allow: /$
 Allow: /industries/
 Allow: /instant-checks
+Allow: /blog
 Allow: /privacy.html
 Disallow: /api/
 Disallow: /index.html
@@ -244,4 +245,4 @@ Sitemap: ${SITE}/sitemap.xml
 }
 
 if (require.main === module) console.log('Built', build());
-module.exports = { build };
+module.exports = { build, head, CSS, HEADER, FOOTER, ld, esc, ORG };

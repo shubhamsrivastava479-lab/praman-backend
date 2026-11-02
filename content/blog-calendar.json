@@ -1,0 +1,786 @@
+[
+ {
+  "date": "2026-11-02",
+  "slug": "tenant-verification-guide-india",
+  "category": "tenant",
+  "title": "Tenant verification in India: the complete guide for landlords",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "maid-verification-guide",
+  "category": "domestic",
+  "title": "Maid verification: a simple guide for Indian families",
+  "related": ""
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "employee-background-verification-india",
+  "category": "employee",
+  "title": "Employee background verification in India: process, checks and timelines",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "used-car-rc-check",
+  "category": "vehicle",
+  "title": "Buying a used car: the RC check to do before you pay",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "matrimonial-verification-guide",
+  "category": "matrimonial",
+  "title": "Matrimonial verification: how to check a match respectfully",
+  "related": ""
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "insurance-claim-investigation-explained",
+  "category": "claims",
+  "title": "What is insurance claim investigation, and why it matters",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "what-is-pivc",
+  "category": "pivc",
+  "title": "What is PIVC in life insurance?",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "borrower-verification-guide",
+  "category": "lending",
+  "title": "Borrower verification for NBFCs and microfinance",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "vendor-due-diligence-checklist",
+  "category": "business",
+  "title": "Vendor due diligence checklist for Indian companies",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "dpdp-act-verification-companies",
+  "category": "guides",
+  "title": "The DPDP Act and verification: what companies need to know",
+  "related": ""
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "digital-vs-physical-verification",
+  "category": "guides",
+  "title": "Digital vs physical verification: when to use which",
+  "related": ""
+ },
+ {
+  "date": "2026-11-02",
+  "slug": "why-satyasakshi-built-praman",
+  "category": "guides",
+  "title": "Why SatyaSakshi built Praman: from field investigations to software",
+  "related": ""
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "tenant-police-verification-vs-background-check",
+  "category": "tenant",
+  "title": "Police verification vs background check for tenants: what is the difference?",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "nanny-babysitter-background-check",
+  "category": "domestic",
+  "title": "Hiring a nanny? Checks every parent should do first",
+  "related": ""
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "employment-history-epfo-check",
+  "category": "employee",
+  "title": "Checking past jobs with EPFO: what HR teams should know",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "gig-worker-onboarding-verification",
+  "category": "gig",
+  "title": "Gig worker onboarding: verification that doesn't slow you down",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "driver-verification-guide",
+  "category": "vehicle",
+  "title": "Driver verification: licence, identity and record checks",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "matrimonial-fraud-warning-signs",
+  "category": "matrimonial",
+  "title": "Common matrimonial frauds and the warning signs",
+  "related": ""
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "online-seller-check-before-paying",
+  "category": "deals",
+  "title": "Buying from an unknown seller online: checks before you pay",
+  "related": ""
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "health-insurance-claim-fraud-types",
+  "category": "claims",
+  "title": "Health insurance claim fraud: the common types",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "digital-pivc-benefits",
+  "category": "pivc",
+  "title": "Digital PIVC: benefits for insurers and customers",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "residence-verification-video",
+  "category": "lending",
+  "title": "Residence verification on video for loans",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-03",
+  "slug": "gst-number-verification",
+  "category": "business",
+  "title": "How to verify a GST number, and what it tells you",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "hospital-empanelment-verification",
+  "category": "healthcare",
+  "title": "Hospital empanelment: verification for insurers and TPAs",
+  "related": "hospital-and-tpa-verification"
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "aadhaar-digilocker-verification",
+  "category": "kyc",
+  "title": "Aadhaar verification through DigiLocker: how it works",
+  "related": ""
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "verification-for-small-businesses",
+  "category": "guides",
+  "title": "Trust is a process: verification for small businesses",
+  "related": ""
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "documents-to-ask-from-tenant",
+  "category": "tenant",
+  "title": "Which documents to ask from a tenant before renting",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "elder-caregiver-verification",
+  "category": "domestic",
+  "title": "Caregiver for your parents: how to verify before you hire",
+  "related": ""
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "fake-experience-letter-signs",
+  "category": "employee",
+  "title": "Fake experience letters: how to spot them",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "delivery-partner-verification",
+  "category": "gig",
+  "title": "Delivery partner verification: the checks that matter",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "driving-licence-verification-online",
+  "category": "vehicle",
+  "title": "How to verify a driving licence online in India",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "nri-groom-bride-verification",
+  "category": "matrimonial",
+  "title": "Verifying an NRI groom or bride: what families should check",
+  "related": ""
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "upi-name-check-before-paying",
+  "category": "deals",
+  "title": "Check the UPI name before you pay a stranger",
+  "related": ""
+ },
+ {
+  "date": "2026-11-04",
+  "slug": "motor-claim-fraud-signs",
+  "category": "claims",
+  "title": "Motor insurance claim fraud: warning signs investigators look for",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "mis-selling-pivc-questions",
+  "category": "pivc",
+  "title": "Mis-selling: the questions every PIVC call should ask",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "business-verification-small-loans",
+  "category": "lending",
+  "title": "Business verification for small-business loans",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "udyam-msme-verification",
+  "category": "business",
+  "title": "Udyam (MSME) registration: how to verify it",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "patient-identity-verification",
+  "category": "healthcare",
+  "title": "Patient identity checks during hospital admission",
+  "related": "hospital-and-tpa-verification"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "pan-verification-online",
+  "category": "kyc",
+  "title": "PAN verification: what it confirms and what it doesn't",
+  "related": ""
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "choosing-verification-partner",
+  "category": "guides",
+  "title": "How to choose a verification partner",
+  "related": ""
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "tenant-fraud-red-flags",
+  "category": "tenant",
+  "title": "9 red flags that a tenant may not be who they say",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "house-help-checklist",
+  "category": "domestic",
+  "title": "Cook, driver, gardener, house help: one checklist for all",
+  "related": ""
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "blue-collar-bulk-hiring-verification",
+  "category": "employee",
+  "title": "Verifying hundreds of blue-collar hires without delays",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "account-sharing-gig-platforms",
+  "category": "gig",
+  "title": "Account sharing on gig platforms, and how liveness checks stop it",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-05",
+  "slug": "echallan-check-before-buying",
+  "category": "vehicle",
+  "title": "Pending e-challans: check them before buying a second-hand vehicle",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "match-job-income-claims",
+  "category": "matrimonial",
+  "title": "How to check a match's job and income claims",
+  "related": ""
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "fake-buyer-scams-sellers",
+  "category": "deals",
+  "title": "Selling online? How fake buyers cheat sellers",
+  "related": ""
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "death-claim-investigation",
+  "category": "claims",
+  "title": "Death claim investigation: what is checked and why",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "term-insurance-pivc",
+  "category": "pivc",
+  "title": "Term insurance PIVC: extra checks for high covers",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "income-verification-lenders",
+  "category": "lending",
+  "title": "Income verification: salary slips, EPFO and bank names",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "company-director-cin-din-check",
+  "category": "business",
+  "title": "Checking a company's CIN and its directors",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "remote-clinic-audit",
+  "category": "healthcare",
+  "title": "Remote clinic and diagnostic centre audits",
+  "related": "hospital-and-tpa-verification"
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "face-match-liveness-explained",
+  "category": "kyc",
+  "title": "Face match and liveness checks, explained simply",
+  "related": ""
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "verification-glossary",
+  "category": "guides",
+  "title": "Verification glossary: common terms explained",
+  "related": ""
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "pg-hostel-resident-verification",
+  "category": "tenant",
+  "title": "How PG and hostel owners can verify residents quickly",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-06",
+  "slug": "placement-agency-what-to-verify",
+  "category": "domestic",
+  "title": "Hiring through a placement agency? What you should still verify",
+  "related": ""
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "proxy-interviews-deepfake-candidates",
+  "category": "employee",
+  "title": "Proxy interviews and deepfake candidates: how to stop them",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "gig-payout-bank-upi-check",
+  "category": "gig",
+  "title": "Bank and UPI name checks for gig payouts",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "fastag-used-vehicle",
+  "category": "vehicle",
+  "title": "FASTag on a used vehicle: what to check and transfer",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "fake-marriage-site-profiles",
+  "category": "matrimonial",
+  "title": "Fake profiles on marriage sites: how to spot them",
+  "related": ""
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "rental-deposit-scams",
+  "category": "deals",
+  "title": "Rental deposit scams: verify the owner first",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "staged-accident-detection",
+  "category": "claims",
+  "title": "Staged accidents: how investigators spot them",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "health-insurance-pivc",
+  "category": "pivc",
+  "title": "Health insurance PIVC and medical disclosure",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "gold-vehicle-loan-checks",
+  "category": "lending",
+  "title": "Gold and vehicle loans: quick verification steps",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "dealer-distributor-verification",
+  "category": "business",
+  "title": "Dealer and distributor onboarding: verification steps",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "ghost-patients-fake-admissions",
+  "category": "healthcare",
+  "title": "Ghost patients and fake admissions: how they are caught",
+  "related": "hospital-and-tpa-verification"
+ },
+ {
+  "date": "2026-11-07",
+  "slug": "deepfakes-and-verification",
+  "category": "kyc",
+  "title": "Deepfakes and verification: what businesses should know",
+  "related": ""
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "rent-agreement-and-tenant-verification",
+  "category": "tenant",
+  "title": "Rent agreement and tenant verification: why you need both",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "domestic-help-warning-signs",
+  "category": "domestic",
+  "title": "Warning signs while hiring domestic help",
+  "related": ""
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "bgv-turnaround-time-cost",
+  "category": "employee",
+  "title": "How long background verification takes, and what drives the cost",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "home-service-professional-verification",
+  "category": "gig",
+  "title": "Verifying electricians, plumbers and home-service professionals",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "chassis-engine-number-match",
+  "category": "vehicle",
+  "title": "Chassis and engine number: how to match them with the RC",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "consent-matrimonial-checks",
+  "category": "matrimonial",
+  "title": "Why consent matters in matrimonial background checks",
+  "related": ""
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "live-video-proof-item",
+  "category": "deals",
+  "title": "Why a live video of the item beats photos",
+  "related": ""
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "inflated-hospital-bills",
+  "category": "claims",
+  "title": "Inflated hospital bills: how insurers detect them",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "plvc-post-login-verification",
+  "category": "pivc",
+  "title": "PLVC: post-login verification explained",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "collections-address-trace",
+  "category": "lending",
+  "title": "Collections: locating and verifying borrowers",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-08",
+  "slug": "franchise-owner-verification",
+  "category": "business",
+  "title": "Franchise owner checks before you sign",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "video-evidence-healthcare-fraud",
+  "category": "healthcare",
+  "title": "Video evidence in healthcare fraud cases",
+  "related": "hospital-and-tpa-verification"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "aadhaar-esign-consent",
+  "category": "kyc",
+  "title": "Aadhaar eSign for consent forms and declarations",
+  "related": ""
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "nri-landlord-tenant-check",
+  "category": "tenant",
+  "title": "NRI landlords: how to verify a tenant from abroad",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "domestic-help-video-statement",
+  "category": "domestic",
+  "title": "Why a recorded video statement helps when hiring house help",
+  "related": ""
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "employee-bgv-consent-dpdp",
+  "category": "employee",
+  "title": "Employee background checks under the DPDP Act: consent basics",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "gig-worker-address-mismatch",
+  "category": "gig",
+  "title": "Why address checks fail for gig workers, and what to do",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "stolen-vehicle-warning-signs",
+  "category": "vehicle",
+  "title": "Signs a second-hand vehicle may be stolen",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "video-claim-investigation",
+  "category": "claims",
+  "title": "Video-based claim investigation: faster and fairer",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "ai-video-pivc",
+  "category": "pivc",
+  "title": "AI video calls for PIVC: how they work",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "identity-theft-loan-fraud",
+  "category": "lending",
+  "title": "Loan fraud with stolen identities: how to prevent it",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-09",
+  "slug": "merchant-onboarding-kyb",
+  "category": "business",
+  "title": "Merchant onboarding and KYB: the basics",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "live-location-time-proof",
+  "category": "kyc",
+  "title": "Why live location and time stamps matter in verification",
+  "related": ""
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "verify-tenant-job-and-income",
+  "category": "tenant",
+  "title": "How to check a tenant's job and income before renting",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "verify-domestic-workers-respectfully",
+  "category": "domestic",
+  "title": "How to verify domestic workers respectfully: consent and privacy",
+  "related": ""
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "digital-address-verification-employees",
+  "category": "employee",
+  "title": "Digital address verification for employees: is it enough?",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "verified-partners-customer-trust",
+  "category": "gig",
+  "title": "Why customers trust platforms that verify their partners",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "fleet-driver-onboarding",
+  "category": "vehicle",
+  "title": "Fleet and rental companies: onboarding drivers safely",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "tpa-claim-investigation-workflow",
+  "category": "claims",
+  "title": "A modern claim investigation workflow for TPAs",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "pivc-regional-languages",
+  "category": "pivc",
+  "title": "PIVC in regional languages: why it matters",
+  "related": "pivc-policy-verification"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "video-kyc-vs-video-verification",
+  "category": "lending",
+  "title": "Video KYC vs video verification: what is the difference?",
+  "related": "loan-verification"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "supplier-factory-video-audit",
+  "category": "business",
+  "title": "Supplier factory audits on video",
+  "related": "vendor-due-diligence"
+ },
+ {
+  "date": "2026-11-10",
+  "slug": "whatsapp-link-verification",
+  "category": "kyc",
+  "title": "Verification on a WhatsApp link: why no app is needed",
+  "related": ""
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "tenant-verification-video-call",
+  "category": "tenant",
+  "title": "Tenant verification on a video call: how it works",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "court-record-check-hiring",
+  "category": "employee",
+  "title": "Court record checks in hiring: what they show and what they don't",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "bike-taxi-auto-driver-checks",
+  "category": "vehicle",
+  "title": "Bike taxi and auto drivers: verification basics",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "motor-claim-documents-fir",
+  "category": "claims",
+  "title": "FIR, documents and photos: building a solid motor claim file",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "landlord-records-tenant-details",
+  "category": "tenant",
+  "title": "What tenant records a landlord should keep, and why",
+  "related": "tenant-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "campus-fresher-verification",
+  "category": "employee",
+  "title": "Verifying freshers and campus hires before day one",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "token-money-used-vehicle",
+  "category": "vehicle",
+  "title": "Paying token money for a used vehicle? Do these checks first",
+  "related": "vehicle-and-driver-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "pre-existing-disease-non-disclosure",
+  "category": "claims",
+  "title": "Hidden illness at purchase: how it surfaces in claims",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "manpower-agency-verified-staff",
+  "category": "employee",
+  "title": "Manpower agencies: how verified staff help win client contracts",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "crop-cattle-claim-remote-verification",
+  "category": "claims",
+  "title": "Crop and cattle claims: remote verification",
+  "related": "insurance-claim-investigation"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "when-to-reverify-employees",
+  "category": "employee",
+  "title": "When should you re-verify existing employees?",
+  "related": "employee-background-verification"
+ },
+ {
+  "date": "2026-11-11",
+  "slug": "chain-of-custody-evidence",
+  "category": "claims",
+  "title": "Chain of custody: evidence that holds up",
+  "related": "insurance-claim-investigation"
+ }
+]

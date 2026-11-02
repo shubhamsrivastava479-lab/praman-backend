@@ -89,6 +89,7 @@ app.use('/api/live', require('./routes/live'));
 app.get('/api/site-info', (req, res) => res.json({ email: process.env.CONTACT_EMAIL || process.env.PRIVACY_CONTACT_EMAIL || 'info@pramanservices.space', phone: process.env.CONTACT_PHONE || '+91 70655 67277', whatsapp: process.env.CONTACT_WHATSAPP || process.env.CONTACT_PHONE || '+91 70655 67277' }));
 // The home address is the public site (with the login form); the dashboard stays at /index.html.
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'login.html')));
+app.use(require('./services/blog').router());   // /blog pages and the site map (posts go live on their date)
 app.use('/media', express.static(path.join(__dirname, '..', 'media')));
 // pages are revalidated (ETag) every time so a new deploy shows at once; images/fonts can be cached
 app.use(express.static(path.join(__dirname, '..', 'public'), { etag: true, maxAge: 0, extensions: ['html'], setHeaders: (res, f) => { if (/\.(png|jpe?g|svg|ico|woff2?)$/i.test(f)) res.setHeader('Cache-Control', 'public, max-age=86400'); } }));
