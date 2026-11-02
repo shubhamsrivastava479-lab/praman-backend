@@ -154,6 +154,7 @@ const PAGES = [
       ['How is a hospital audited remotely?', 'A staff member gives a live video tour of the reception, wards and equipment. Location and time are saved with every photo.'],
       ['Can the patient be verified?', 'Yes. The patient joins a short video call, shows their ID, and a face match and liveness check are run.']] }
 ];
+PAGES.push(...require('./site-pages-more'));
 
 // Questions for the home page (also sent to Google as FAQ data).
 const HOME_FAQ = [
@@ -185,9 +186,33 @@ const IND_LINK = {
  "Hospitals and TPAs": "hospital-and-tpa-verification",
  "Hiring and HR": "employee-background-verification",
  "Real estate and rentals": "tenant-verification",
- "Legal and corporate": "vendor-due-diligence",
- "Business and trade": "vendor-due-diligence",
- "Telecom, utilities and mobility": "vehicle-and-driver-verification"
+ "Education": "education-and-scholarship-verification",
+ "Government and welfare": "government-and-welfare-verification",
+ "Legal and corporate": "legal-and-recovery-verification",
+ "Business and trade": "business-and-trade-verification",
+ "Telecom, utilities and mobility": "telecom-and-utilities-verification",
+ "Marketplaces and communities": "marketplace-and-community-verification",
+ "Investments and finance services": "investment-and-finance-services-verification"
+};
+// Hiring and mobility sub-segments: each use-case chip links to its own page.
+const USE_LINK = {
+ "Blue-collar bulk hiring": "blue-collar-bulk-hiring",
+ "Security, driver and delivery staff": "security-driver-delivery-verification",
+ "Gig partner onboarding": "gig-partner-onboarding",
+ "Contract and manpower agencies": "manpower-agency-verification",
+ "Domestic help and caregivers": "domestic-help-verification",
+ "Campus and fresher hiring": "campus-and-fresher-verification",
+ "Franchise and dealer owners": "franchise-and-dealer-verification",
+ "Driver checks for rental and fleet": "vehicle-and-driver-verification",
+ "Vehicle rental and car sharing": "vehicle-and-driver-verification",
+ "Vendor and supplier due diligence": "vendor-due-diligence",
+ "Dealer and distributor checks": "franchise-and-dealer-verification",
+ "Tenant verification": "tenant-verification",
+ "PG, hostel and co-living residents": "tenant-verification",
+ "Matrimonial profile verification": "marketplace-and-community-verification",
+ "Death claim investigation": "insurance-claim-investigation",
+ "Health and motor claims": "insurance-claim-investigation",
+ "Hospital existence and audit": "hospital-and-tpa-verification"
 };
 
-module.exports = { SITE, CHECKS, STEPS, PAGES, HOME_FAQ, INDUSTRIES, IND_LINK };
+module.exports = { SITE, CHECKS, STEPS, PAGES, HOME_FAQ, INDUSTRIES, IND_LINK, USE_LINK };

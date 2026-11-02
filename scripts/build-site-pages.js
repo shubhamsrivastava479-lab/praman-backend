@@ -6,7 +6,7 @@
 // Run:  node scripts/build-site-pages.js
 const fs = require('fs');
 const path = require('path');
-const { SITE, CHECKS, STEPS, PAGES, HOME_FAQ, INDUSTRIES, IND_LINK } = require('./site-content');
+const { SITE, CHECKS, STEPS, PAGES, HOME_FAQ, INDUSTRIES, IND_LINK, USE_LINK } = require('./site-content');
 
 const PUB = path.join(__dirname, '..', 'public');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -169,7 +169,7 @@ ${ld({ '@context': 'https://schema.org', '@graph': [
 ${ld(faqLd(HOME_FAQ))}`;
   const ind = INDUSTRIES.map(([ic, name, ex]) => {
     const slug = IND_LINK[name];
-    return `<div class="box"><div class="ic">${ic}</div><h3>${esc(name)}</h3><div class="chips">${ex.map(x => `<span>${esc(x)}</span>`).join('')}</div>${slug ? `<a class="more-link" href="/industries/${slug}">Learn more →</a>` : ''}</div>`;
+    return `<div class="box"><div class="ic">${ic}</div><h3>${esc(name)}</h3><div class="chips">${ex.map(x => USE_LINK[x] ? `<a href="/industries/${USE_LINK[x]}">${esc(x)}</a>` : `<span>${esc(x)}</span>`).join('')}</div>${slug ? `<a class="more-link" href="/industries/${slug}">Learn more →</a>` : ''}</div>`;
   }).join('\n');
   const checks = `<section id="checks" class="alt">
   <div class="wrap">
