@@ -1,4 +1,13 @@
-# Praman (Android app)
+# Praman Android apps
+
+One code base, two apps (Gradle product flavors):
+
+| Flavor | App name | Package | Opens |
+|---|---|---|---|
+| `business` | Praman Business | com.praman.app | Team login and dashboards (`/login.html`) |
+| `consumer` | SatyaSakshi Praman | com.satyasakshi.praman | Consumer app (`/c/`), "join my verification call", call links from WhatsApp |
+
+The notes below apply to both unless they say otherwise.
 
 The whole Praman website inside an app, for everyone:
 
@@ -21,10 +30,10 @@ Google sign-in does not work inside apps (Google blocks it); team members who re
 ## Build the APK (no Android Studio needed)
 1. Push this folder (`android/`) and `.github/workflows/android.yml` to GitHub.
 2. GitHub → **Actions** → **Build Android app** → **Run workflow** (it also runs on every push that changes `android/`).
-3. When it is green, open the run → **Artifacts** → download `praman-call-apk` → unzip → `app-debug.apk`.
+3. When it is green, open the run → **Artifacts** → download `praman-business-apk` and `satyasakshi-praman-apk` → unzip each.
 
 ## Give the app to people
-* Copy `app-debug.apk` to `public/downloads/praman-call.apk` and push. Call pages offer it to Android users,
+* Copy `app-consumer-debug.apk` to `public/downloads/praman-call.apk` (customers get this one) and `app-business-debug.apk` to `public/downloads/praman-business.apk` (your team), and push. Call pages offer it to Android users,
   and it can be shared as `https://pramanservices.space/downloads/praman-call.apk`.
 * The phone must allow "Install unknown apps" once. For wide use, publish on Google Play (needs a release signing key
   and a Play developer account).

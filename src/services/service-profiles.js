@@ -237,6 +237,17 @@ const PROFILES = {
     }
   }
 };
+PROFILES.personal_check = {
+  ...PROFILES.bgv_employee, title: 'Personal verification report', person: 'Person checked',
+  questions: c => require('./b2c-packages').questionsFor(c && c.details && c.details.b2cPackage),
+  order: ['identity', 'address', 'education', 'employment', 'declaration', 'references', 'custom'],
+  facts: d => [['Package', d.b2cPackageName], ['Ordered by', d.orderedBy], ['Order no.', d.orderId]],
+  next: {
+    focus: ['Ask the person for the missing ID documents', 'Physical address visit if the live location did not match the stated address', 'Court record check through an authorised source'],
+    check: ['Call the reference given by the person'],
+    clear: ['Details given on the call are consistent.']
+  }
+};
 PROFILES.pivc_term = { ...PROFILES.pivc_life, title: 'Term policy verification report (PIVC)', questions: () => [...LIFE_PIVC, ...TERM_EXTRA] };
 
 const profileOf = svc => PROFILES[svc] || PROFILES.motor_claim;

@@ -62,9 +62,21 @@ const SERVICES = {
     policyType: null,
     numberLabel: 'Case / employee no.',
     about: 'Video verification of a job candidate from their home: identity, current and permanent address with live location, education, employment history, gaps, criminal and dual-employment declaration, and a reference.'
+  },
+  // Orders from the SatyaSakshi Praman consumer app (tenant, domestic help, driver, matrimonial, self ...).
+  // Only SatyaSakshi's own B2C account works these cases; it is never offered to a vendor firm.
+  personal_check: {
+    label: 'Personal verification (consumer app)',
+    short: 'Consumer app',
+    icon: '🙋',
+    caseType: 'background_verification',
+    policyType: null,
+    numberLabel: 'Order no.',
+    internal: true,
+    about: 'Orders from the SatyaSakshi Praman app: the person being checked agrees on WhatsApp and takes a short AI video call (ID photos, face and liveness, live location, questions for the package). Review the call and sign off; the buyer then sees the report in the app.'
   }
 };
-const ALL = Object.keys(SERVICES);
+const ALL = Object.keys(SERVICES).filter(k => !SERVICES[k].internal);
 
 // Which service a case (or a create request) belongs to.
 function serviceFor({ service, caseType, policyType } = {}) {

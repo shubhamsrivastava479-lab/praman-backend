@@ -36,7 +36,7 @@ const isPolicy = c => c.caseType === 'policy_verification';
 const profiles = require('./service-profiles');
 const svcOf = c => require('./plans').serviceOfCase(c);
 const TYPE_LABELS = { pivc_life: 'life insurance policy verification', pivc_term: 'term insurance policy verification', pivc_health: 'health insurance policy verification',
-  motor_claim: 'motor claim investigation', health_claim: 'health claim investigation', bgv_employee: 'employee background verification' };
+  motor_claim: 'motor claim investigation', health_claim: 'health claim investigation', bgv_employee: 'employee background verification', personal_check: 'personal verification' };
 const typeLabel = c => TYPE_LABELS[svcOf(c)] || 'motor claim investigation';
 
 // Rough great-circle distance in km, used to notice if the customer moves
@@ -129,7 +129,7 @@ function buildQueue(c, cfg = {}) {
   const confirms = [];
   if (c.insuredName) confirms.push({ key: 'insuredName', label: 'name', value: c.insuredName });
   const svc = svcOf(c), prof = profiles.profileOf(svc), det = c.details || {};
-  if (c.claimNo) confirms.push({ key: 'claimNo', label: c.caseType === 'policy_verification' ? 'policy number' : svc === 'bgv_employee' ? 'case number' : 'claim number', value: c.claimNo, spell: true });
+  if (c.claimNo && svc !== 'personal_check') confirms.push({ key: 'claimNo', label: c.caseType === 'policy_verification' ? 'policy number' : svc === 'bgv_employee' ? 'case number' : svc === 'personal_check' ? 'order number' : 'claim number', value: c.claimNo, spell: true });
   if (c.policyNo && c.policyNo !== c.claimNo) confirms.push({ key: 'policyNo', label: 'policy number', value: c.policyNo, spell: true });
   if (c.vehicleNo) confirms.push({ key: 'vehicleNo', label: 'vehicle number', value: c.vehicleNo, spell: true });
   if (c.district) confirms.push({ key: 'district', label: 'district', value: c.district });
@@ -172,7 +172,7 @@ function buildQueue(c, cfg = {}) {
     text: 'Now please send a clear photo of your PAN card on the same WhatsApp chat.'
   });
 
-  const bank = prof.questions();
+  const bank = prof.questions(c);
   for (const [section, key, text] of bank) q.push({ id: 'q_' + key, type: 'ask', kind: 'free', key, section, text });
   // Every detail the insurer sent is asked from the customer (without saying it) and compared.
   // Attached to the question that already asks for it, or added as its own question.

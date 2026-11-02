@@ -40,10 +40,9 @@ import android.widget.Toast
 import java.io.File
 
 /**
- * Praman: the whole Praman website and dashboards inside an app.
- *  - Start page (/app.html): "Join my verification call" for customers (mobile number + WhatsApp code)
- *    or "Team login" for vendor, agent, insurer, viewer and admin. A logged-in user goes straight to the dashboard.
- *  - Call links from WhatsApp (live-join, ai-call, verify) open here directly.
+ * One code base, two apps (build flavors):
+ *  - Praman Business: the team login and dashboards (vendor, agent, insurer, viewer, admin).
+ *  - SatyaSakshi Praman: the consumer app (/c/) and "join my verification call"; call links from WhatsApp open in it.
  *  - Adds what a phone browser cannot do: screen sharing, saving reports / CSV files, picking files.
  * Only pages of the Praman site are opened inside the app; any other link opens in its own app (WhatsApp, maps, mail).
  */
@@ -51,7 +50,8 @@ class MainActivity : Activity() {
 
     companion object {
         const val BASE = "https://pramanservices.space"
-        const val START = "$BASE/app.html"
+        // Start page of this app: the team login (Praman Business) or the consumer app (SatyaSakshi Praman).
+        val START = BASE + BuildConfig.START_PATH
         // Old address stays trusted so call links already sent to customers keep working.
         private const val OLD_HOST = "praman-backend-vtbz.onrender.com"
         private const val REQ_PERMS = 11
@@ -130,7 +130,7 @@ class MainActivity : Activity() {
             allowContentAccess = true                      // needed to upload files the user picks
             loadWithOverviewMode = true
             useWideViewPort = true
-            userAgentString = "$userAgentString PramanApp/2"
+            userAgentString = "$userAgentString " + BuildConfig.APP_TAG
         }
         CookieManager.getInstance().setAcceptCookie(true)
 

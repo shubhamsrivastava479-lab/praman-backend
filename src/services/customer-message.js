@@ -15,13 +15,15 @@ const REASON = {
   pivc_life: { hi: 'आपकी नई लाइफ़ इंश्योरेंस पॉलिसी जारी होने से पहले पुष्टि', en: 'confirming your new life insurance policy before it is issued' },
   pivc_term: { hi: 'आपकी नई टर्म इंश्योरेंस पॉलिसी जारी होने से पहले पुष्टि', en: 'confirming your new term insurance policy before it is issued' },
   pivc_health: { hi: 'आपकी नई हेल्थ इंश्योरेंस पॉलिसी जारी होने से पहले पुष्टि', en: 'confirming your new health insurance policy before it is issued' },
-  bgv_employee: { hi: 'नई नौकरी के लिए आपका बैकग्राउंड वेरिफ़िकेशन', en: 'your background verification for the new job' }
+  bgv_employee: { hi: 'नई नौकरी के लिए आपका बैकग्राउंड वेरिफ़िकेशन', en: 'your background verification for the new job' },
+  personal_check: { hi: 'आपका पहचान वेरिफ़िकेशन', en: 'verifying your identity' }
 };
-const NUMBER = { health_claim: ['क्लेम नं.', 'claim no.'], motor_claim: ['क्लेम नं.', 'claim no.'], bgv_employee: ['केस नं.', 'case no.'] };
+const NUMBER = { health_claim: ['क्लेम नं.', 'claim no.'], motor_claim: ['क्लेम नं.', 'claim no.'], bgv_employee: ['केस नं.', 'case no.'], personal_check: ['ऑर्डर नं.', 'order no.'] };
 const BRING = {
   health_claim: ['आधार, पैन, अस्पताल का डिस्चार्ज समरी और बिल', 'Aadhaar, PAN, hospital discharge summary and bills'],
   motor_claim: ['आधार, पैन, ड्राइविंग लाइसेंस, RC और FIR (अगर है)', 'Aadhaar, PAN, driving licence, RC and FIR (if any)'],
   bgv_employee: ['आधार, पैन, डिग्री / मार्कशीट और पिछली नौकरी का रिलीविंग लेटर', 'Aadhaar, PAN, degree / marksheet and relieving letter of the last job'],
+  personal_check: ['आधार और पैन कार्ड', 'Aadhaar and PAN card'],
   pivc: ['आधार और पैन कार्ड', 'Aadhaar and PAN card']
 };
 const clean1 = v => String(v == null ? '' : v).replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim(); // template variables must be one line
@@ -31,7 +33,7 @@ function parts(c, firm) {
   const r = REASON[svc] || REASON.motor_claim;
   const [nh, ne] = NUMBER[svc] || ['पॉलिसी नं.', 'policy no.'];
   const d = c.details || {};
-  const insurer = clean1(d.clientName && svc === 'bgv_employee' ? d.clientName : d.insurerName);
+  const insurer = clean1(d.clientName && ['bgv_employee', 'personal_check'].includes(svc) ? d.clientName : d.insurerName);
   const by = clean1(firm && firm.vendorName) || 'हमारी टीम';
   return {
     svc, name: clean1(c.insuredName) || 'ग्राहक', number: clean1(c.claimNo),

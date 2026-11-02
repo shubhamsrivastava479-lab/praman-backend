@@ -716,6 +716,7 @@ router.post('/:id/share-link', async (req, res) => {
 
 module.exports = router;
 module.exports.customerLink = customerLink;
+module.exports.buildCase = buildCase;
 module.exports.baseUrlFor = baseUrlFor;
 module.exports.buildCase = buildCase;
 module.exports.findDuplicate = findDuplicate;

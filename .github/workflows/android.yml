@@ -21,11 +21,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - name: Build debug APK
+      - name: Build both debug APKs
         working-directory: android
-        run: gradle assembleDebug --no-daemon
-      - name: Keep the APK
+        run: gradle assembleBusinessDebug assembleConsumerDebug --no-daemon
+      - name: Keep the Praman Business APK
         uses: actions/upload-artifact@v4
         with:
-          name: praman-call-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: praman-business-apk
+          path: android/app/build/outputs/apk/business/debug/app-business-debug.apk
+      - name: Keep the SatyaSakshi Praman APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: satyasakshi-praman-apk
+          path: android/app/build/outputs/apk/consumer/debug/app-consumer-debug.apk

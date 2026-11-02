@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(self), payment=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(self), payment=(self "https://api.razorpay.com" "https://checkout.razorpay.com")');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   if (req.secure || req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');   // private data is never kept by a browser or proxy
@@ -60,13 +60,15 @@ app.use(
 );
 
 const rolesGuard = require('./services/roles').guard;
-app.use('/api', (req, res, next) => /^\/(public|ai-call|participant|super-admin|live|v1|gemini)\b/.test(req.path) ? next() : rolesGuard(req, res, next));
+app.use('/api', (req, res, next) => /^\/(public|ai-call|participant|super-admin|live|v1|gemini|consumer)\b/.test(req.path) ? next() : rolesGuard(req, res, next));
 app.use('/api/auth', authRouter);
 app.use('/api/whatsapp-accounts', whatsappAccountsRouter);
 app.use('/api/kyc', kycRouter);
 app.use('/api/gridlines', require('./routes/gridlines'));
 app.use('/api/cases', casesRouter);
 app.use('/api/public/customer', require('./routes/customer-join'));
+app.get('/api/public/cert/:token', async (req, res) => { await require('./db').db.read(); const c = require('./services/b2c').certificate(String(req.params.token)); c ? res.json(c) : res.status(404).json({ error: 'Certificate not found.' }); });
+app.use('/api/consumer', require('./routes/consumer'));
 app.use('/api/public', publicRouter);
 app.use('/api/demo', require('./routes/demo'));
 app.use('/api/participant', participantRouter);

@@ -31,3 +31,14 @@ App pages (dashboard, admin, customer call links) are blocked for search engines
 
 Google Search Console: add the domain `pramanservices.space`, verify with the DNS TXT record Google gives
 (add it at your domain registrar), then in Sitemaps submit `https://pramanservices.space/sitemap.xml`.
+
+## SatyaSakshi Praman consumer app (B2C)
+
+Super Admin → "SatyaSakshi Praman app (B2C)":
+1. Choose the WhatsApp number that sends login codes and call links (your own SatyaSakshi number, connected under a vendor account).
+2. Set a price (GST included) for each package you want to sell. A package without a price shows "Coming soon".
+3. Razorpay: Key ID and Key Secret from Razorpay Dashboard → Account & Settings → API Keys. Add a webhook with the URL shown
+   on the card, event `payment.captured`, and paste its secret.
+4. Team login: an email and password for the "SatyaSakshi Praman (consumer app)" account. Log in with it on the website to
+   review person checks (they arrive as cases, service "Consumer app").
+5. Test mode lets you order packages that have no price, for free, while you try the flow.

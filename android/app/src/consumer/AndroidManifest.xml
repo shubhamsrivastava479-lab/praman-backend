@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Consumer app only: call links sent to customers on WhatsApp open in this app. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="pramanservices.space" />
+                <data android:host="praman-backend-vtbz.onrender.com" />
+                <data android:pathPrefix="/live-join.html" />
+                <data android:pathPrefix="/ai-call.html" />
+                <data android:pathPrefix="/verify.html" />
+                <data android:pathPrefix="/app-join.html" />
+                <data android:pathPrefix="/c/" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

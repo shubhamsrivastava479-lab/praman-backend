@@ -146,6 +146,24 @@
     <div id="settingsMsg" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
+  <div class="card" id="b2cCard">
+    <h2>SatyaSakshi Praman app (B2C) <span class="source-tag" id="b2cTag"></span></h2>
+    <div class="hint">Consumer app settings. A package can be bought only when it has a price (or test mode is on). Prices include GST. Orders for person checks appear as cases of the "SatyaSakshi Praman (consumer app)" account: log in with the team login below to review them.</div>
+    <div class="form-row" style="margin-top:8px;flex-wrap:wrap;gap:10px;align-items:center;">
+      <label style="font-size:13px;"><input type="checkbox" id="b2cTest"> Test mode (packages without a price can be ordered free)</label>
+      <label style="font-size:13px;">GST % <input id="b2cGst" type="number" min="0" max="28" style="width:70px;"></label>
+    </div>
+    <div style="overflow-x:auto;"><table style="width:100%;font-size:12.5px;border-collapse:collapse;margin:8px 0;"><thead><tr style="text-align:left;"><th>Package</th><th>On</th><th>Price ₹ (incl. GST)</th></tr></thead><tbody id="b2cPk"></tbody></table></div>
+    <div class="form-row"><select id="b2cWa" title="WhatsApp number used for login codes and links"><option value="">WhatsApp number for codes and links…</option></select><input id="b2cOtpT" placeholder="OTP template name (Authentication)"></div>
+    <div class="form-row"><input id="b2cRzId" placeholder="Razorpay Key ID (rzp_live_…)"><input id="b2cRzSec" type="password" placeholder="Razorpay Key Secret (blank = keep)" autocomplete="off"><input id="b2cRzWh" type="password" placeholder="Razorpay webhook secret (blank = keep)" autocomplete="off"></div>
+    <div class="hint">Razorpay webhook URL: <code id="b2cHook"></code> (event: payment.captured).</div>
+    <div class="form-row"><input id="b2cHEmail" placeholder="Team login email for consumer orders"><input id="b2cHPw" type="password" placeholder="Team login password (blank = keep)" autocomplete="new-password"></div>
+    <button class="save" onclick="b2cSave()">Save consumer app settings</button>
+    <div id="b2cMsg" style="font-size:12.5px;margin-top:8px;"></div>
+    <h3 style="margin:16px 0 6px;font-size:14px;">Latest orders</h3>
+    <div style="overflow-x:auto;"><table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="text-align:left;"><th>Order</th><th>When</th><th>Package</th><th>Buyer</th><th>Checked</th><th>₹</th><th>Status</th></tr></thead><tbody id="b2cOrders"></tbody></table></div>
+  </div>
+
   <div class="card" id="glCard">
     <h2>Gridlines checks <span class="source-tag">one key per check</span></h2>
     <div class="hint">Each check (CIBIL, Digital Footprint, PAN, DL, E-Challan, FASTag, RC, Chassis) has its own API key. Paste a key and press Save. Type <b>-</b> to remove a key. A check without a key stays switched off for vendors. Prices are set in Billing.</div>
@@ -607,6 +625,39 @@ async function bkRestore(id){
   const d = await r.json(); document.getElementById('bkMsg').textContent = r.ok ? 'Restored. Reload the page.' : d.error; bkLoad();
 }
 bkLoad();
+// ---- consumer app (B2C) ----
+let b2cData = null;
+async function b2cLoad(){
+  const r = await fetch('/api/super-admin/b2c', { headers: authHeaders() }); if (!r.ok) return;
+  const d = b2cData = await r.json();
+  document.getElementById('b2cTag').textContent = d.consumers + ' users · ' + d.orders.length + ' recent orders' + (d.testMode ? ' · TEST MODE' : '');
+  document.getElementById('b2cTest').checked = d.testMode;
+  document.getElementById('b2cGst').value = d.gstPercent;
+  document.getElementById('b2cPk').innerHTML = d.packages.map(p => `<tr style="border-top:1px solid #eee;"><td>${esc(p.name)}<br><span style="color:#888">${esc(p.tagline)}</span></td><td><input type="checkbox" id="b2cOn_${p.id}" ${d.enabled[p.id] === false ? '' : 'checked'}></td><td><input type="number" min="0" id="b2cPr_${p.id}" value="${d.prices[p.id] || ''}" placeholder="not set" style="width:110px;"></td></tr>`).join('');
+  const wa = document.getElementById('b2cWa'); wa.length = 1; d.whatsappAccounts.forEach(a => wa.add(new Option(a.label, a.id))); wa.value = d.whatsappAccountId || '';
+  document.getElementById('b2cOtpT').value = d.otpTemplate || '';
+  document.getElementById('b2cRzId').value = d.razorpayKeyId || '';
+  document.getElementById('b2cRzSec').placeholder = d.razorpaySecretSet ? 'Key Secret saved ' + d.razorpaySecretMask + ' (blank = keep, - = remove)' : 'Razorpay Key Secret';
+  document.getElementById('b2cRzWh').placeholder = d.webhookSecretSet ? 'Webhook secret saved (blank = keep)' : 'Razorpay webhook secret';
+  document.getElementById('b2cHook').textContent = location.origin + '/api/consumer/razorpay/webhook';
+  document.getElementById('b2cHEmail').value = d.houseEmail || '';
+  document.getElementById('b2cHPw').placeholder = d.houseLoginSet ? 'Team login password set (blank = keep)' : 'Team login password (at least 8 characters)';
+  const ST = { waiting_for_person: 'Waiting for person', call_in_progress: 'Call going on', under_review: 'Needs review', report_ready: 'Report ready', completed: 'Done', needs_team: 'Needs team', paid: 'Paid', in_progress: 'In progress' };
+  document.getElementById('b2cOrders').innerHTML = d.orders.map(o => `<tr style="border-top:1px solid #eee;"><td>${esc(o.ref)}${o.test ? ' <span style="color:#b26b00">test</span>' : ''}</td><td>${esc(new Date(o.at).toLocaleString('en-IN'))}</td><td>${esc(o.package)}</td><td>${esc(o.buyer)}</td><td>${esc(o.subject)}</td><td>${o.price || 0}</td><td>${esc(ST[o.status] || o.status)}</td></tr>`).join('') || '<tr><td colspan="7" style="color:#888;padding:6px 0;">No orders yet.</td></tr>';
+}
+async function b2cSave(){
+  const d = b2cData, prices = {}, enabled = {};
+  d.packages.forEach(p => { const v = document.getElementById('b2cPr_' + p.id).value; if (v !== '') prices[p.id] = Number(v); enabled[p.id] = document.getElementById('b2cOn_' + p.id).checked; });
+  const body = { testMode: document.getElementById('b2cTest').checked, gstPercent: document.getElementById('b2cGst').value, prices, enabled,
+    whatsappAccountId: document.getElementById('b2cWa').value, otpTemplate: document.getElementById('b2cOtpT').value,
+    razorpayKeyId: document.getElementById('b2cRzId').value, razorpayKeySecret: document.getElementById('b2cRzSec').value, razorpayWebhookSecret: document.getElementById('b2cRzWh').value,
+    houseEmail: document.getElementById('b2cHEmail').value, housePassword: document.getElementById('b2cHPw').value };
+  const r = await fetch('/api/super-admin/b2c', { method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({})), m = document.getElementById('b2cMsg');
+  m.style.color = r.ok ? '#1f7a6c' : '#b23a2c'; m.textContent = r.ok ? '✓ Saved.' : (j.error || 'Could not save.');
+  if (r.ok) { ['b2cRzSec','b2cRzWh','b2cHPw'].forEach(id => document.getElementById(id).value = ''); b2cLoad(); }
+}
+b2cLoad();
 // ---- Gridlines checks ----
 let glList = [];
 async function glLoad(){

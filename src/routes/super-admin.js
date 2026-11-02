@@ -390,6 +390,51 @@ router.get('/gridlines/transactions/:id/result', async (req, res) => {
   res.json(r);
 });
 
+// ---- SatyaSakshi Praman consumer app (B2C) ----
+router.get('/b2c', async (req, res) => {
+  await db.read();
+  const b2c = require('../services/b2c'), st = b2c.settings(), h = db.data.users.find(u => u.id === b2c.HOUSE_ID);
+  const mask = k => k ? '••••' + String(k).slice(-4) : '';
+  const orders = (db.data.b2cOrders || []).slice(-100).reverse().map(o => {
+    const c = (db.data.consumers || []).find(x => x.id === o.consumerId) || {};
+    return { ref: o.ref, at: o.createdAt, package: o.packageName, status: o.status, price: o.price, buyer: (c.name || '') + ' ' + (c.mobile ? '••••' + c.mobile.slice(-4) : ''), subject: o.subject ? o.subject.name : (o.input && o.input.vehicleNumber) || '', caseId: o.caseId || null, test: !!o.testOrder };
+  });
+  res.json({ testMode: st.testMode, gstPercent: st.gstPercent, prices: st.prices, enabled: st.enabled, whatsappAccountId: st.whatsappAccountId, otpTemplate: st.otpTemplate,
+    razorpayKeyId: st.razorpayKeyId, razorpaySecretSet: !!st.razorpayKeySecret, razorpaySecretMask: mask(st.razorpayKeySecret), webhookSecretSet: !!st.razorpayWebhookSecret,
+    houseEmail: h ? h.email : '', houseLoginSet: !!(h && h.passwordHash), packages: b2c.catalogue(),
+    whatsappAccounts: (db.data.whatsappAccounts || []).map(a => ({ id: a.id, label: (a.displayPhoneNumber || a.phoneNumberId || a.id) + ' · ' + ((db.data.users.find(u => u.id === a.vendorId) || {}).vendorName || '') })),
+    consumers: (db.data.consumers || []).length, orders });
+});
+router.put('/b2c', async (req, res) => {
+  await db.read();
+  const b = req.body || {}, b2c = require('../services/b2c'), ps = (db.data.platformSettings ||= {}), s = (ps.b2c ||= {});
+  const { PACKAGES } = require('../services/b2c-packages');
+  if (b.testMode !== undefined) s.testMode = !!b.testMode;
+  if (b.gstPercent !== undefined) { const g = Number(b.gstPercent); if (!(g >= 0 && g <= 28)) return res.status(400).json({ error: 'GST must be between 0 and 28.' }); s.gstPercent = g; }
+  if (b.prices) { s.prices ||= {}; for (const [k, v] of Object.entries(b.prices)) if (PACKAGES[k]) { const n = Number(v); if (!(n >= 0 && n <= 100000)) return res.status(400).json({ error: 'Price must be between 0 and 1,00,000.' }); s.prices[k] = Math.round(n * 100) / 100; } }
+  if (b.enabled) { s.enabled ||= {}; for (const [k, v] of Object.entries(b.enabled)) if (PACKAGES[k]) s.enabled[k] = !!v; }
+  if (b.whatsappAccountId !== undefined) s.whatsappAccountId = (db.data.whatsappAccounts || []).some(a => a.id === b.whatsappAccountId) ? b.whatsappAccountId : null;
+  if (typeof b.otpTemplate === 'string') s.otpTemplate = b.otpTemplate.replace(/[^a-z0-9_]/gi, '').slice(0, 80) || undefined;
+  if (typeof b.razorpayKeyId === 'string') s.razorpayKeyId = b.razorpayKeyId.trim().slice(0, 80) || undefined;
+  if (typeof b.razorpayKeySecret === 'string' && b.razorpayKeySecret.trim()) s.razorpayKeySecret = b.razorpayKeySecret.trim() === '-' ? undefined : b.razorpayKeySecret.trim().slice(0, 120);
+  if (typeof b.razorpayWebhookSecret === 'string' && b.razorpayWebhookSecret.trim()) s.razorpayWebhookSecret = b.razorpayWebhookSecret.trim() === '-' ? undefined : b.razorpayWebhookSecret.trim().slice(0, 120);
+  if (b.houseEmail || b.housePassword) {
+    const h = b2c.house();
+    if (b.houseEmail) {
+      const e = String(b.houseEmail).trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(e)) return res.status(400).json({ error: 'Enter a valid email for the team login.' });
+      if (db.data.users.some(u => u.id !== h.id && String(u.email || '').toLowerCase() === e)) return res.status(409).json({ error: 'That email is already used by another login.' });
+      h.email = e;
+    }
+    if (b.housePassword) {
+      if (String(b.housePassword).length < 8) return res.status(400).json({ error: 'Password must have at least 8 characters.' });
+      h.passwordHash = await require('../services/auth').hashPassword(String(b.housePassword));
+    }
+  }
+  await db.write();
+  res.json({ ok: true });
+});
+
 // Storage status + a full backup download (JSON) for the Super Admin.
 router.get('/system', async (req, res) => {
   const counts = {};
