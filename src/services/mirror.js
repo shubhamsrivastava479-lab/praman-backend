@@ -26,7 +26,13 @@ const DDL = [
   `create index if not exists praman_m_evidence_case on praman_m_evidence (case_id)`,
   `create table if not exists praman_m_custody (id text primary key, case_id text, actor text, event text, at timestamptz)`,
   `create index if not exists praman_m_custody_case on praman_m_custody (case_id)`,
-  `create table if not exists praman_m_users (id text primary key, email text, role text, vendor_name text, parent_vendor_id text, approved boolean, two_step boolean, created_at timestamptz)`
+  `create table if not exists praman_m_users (id text primary key, email text, role text, vendor_name text, parent_vendor_id text, approved boolean, two_step boolean, created_at timestamptz)`,
+  // Server-only tables: row level security ON with no policies, so the public (anon) key can read nothing.
+  // The server connects directly to the database and is not affected.
+  `alter table praman_m_cases enable row level security`,
+  `alter table praman_m_evidence enable row level security`,
+  `alter table praman_m_custody enable row level security`,
+  `alter table praman_m_users enable row level security`
 ];
 
 const ts = v => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toISOString() : null; };
