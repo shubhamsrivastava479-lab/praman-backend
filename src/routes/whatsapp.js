@@ -20,7 +20,7 @@ const { caseFileKey, unassignedFileKey, normRef } = require('../services/ids');
 // nothing is ever lost; the executive attaches it to a case from the dashboard.
 const CLOSED = ['completed', 'closed'];
 function matchCase(vendorId, senderDigits, text) {
-  const sameNumber = db.data.cases.filter(c => c.vendorId === vendorId && c.whatsappNumber === senderDigits);
+  const sameNumber = db.data.cases.filter(c => (!vendorId || c.vendorId === vendorId) && c.whatsappNumber === senderDigits);
   if (!sameNumber.length) return { c: null, how: 'no case for this number' };
   const step = c => c.aiCall && c.aiCall.status === 'in_progress' && c.aiCall.queue && c.aiCall.queue[c.aiCall.i];
   let c = sameNumber.find(x => step(x) && step(x).type === 'docs');
@@ -95,12 +95,12 @@ router.post('/webhook', async (req, res) => {
       const senderDigits = msg.from.replace(/\D/g, '');
       // Meta sometimes delivers the same message twice — keep only one copy.
       if (msg.id && db.data.evidence.some(e => e.waMessageId === msg.id)) continue;
-      const m = matchCase(account.vendorId, senderDigits, `${msg.text || ''} ${(msg.media && msg.media.caption) || ''}`);
+      const m = matchCase(account.vendorId === require('../services/wa-platform').PLATFORM_VENDOR ? null : account.vendorId, senderDigits, `${msg.text || ''} ${(msg.media && msg.media.caption) || ''}`);
       const matchedCase = m.c;
       if (!matchedCase) console.warn(`WhatsApp item from ${msg.from}: no case for this number — saved as unassigned.`);
 
       const item = {
-        msg, caseId: matchedCase ? matchedCase.id : null, vendorId: account.vendorId, match: m, evidenceId: uid('ev'),
+        msg, caseId: matchedCase ? matchedCase.id : null, vendorId: matchedCase ? matchedCase.vendorId : account.vendorId, match: m, evidenceId: uid('ev'),
         fileUrl: null, mimeType: null, sha256: null, storedSha256: null, size: null, fileName: null,
         caption: msg.text || null, analysis: null, idExtract: null, idBuffer: null, transcript: null,
         aiActive: !!(matchedCase && matchedCase.aiCall && matchedCase.aiCall.status === 'in_progress')
@@ -210,7 +210,7 @@ router.post('/send-intake/:caseId', requireAuth, async (req, res) => {
   await db.read();
   const c = db.data.cases.find(x => x.id === req.params.caseId && x.vendorId === req.user.vendorRootId);
   if (!c) return res.status(404).json({ error: 'Case not found' });
-  const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
+  const account = require('../services/wa-platform').forCase(c, db.data);
   if (!account) return res.status(400).json({ error: 'This case has no WhatsApp account linked. Connect one first.' });
 
   try {
@@ -242,7 +242,7 @@ router.post('/request-history/:caseId', requireAuth, async (req, res) => {
   await db.read();
   const c = db.data.cases.find(x => x.id === req.params.caseId && x.vendorId === req.user.vendorRootId);
   if (!c) return res.status(404).json({ error: 'Case not found' });
-  const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
+  const account = require('../services/wa-platform').forCase(c, db.data);
   if (!account) return res.status(400).json({ error: 'This case has no WhatsApp account linked. Connect one first.' });
   const v = String(c.vehicleNo || '').replace(/\s/g, '');
   const words = ['accident / एक्सीडेंट', 'theft / चोरी', 'police / पुलिस', ...(v.length >= 4 ? [v.slice(-4)] : [])];

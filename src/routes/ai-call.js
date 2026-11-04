@@ -139,7 +139,7 @@ router.get('/:token/info', async (req, res) => {
   if (!c) return notFound(res);
   // The case's own number first; otherwise any number the vendor has connected,
   // so the customer's WhatsApp button never ends up dead.
-  const acct = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId)
+  const acct = require('../services/wa-platform').forCase(c, db.data)
     || db.data.whatsappAccounts.find(a => a.vendorId === c.vendorId && a.displayPhoneNumber)
     || null;
   const vendor = (db.data.users || []).find(u => u.id === c.vendorId);
@@ -396,7 +396,7 @@ router.post('/:token/advance', async (req, res) => {
 function thankCustomer(c, firmRow) {
   try {
     if (!require('../services/followup').settingsOf(firmRow).completionMessage || c.aiCall.thankSentAt || !c.whatsappNumber) return;
-    const account = (db.data.whatsappAccounts || []).find(a => a.id === c.whatsappAccountId);
+    const account = require('../services/wa-platform').forCase(c, db.data);
     if (!account) return;
     const hi = ['Hindi', 'Marathi'].includes(c.aiCall.language);
     const name = c.insuredName ? ' ' + c.insuredName : '';

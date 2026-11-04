@@ -5,12 +5,15 @@ const wa = require('../services/whatsapp');
 
 const router = express.Router();
 router.use(requireAuth);
+// Vendors do not connect their own WhatsApp numbers: every message goes out from the single
+// "Praman by SatyaSakshi" number, managed by Super Admin only.
+router.use((req, res, next) => req.user.role === 'super_admin' ? next() : res.status(403).json({ error: 'WhatsApp is managed by Praman. All messages are sent from the Praman by SatyaSakshi number.' }));
 
 // List the logged-in vendor's connected WhatsApp numbers
 router.get('/', async (req, res) => {
   await db.read();
   const accounts = db.data.whatsappAccounts
-    .filter(a => a.vendorId === req.user.vendorRootId)
+    .filter(() => true)
     .map(a => ({ // never send the token/secret back to the browser
       id: a.id,
       displayPhoneNumber: a.displayPhoneNumber,
@@ -44,7 +47,7 @@ router.post('/', async (req, res) => {
 
   const account = {
     id: uid('wa'),
-    vendorId: req.user.vendorRootId,
+    vendorId: require('../services/wa-platform').PLATFORM_VENDOR,
     token,
     phoneNumberId,
     appSecret: appSecret || null,
@@ -64,7 +67,7 @@ router.post('/', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   await db.read();
-  const idx = db.data.whatsappAccounts.findIndex(a => a.id === req.params.id && a.vendorId === req.user.vendorRootId);
+  const idx = db.data.whatsappAccounts.findIndex(a => a.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
   db.data.whatsappAccounts.splice(idx, 1);
   await db.write();

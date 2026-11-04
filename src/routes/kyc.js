@@ -112,7 +112,7 @@ router.post('/phone-otp/send/:caseId', async (req, res) => {
   await db.read();
   const c = db.data.cases.find(x => x.id === req.params.caseId && x.vendorId === req.user.vendorRootId);
   if (!c) return res.status(404).json({ error: 'Case not found' });
-  const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
+  const account = require('../services/wa-platform').forCase(c, db.data);
   if (!account) return res.status(400).json({ error: 'This case has no WhatsApp account linked' });
 
   try {

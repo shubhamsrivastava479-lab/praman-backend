@@ -40,7 +40,7 @@ async function followupTick({ now = new Date(), send = defaultSend } = {}) {
       require('./notifications').notify(c.vendorId, { type: 'overdue', caseId: c.id, text: `Case ${c.caseRef} is past its deadline` });
       out.escalated++;
     } else if (d.action === 'remind') {
-      const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
+      const account = require('./wa-platform').forCase(c, db.data);
       const f = (c.followUp ||= { count: 0 });
       if (!account || !base) {
         f.skipReason = !account ? 'No WhatsApp number is linked to this case' : 'PUBLIC_BASE_URL is not set on the server';

@@ -272,10 +272,8 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
   if (!allowed.length) return res.status(403).json({ error: 'Your Praman plan has no services yet. Contact Praman.' });
   if (defaultService && !allowed.includes(defaultService)) return res.status(403).json({ error: serviceBlocked(req, defaultService) || 'Service not allowed' });
 
-  const vendorAccounts = db.data.whatsappAccounts.filter(a => a.vendorId === req.user.vendorRootId);
-  let accountId = whatsappAccountId;
-  if (!accountId && vendorAccounts.length === 1) accountId = vendorAccounts[0].id;
-  const account = db.data.whatsappAccounts.find(a => a.id === accountId);
+  const account = require('../services/wa-platform').account(db.data);
+  const accountId = account ? account.id : null;
 
   let rows;
   try {
@@ -386,9 +384,7 @@ router.post('/', async (req, res) => {
   // If the vendor has more than one connected WhatsApp number, they must
   // specify which one this case's field contact will message. If they only
   // have one connected, default to it.
-  const vendorAccounts = db.data.whatsappAccounts.filter(a => a.vendorId === req.user.vendorRootId);
-  let accountId = whatsappAccountId;
-  if (!accountId && vendorAccounts.length === 1) accountId = vendorAccounts[0].id;
+  const accountId = require('../services/wa-platform').accountId(db.data); // one Praman number for everyone
 
   const newCase = buildCase({
     vendorId: req.user.vendorRootId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service: svc

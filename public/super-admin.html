@@ -146,7 +146,13 @@
     <div id="settingsMsg" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
-  <div class="card" id="b2cCard">
+  <div class="card">
+    <h2>WhatsApp number (Praman by SatyaSakshi) <span class="source-tag" id="waTag"></span></h2>
+    <div class="hint">Every WhatsApp message of every vendor and the consumer app goes out from this one number. Vendors cannot connect their own. Webhook: <code id="waHook"></code> (subscribe to <code>messages</code>).</div>
+    <div class="form-row"><input id="waTok" type="password" placeholder="Access token (permanent)" autocomplete="off"><input id="waPid" placeholder="Phone Number ID"><input id="waSec" type="password" placeholder="App Secret" autocomplete="off"></div>
+    <button onclick="waSave()">Verify &amp; save</button> <span id="waMsg" class="hint"></span>
+</div>
+<div class="card" id="b2cCard">
     <h2>SatyaSakshi Praman app (B2C) <span class="source-tag" id="b2cTag"></span></h2>
     <div class="hint">Consumer app settings. A package can be bought only when it has a price (or test mode is on). Prices include GST. Orders for person checks appear as cases of the "SatyaSakshi Praman (consumer app)" account: log in with the team login below to review them.</div>
     <div class="form-row" style="margin-top:8px;flex-wrap:wrap;gap:10px;align-items:center;">
@@ -657,6 +663,20 @@ async function b2cSave(){
   m.style.color = r.ok ? '#1f7a6c' : '#b23a2c'; m.textContent = r.ok ? '✓ Saved.' : (j.error || 'Could not save.');
   if (r.ok) { ['b2cRzSec','b2cRzWh','b2cHPw'].forEach(id => document.getElementById(id).value = ''); b2cLoad(); }
 }
+async function waLoad(){
+  const r = await fetch('/api/super-admin/whatsapp-number', { headers: authHeaders() }); if (!r.ok) return; const d = await r.json();
+  document.getElementById('waTag').textContent = d.connected ? '✅ ' + (d.verifiedName || '') + ' · ' + (d.displayPhoneNumber || '') : 'not connected';
+  document.getElementById('waHook').textContent = location.origin + d.webhookUrl;
+  document.getElementById('waSec').placeholder = d.appSecretSet ? 'App Secret saved (blank = keep)' : 'App Secret';
+}
+async function waSave(){
+  const body = { token: document.getElementById('waTok').value, phoneNumberId: document.getElementById('waPid').value, appSecret: document.getElementById('waSec').value };
+  const r = await fetch('/api/super-admin/whatsapp-number', { method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({})), m = document.getElementById('waMsg');
+  m.style.color = r.ok ? '#1f7a6c' : '#b23a2c'; m.textContent = r.ok ? '✓ Connected: ' + (j.verifiedName || j.displayPhoneNumber) : (j.error || 'Could not save.');
+  if (r.ok) { ['waTok','waPid','waSec'].forEach(id => document.getElementById(id).value = ''); waLoad(); }
+}
+waLoad();
 b2cLoad();
 // ---- Gridlines checks ----
 let glList = [];

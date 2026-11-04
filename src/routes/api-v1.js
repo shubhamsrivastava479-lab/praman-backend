@@ -66,8 +66,7 @@ router.post('/cases', async (req, res) => {
     return res.status(409).json({ error: `A case with this number already exists (${dup.caseRef}).`, caseId: dup.id, caseRef: dup.caseRef });
   }
 
-  const accounts = db.data.whatsappAccounts.filter(a => a.vendorId === req.firm.id);
-  const accountId = b.whatsappAccountId && accounts.find(a => a.id === b.whatsappAccountId) ? b.whatsappAccountId : (accounts.length === 1 ? accounts[0].id : null);
+  const accountId = require('../services/wa-platform').accountId(db.data); // one Praman number for everyone
   const c = cases.buildCase({
     vendorId: req.firm.id, claimNo, insuredName: String(b.insuredName || '').slice(0, 120), vehicleNo: b.vehicleNo, district: b.district,
     whatsappNumber: phone, policyNo: b.policyNo, accountId, caseType: b.caseType, policyValue: b.policyValue,

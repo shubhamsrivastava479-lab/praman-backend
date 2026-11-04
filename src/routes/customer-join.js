@@ -35,7 +35,7 @@ function callsOf(n, base) {
 
 async function sendCode(c, to, code) {
   const wa = require('../services/whatsapp');
-  const account = (db.data.whatsappAccounts || []).find(a => a.id === c.whatsappAccountId);
+  const account = require('../services/wa-platform').forCase(c, db.data);
   if (!account) throw new Error('no WhatsApp number on the case');
   try {
     await wa.sendTextMessage(to, `Your Praman code is ${code}. It is valid for 5 minutes.\nआपका Praman कोड ${code} है। 5 मिनट तक मान्य।\nDo not share it with anyone.`, account);

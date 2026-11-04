@@ -201,7 +201,7 @@ router.post('/cases/:id/remind', async (req, res) => {
   const c = myCase(req, req.params.id);
   if (!c) return res.status(404).json({ error: 'Case not found' });
   if (!followup.isOpen(c)) return res.status(400).json({ error: 'This case is already completed.' });
-  const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
+  const account = require('../services/wa-platform').forCase(c, db.data);
   if (!account) return res.status(400).json({ error: 'No WhatsApp number is linked to this case.' });
   const { customerLink, baseUrlFor } = require('./cases');
   const s = followup.settingsOf(firmOf(req));

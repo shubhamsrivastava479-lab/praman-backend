@@ -46,7 +46,7 @@ router.get('/vendors', async (req, res) => {
     createdAt: v.createdAt,
     caseCount: db.data.cases.filter(c => c.vendorId === v.id).length,
     agentCount: db.data.users.filter(u => u.role === 'agent' && u.parentVendorId === v.id).length,
-    whatsappConnected: db.data.whatsappAccounts.some(a => a.vendorId === v.id),
+    whatsappConnected: !!require('../services/wa-platform').account(db.data),
     services: Array.isArray(v.services) ? v.services : null, // null = all (older account, not set yet)
     servicePrices: v.servicePrices || {},
     retentionDays: v.retentionDays || null,
@@ -404,6 +404,32 @@ router.get('/b2c', async (req, res) => {
     houseEmail: h ? h.email : '', houseLoginSet: !!(h && h.passwordHash), packages: b2c.catalogue(),
     whatsappAccounts: (db.data.whatsappAccounts || []).map(a => ({ id: a.id, label: (a.displayPhoneNumber || a.phoneNumberId || a.id) + ' · ' + ((db.data.users.find(u => u.id === a.vendorId) || {}).vendorName || '') })),
     consumers: (db.data.consumers || []).length, orders });
+});
+// The one WhatsApp number all messages go out from (Praman by SatyaSakshi).
+router.get('/whatsapp-number', async (req, res) => {
+  await db.read();
+  const a = require('../services/wa-platform').account(db.data);
+  res.json({ connected: !!a, displayPhoneNumber: a && a.displayPhoneNumber, verifiedName: a && a.verifiedName, phoneNumberId: a && a.phoneNumberId, appSecretSet: !!(a && a.appSecret),
+    webhookUrl: '/webhooks/whatsapp/webhook' });
+});
+router.put('/whatsapp-number', async (req, res) => {
+  const { token, phoneNumberId, appSecret } = req.body || {};
+  if (!token || !phoneNumberId) return res.status(400).json({ error: 'Access token and Phone Number ID are required.' });
+  const wa = require('../services/whatsapp'), plat = require('../services/wa-platform');
+  let info;
+  try { info = await wa.verifyCredentials({ token: String(token).trim(), phoneNumberId: String(phoneNumberId).trim() }); }
+  catch (e) { return res.status(400).json({ error: 'Could not verify with Meta: ' + e.message }); }
+  await db.read();
+  const list = (db.data.whatsappAccounts ||= []);
+  let a = list.find(x => x.phoneNumberId === String(phoneNumberId).trim());
+  if (!a) { a = { id: require('../db').uid('wa'), connectedAt: new Date().toISOString() }; list.push(a); }
+  Object.assign(a, { vendorId: plat.PLATFORM_VENDOR, token: String(token).trim(), phoneNumberId: String(phoneNumberId).trim(), displayPhoneNumber: info.display_phone_number, verifiedName: info.verified_name });
+  if (appSecret && String(appSecret).trim()) a.appSecret = String(appSecret).trim();
+  const ps = (db.data.platformSettings ||= {}); ps.whatsappAccountId = a.id; (ps.b2c ||= {}).whatsappAccountId = a.id;
+  // older cases that pointed to a vendor's own number now use the Praman number too
+  for (const c of db.data.cases || []) if (c.whatsappAccountId !== a.id) c.whatsappAccountId = a.id;
+  await db.write();
+  res.json({ ok: true, displayPhoneNumber: a.displayPhoneNumber, verifiedName: a.verifiedName });
 });
 router.put('/b2c', async (req, res) => {
   await db.read();

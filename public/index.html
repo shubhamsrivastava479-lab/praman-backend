@@ -105,7 +105,6 @@
     <div style="font-size:11.5px;color:#aab;margin-bottom:14px;" id="vendorLabel"></div>
     <div class="ws-switch" id="wsSwitch"></div>
     <button class="navbtn active" id="navCases" onclick="showView('cases')">Cases</button>
-    <button class="navbtn" id="navWA" onclick="showView('whatsapp')">WhatsApp</button>
     <button class="navbtn" id="navTeam" onclick="showView('team')" style="display:none;">Team</button>
     <button class="navbtn" id="navPerf" onclick="showView('performance')">Performance</button>
     <a class="navbtn" href="/fraud.html" style="text-decoration:none;box-sizing:border-box;">🛡️ Fraud dashboard</a>
@@ -146,7 +145,6 @@
           <input id="insuredName" placeholder="Insured name">
           <input id="whatsappNumber" placeholder="Field WhatsApp number (digits)">
           <input id="policyValue" type="number" placeholder="Policy/claim value (₹, optional)">
-          <select id="whatsappAccountSelect"></select>
         </div>
         <div class="form-row ws-motor" id="motorRow">
           <input id="vehicleNo" placeholder="Vehicle registration no. (e.g. UP16AB1234)">
@@ -157,7 +155,6 @@
         <div class="hint">If policy/claim value is above ₹10,00,000, self-verification is disabled for that case — only a live executive call is allowed.</div>
         </details>
         <button onclick="createCase()">Create case</button>
-        <div class="hint" id="noWaHint" style="display:none;">You haven't connected a WhatsApp number yet — go to <b>WhatsApp Connection</b> in the sidebar first, otherwise evidence can't be auto-filed for this case.</div>
       </div>
 
       <div class="card fold-hide" id="bulkCard">
@@ -181,35 +178,6 @@
       <div class="card" id="unassignedBox" style="display:none;"></div>
       <div id="caseTable"></div>
       <div id="caseDetail"></div>
-    </div>
-
-    <div id="view-whatsapp" class="view">
-      <div class="card">
-        <h2 style="margin-top:0;">Connect your WhatsApp Business number</h2>
-        <p style="font-size:12.5px;color:#555;">Each vendor connects their own WhatsApp Business API credentials from their own Meta Developer App. Your recipients will see messages from <b>your</b> business number, not a shared one.</p>
-        <div class="form-row">
-          <input id="waToken" placeholder="Access Token">
-          <input id="waPhoneId" placeholder="Phone Number ID">
-          <input id="waAppSecret" placeholder="App Secret (optional but recommended)">
-        </div>
-        <button onclick="connectWhatsApp()">Verify & connect</button>
-        <div id="waConnectMsg" style="font-size:12.5px;margin-top:8px;"></div>
-      </div>
-
-      <div class="card">
-        <b>Connected numbers</b>
-        <div id="waAccountsList" style="margin-top:10px;"></div>
-      </div>
-
-      <div class="card">
-        <b>Webhook setup (do this once per Meta App)</b>
-        <p style="font-size:12.5px;color:#555;">In your Meta App Dashboard → WhatsApp → Configuration, set:</p>
-        <div class="hint">
-          Callback URL: <code id="webhookUrl"></code><br>
-          Verify Token: <code id="verifyTokenHint">(same value your platform admin set as WHATSAPP_VERIFY_TOKEN)</code><br>
-          Subscribe to the <code>messages</code> field.
-        </div>
-      </div>
     </div>
 
     <div id="view-team" class="view">
@@ -263,7 +231,6 @@
 <script>
 const API = '';
 let currentCaseId = null;
-let waAccounts = [];
 
 const token = localStorage.getItem('praman_token');
 const user = JSON.parse(localStorage.getItem('praman_user') || 'null');
@@ -301,14 +268,11 @@ function ntfOpen(id) { if (id) { document.getElementById('bellBox').style.displa
 setInterval(loadNtf, 30000);
 function showView(name){
   document.getElementById('view-cases').classList.toggle('active', name === 'cases');
-  document.getElementById('view-whatsapp').classList.toggle('active', name === 'whatsapp');
   document.getElementById('view-team').classList.toggle('active', name === 'team');
   document.getElementById('view-performance').classList.toggle('active', name === 'performance');
   document.getElementById('navCases').classList.toggle('active', name === 'cases');
-  document.getElementById('navWA').classList.toggle('active', name === 'whatsapp');
   document.getElementById('navTeam').classList.toggle('active', name === 'team');
   document.getElementById('navPerf').classList.toggle('active', name === 'performance');
-  if (name === 'whatsapp') loadWhatsappAccounts();
   if (name === 'team') loadAgents();
   if (name === 'performance') loadPerformance();
 }
@@ -420,50 +384,6 @@ async function deleteAgent(id){
   if(!confirm('Remove this agent? They will no longer be able to log in.')) return;
   await fetch(API + '/api/auth/agents/' + id, { method:'DELETE', headers: authHeaders() });
   loadAgents();
-}
-
-// ---------- WhatsApp accounts ----------
-async function loadWhatsappAccounts(){
-  const res = await fetch(API + '/api/whatsapp-accounts', { headers: authHeaders() });
-  waAccounts = await res.json();
-  document.getElementById('waAccountsList').innerHTML = waAccounts.map(a => `
-    <div class="wa-row">
-      <span><b>${a.verifiedName || a.displayPhoneNumber}</b> — ${a.displayPhoneNumber}</span>
-      <button class="danger" onclick="disconnectWA('${a.id}')">Disconnect</button>
-    </div>`).join('') || '<div style="opacity:.6;font-size:12px;">No WhatsApp number connected yet.</div>';
-
-  document.getElementById('webhookUrl').textContent = location.origin + '/webhooks/whatsapp/webhook';
-
-  const sel = document.getElementById('whatsappAccountSelect');
-  sel.innerHTML = waAccounts.map(a => `<option value="${a.id}">${a.verifiedName || a.displayPhoneNumber}</option>`).join('');
-  sel.style.display = waAccounts.length > 1 ? '' : 'none'; // one number: used automatically
-  document.getElementById('noWaHint').style.display = waAccounts.length === 0 ? 'block' : 'none';
-}
-
-async function connectWhatsApp(){
-  const token_ = document.getElementById('waToken').value.trim();
-  const phoneNumberId = document.getElementById('waPhoneId').value.trim();
-  const appSecret = document.getElementById('waAppSecret').value.trim();
-  const msg = document.getElementById('waConnectMsg');
-  if(!token_ || !phoneNumberId){ msg.textContent = 'Token and Phone Number ID are required.'; msg.style.color = '#b23a2c'; return; }
-  msg.textContent = 'Verifying with Meta…'; msg.style.color = '#555';
-  const res = await fetch(API + '/api/whatsapp-accounts', {
-    method: 'POST', headers: authHeaders({'Content-Type':'application/json'}),
-    body: JSON.stringify({ token: token_, phoneNumberId, appSecret })
-  });
-  const data = await res.json();
-  if(data.error){ msg.textContent = data.error; msg.style.color = '#b23a2c'; return; }
-  msg.textContent = `Connected: ${data.verifiedName || data.displayPhoneNumber}`; msg.style.color = '#1f7a6c';
-  document.getElementById('waToken').value = '';
-  document.getElementById('waPhoneId').value = '';
-  document.getElementById('waAppSecret').value = '';
-  loadWhatsappAccounts();
-}
-
-async function disconnectWA(id){
-  if(!confirm('Disconnect this WhatsApp number? Existing cases linked to it will stop receiving evidence.')) return;
-  await fetch(API + '/api/whatsapp-accounts/' + id, { method:'DELETE', headers: authHeaders() });
-  loadWhatsappAccounts();
 }
 
 // ---------- Cases ----------
@@ -757,7 +677,6 @@ async function createCase(){
   const claimNo = document.getElementById('claimNo').value.trim();
   const insuredName = document.getElementById('insuredName').value.trim();
   const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
-  const whatsappAccountId = document.getElementById('whatsappAccountSelect').value;
   const service = ws === 'all' ? document.getElementById('serviceSelect').value : ws;
   const svc = myServices.find(x => x.key === service);
   if (!svc) { alert('Choose a service.'); return; }
@@ -768,7 +687,7 @@ async function createCase(){
   if(!claimNo || !whatsappNumber){ alert(`${svc.numberLabel} and WhatsApp number are required`); return; }
   const res = await fetch(API + '/api/cases', {
     method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
-    body: JSON.stringify({ claimNo, insuredName, whatsappNumber, whatsappAccountId, service, policyValue, verificationMode, vehicleNo, district })
+    body: JSON.stringify({ claimNo, insuredName, whatsappNumber, service, policyValue, verificationMode, vehicleNo, district })
   });
   const c = await res.json();
   if (!res.ok) {
@@ -1397,7 +1316,6 @@ async function copyCustomerMessage(caseId) {
   catch { prompt('Copy this message:', d.message); }
 }
 loadWorkspace().then(loadCases);
-loadWhatsappAccounts();
 </script>
 <dialog id="ssDlg" style="border:none;border-radius:12px;padding:18px;max-width:560px;width:calc(100% - 32px);">
   <b style="font-size:15px;">🖥️ Screen-share check</b>

@@ -62,7 +62,7 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
   const message = msg.text(c, { firm, joinUrl, appUrl, kind: 'live' });
   let sent = false, sendError = null;
   if (req.body.sendWhatsApp) {
-    const account = db.data.whatsappAccounts.find(a => a.id === c.whatsappAccountId);
+    const account = require('../services/wa-platform').forCase(c, db.data);
     if (!account) sendError = 'This case has no WhatsApp number linked.';
     else {
       try {
