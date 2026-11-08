@@ -27,3 +27,19 @@ test('phone numbers are completed with the country code before sending', () => {
   assert.equal(normalizePhone('0091 9876543210'), '919876543210');
   assert.equal(normalizePhone('14155550123'), '14155550123');
 });
+
+test('a case can be sent to its main number, the alternate number, or both', async () => {
+  const msg = require('../src/services/customer-message'), wa = require('../src/services/whatsapp');
+  const c = { whatsappNumber: '919876543210', altNumber: '9123456789' };
+  assert.deepEqual(msg.recipients(c, 'primary'), ['919876543210']);
+  assert.deepEqual(msg.recipients(c, 'alt'), ['919123456789']);
+  assert.deepEqual(msg.recipients(c, 'both'), ['919876543210', '919123456789']);
+  assert.deepEqual(msg.recipients({ whatsappNumber: '919876543210' }, 'both'), ['919876543210']);
+  const calls = [], orig = wa.sendTextMessage;
+  wa.sendTextMessage = async n => { calls.push(n); if (n.endsWith('3210')) throw new Error('first number failed'); };
+  try {
+    const r = await msg.sendText(c, 'hi', {}, 'both');          // one number failing does not stop the other
+    assert.deepEqual(r.sent, ['919123456789']); assert.deepEqual(r.failed, ['919876543210']);
+    await assert.rejects(() => msg.sendText({ whatsappNumber: '919876543210' }, 'hi', {}, 'alt'), /no alternate number/);
+  } finally { wa.sendTextMessage = orig; }
+});

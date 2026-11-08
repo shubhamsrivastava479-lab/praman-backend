@@ -206,7 +206,7 @@ router.post('/cases/:id/remind', async (req, res) => {
   const { customerLink, baseUrlFor } = require('./cases');
   const s = followup.settingsOf(firmOf(req));
   try {
-    await require('../services/customer-message').sendTemplate(c, account, { firm: firmOf(req), link: customerLink(c, baseUrlFor(req)), fallbackName: s.reminderTemplate });
+    await require('../services/customer-message').sendTemplate(c, account, { firm: firmOf(req), link: customerLink(c, baseUrlFor(req)), fallbackName: s.reminderTemplate, to: req.body && req.body.to });
   } catch (e) {
     return res.status(502).json({ error: 'WhatsApp could not send the message: ' + String(e.message || e).slice(0, 160) });
   }

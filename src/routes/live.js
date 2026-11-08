@@ -66,7 +66,7 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
     if (!account) sendError = 'This case has no WhatsApp number linked.';
     else {
       try {
-        await wa.sendTextMessage(c.whatsappNumber, message, account);
+        await msg.sendText(c, message, account, req.body.to);
         sent = true;
         c.lastContactAt = now();
         custody(c.id, 'Live video call link sent to the customer on WhatsApp', req.user.email || 'agent');
@@ -74,7 +74,7 @@ router.post('/case/:caseId/start', requireAuth, async (req, res) => {
         if (/24|window|re-engage|131047/i.test(e.message)) {
           // Outside the 24-hour window only an approved template works.
           try {
-            const tpl = await msg.sendTemplate(c, account, { firm, link: joinUrl, appUrl, fallbackName: req.body.templateName || followup.settingsOf(firm).reminderTemplate || 'claim_investigation_intake' });
+            const tpl = await msg.sendTemplate(c, account, { firm, link: joinUrl, appUrl, fallbackName: req.body.templateName || followup.settingsOf(firm).reminderTemplate || 'claim_investigation_intake', to: req.body.to });
             sent = true;
             c.lastContactAt = now();
             custody(c.id, `Live video call link sent to the customer on WhatsApp (template "${tpl}")`, req.user.email || 'agent');

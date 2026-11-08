@@ -143,7 +143,8 @@
           </select>
           <input id="claimNo" placeholder="Claim / Policy No.">
           <input id="insuredName" placeholder="Insured name">
-          <input id="whatsappNumber" placeholder="Field WhatsApp number (digits)">
+          <input id="whatsappNumber" placeholder="Field WhatsApp number (10 digits)">
+          <input id="altNumber" placeholder="Alternate number (optional)">
           <input id="policyValue" type="number" placeholder="Policy/claim value (₹, optional)">
         </div>
         <div class="form-row ws-motor" id="motorRow">
@@ -486,7 +487,7 @@ async function flowPost(path, body){
 }
 async function flowAssign(id, to){ if (await flowPost(`/cases/${id}/assign`, { agentId: to || null })) { await loadCases(); openCase(id); } }
 async function flowDue(id, v){ if (v && await flowPost(`/cases/${id}/due`, { dueAt: new Date(v).toISOString() })) { await loadCases(); openCase(id); } }
-async function flowRemind(id){ if (confirm('Send the WhatsApp reminder with the call link to the customer now?') && await flowPost(`/cases/${id}/remind`)) { alert('Reminder sent.'); openCase(id); } }
+async function flowRemind(id){ if (confirm('Send the WhatsApp reminder with the call link to the customer now?') && await flowPost(`/cases/${id}/remind`, { to: sendToVal() })) { alert('Reminder sent.'); openCase(id); } }
 async function flowStop(id, stop){ if (await flowPost(`/cases/${id}/reminders`, { stop })) { await loadCases(); openCase(id); } }
 async function flowHold(id, on){ if (await flowPost(`/cases/${id}/legal-hold`, { on })) { await loadCases(); openCase(id); } }
 
@@ -687,7 +688,7 @@ async function createCase(){
   if(!claimNo || !whatsappNumber){ alert(`${svc.numberLabel} and WhatsApp number are required`); return; }
   const res = await fetch(API + '/api/cases', {
     method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
-    body: JSON.stringify({ claimNo, insuredName, whatsappNumber, service, policyValue, verificationMode, vehicleNo, district })
+    body: JSON.stringify({ claimNo, insuredName, whatsappNumber, altNumber: (document.getElementById('altNumber')||{}).value || '', service, policyValue, verificationMode, vehicleNo, district })
   });
   const c = await res.json();
   if (!res.ok) {
@@ -695,7 +696,7 @@ async function createCase(){
     else if (!c.caseId) alert(c.error || 'Could not create the case.');
     return;
   }
-  ['claimNo','insuredName','whatsappNumber','policyValue','vehicleNo','district'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['claimNo','insuredName','whatsappNumber','altNumber','policyValue','vehicleNo','district'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   await loadCases();
   openCase(c.id, true);
 }
@@ -974,7 +975,7 @@ async function openCase(id, scroll){
     <div class="card" data-nofold="1">
       <div style="font-size:12px;color:#c8781f;font-weight:700;">Case no. ${escH(c.caseRef || '')} </div>
       <h2>${escH(c.claimNo)} <span class="tag">${escH(({ in_progress: 'In progress', completed: 'Completed', open: 'Open' }[c.status]) || String(c.status || '').replace(/_/g, ' '))}</span> ${isPivc ? `<span class="tag" style="background:#f4e3cc;color:#8a5416;">PIVC · ${c.policyType === 'term' ? 'Term' : 'Life'}</span>` : ''} ${isAi ? '<span class="tag" style="background:#e2e8fb;color:#2b3a8c;">🤖 AI call</span>' : ''}</h2>
-      <div style="font-size:12.5px;color:#555;">${escH(c.insuredName || '')} · WhatsApp: ${escH(c.whatsappNumber)}</div>
+      <div style="font-size:12.5px;color:#555;">${escH(c.insuredName || '')} · WhatsApp: ${escH(c.whatsappNumber)}${c.altNumber ? ' · Alt: ' + escH(c.altNumber) : ''} <a href="#" onclick="editNumbers('${c.id}');return false;" title="Change the number or add an alternate number">✏ Edit numbers</a></div>
       ${caseDetailsHtml(c)}
       ${c.lastKnownLocation ? `<div style="font-size:11.5px;color:#888;margin-top:2px;">📍 Last captured location: ${c.lastKnownLocation.latitude.toFixed(5)}, ${c.lastKnownLocation.longitude.toFixed(5)} (±${Math.round(c.lastKnownLocation.accuracy||0)}m) — ${new Date(c.lastKnownLocation.capturedAt).toLocaleString()} <a href="https://maps.google.com/?q=${c.lastKnownLocation.latitude},${c.lastKnownLocation.longitude}" target="_blank">View on map</a></div>` : ''}
       ${c.spotCheckRequired ? `<div style="font-size:11.5px;margin-top:4px;"><span class="tag" style="background:#f4e3cc;color:#8a5416;">🎯 Selected for spot-check review</span></div>` : ''}
@@ -992,6 +993,7 @@ async function openCase(id, scroll){
         <button class="link" onclick="window.open('/live.html?case=${encodeURIComponent(c.id)}','_blank')" title="Two-way video call with the customer: back camera, photos with location, recording">📹 Live video call</button>
         <button class="link" style="background:#1f7a6c;" onclick="openScreenCheck('${c.id}')" title="Guided check: WhatsApp video call, customer taps Share screen, you record it on your laptop and upload it here">🖥️ Screen-share check${c.screenCheck ? ' ✓' : ''}</button>
         <button class="secondary" onclick="openRecUpload('${c.id}')" title="Upload a WhatsApp video call (with screen share) that you recorded on your laptop">⬆ Upload call recording</button>
+        <select id="sendTo" title="Which number gets the WhatsApp link" onchange="sendToPref=this.value"><option value="primary" ${sendToPref==='primary'?'selected':''}>Send to: main number</option>${c.altNumber ? `<option value="alt" ${sendToPref==='alt'?'selected':''}>Send to: alternate number</option><option value="both" ${sendToPref==='both'?'selected':''}>Send to: both numbers</option>` : ''}</select>
         <button onclick="sendIntake('${c.id}')">Send WhatsApp intake message</button>
         ${isPivc ? '' : `<button class="secondary" onclick="requestHistory('${c.id}')" title="Ask the customer to search WhatsApp for accident / theft / police and send screenshots">Ask for WhatsApp search screenshots</button>`}
         <button class="secondary" onclick="window.open('${callUrl}','_blank')">Open call (agent)</button>
@@ -1203,8 +1205,21 @@ async function claimCase(caseId){
   loadCases();
 }
 
+let sendToPref = 'primary';
+const sendToVal = () => { const el = document.getElementById('sendTo'); return el ? el.value : (sendToPref || 'primary'); };
+async function editNumbers(id){
+  const c = (allCases || []).find(x => x.id === id) || {};
+  const main = prompt('WhatsApp number of the customer (10 digits, or with country code):', c.whatsappNumber || '');
+  if (main === null) return;
+  const alt = prompt('Alternate number (optional, leave blank for none):', c.altNumber || '');
+  if (alt === null) return;
+  const r = await fetch(API + '/api/cases/' + id, { method:'PATCH', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ whatsappNumber: main, altNumber: alt }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.error) { alert(d.error || 'Could not save.'); return; }
+  await loadCases(); openCase(id);
+}
 async function sendIntake(caseId){
-  const r = await fetch(API + `/webhooks/whatsapp/send-intake/${caseId}`, { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({}) });
+  const r = await fetch(API + `/webhooks/whatsapp/send-intake/${caseId}`, { method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({ to: sendToVal() }) });
   const data = await r.json();
   if(data.error) alert('Failed: ' + data.error);
   else alert('Intake template sent.');

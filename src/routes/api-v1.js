@@ -69,7 +69,7 @@ router.post('/cases', async (req, res) => {
   const accountId = require('../services/wa-platform').accountId(db.data); // one Praman number for everyone
   const c = cases.buildCase({
     vendorId: req.firm.id, claimNo, insuredName: String(b.insuredName || '').slice(0, 120), vehicleNo: b.vehicleNo, district: b.district,
-    whatsappNumber: phone, policyNo: b.policyNo, accountId, caseType: b.caseType, policyValue: b.policyValue,
+    whatsappNumber: phone, altNumber: b.altNumber, policyNo: b.policyNo, accountId, caseType: b.caseType, policyValue: b.policyValue,
     verificationMode: b.verificationMode || 'full_automation', policyType: b.policyType, service: svc
   });
   if (externalRef) c.externalRef = externalRef;

@@ -45,7 +45,7 @@ const normMode = m => /^(full|auto|ai)/i.test(String(m || '').replace(/[^a-z]/gi
 
 const normPolicyType = t => /term/i.test(String(t || '')) ? 'term' : /health|medi/i.test(String(t || '')) ? 'health' : 'life';
 
-function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service, details }) {
+function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsappNumber, altNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service, details }) {
   const svc = plans.serviceFor({ service, caseType, policyType });
   caseType = plans.SERVICES[svc].caseType;
   policyType = plans.SERVICES[svc].policyType || policyType;
@@ -68,6 +68,7 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
     district: district || '',
     policyNo: policyNo || '',
     whatsappNumber: require('../services/whatsapp').normalizePhone(whatsappNumber),
+    altNumber: require('../services/whatsapp').normalizePhone(altNumber) || undefined,
     policyValue: parsedValue,
     requiresMandatoryCall: !!(parsedValue && parsedValue >= HIGH_VALUE_THRESHOLD),
     status: 'in_progress',
@@ -368,7 +369,7 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, whatsappAccountId, caseType, policyValue, verificationMode, policyType, service } = req.body;
+  const { claimNo, insuredName, vehicleNo, district, whatsappNumber, altNumber, policyNo, whatsappAccountId, caseType, policyValue, verificationMode, policyType, service } = req.body;
   if (!claimNo || !whatsappNumber) {
     return res.status(400).json({ error: 'claimNo and whatsappNumber are required' });
   }
@@ -387,7 +388,7 @@ router.post('/', async (req, res) => {
   const accountId = require('../services/wa-platform').accountId(db.data); // one Praman number for everyone
 
   const newCase = buildCase({
-    vendorId: req.user.vendorRootId, claimNo, insuredName, vehicleNo, district, whatsappNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service: svc
+    vendorId: req.user.vendorRootId, claimNo, insuredName, vehicleNo, district, whatsappNumber, altNumber, policyNo, accountId, caseType, policyValue, verificationMode, policyType, service: svc
   });
 
   db.data.cases.push(newCase);
@@ -578,7 +579,7 @@ router.patch('/:id', async (req, res) => {
   const c = db.data.cases.find(x => x.id === req.params.id && x.vendorId === req.user.vendorRootId);
   if (!c) return res.status(404).json({ error: 'Case not found' });
   // Never let a client overwrite identity / security fields.
-  const BLOCKED = ['id', 'service', 'caseType', 'policyType', 'caseRef', 'selfToken', 'liveCall', 'vendorId', 'aiCall', 'aiReview', 'createdAt', 'shareToken', 'verificationMode', 'whatsappNumber', 'whatsappAccountId'];
+  const BLOCKED = ['id', 'service', 'caseType', 'policyType', 'caseRef', 'selfToken', 'liveCall', 'vendorId', 'aiCall', 'aiReview', 'createdAt', 'shareToken', 'verificationMode', 'whatsappNumber', 'altNumber', 'whatsappAccountId'];
   const patch = { ...req.body };
   for (const k of BLOCKED) delete patch[k];
   if (patch.claimNo !== undefined) {
@@ -586,13 +587,29 @@ router.patch('/:id', async (req, res) => {
     if (!String(patch.claimNo).trim()) return res.status(400).json({ error: 'Claim/policy no. cannot be empty.' });
     if (d && d.id !== c.id) return res.status(409).json({ error: `Claim/policy no. ${patch.claimNo} is already used by case ${d.caseRef}.` });
   }
+  // Phone numbers: the main WhatsApp number and an alternate one can be corrected here.
+  const wpn = require('../services/whatsapp').normalizePhone;
+  const numCheck = v => v.length >= 11 && v.length <= 15;
+  const numLog = [];
+  if (req.body.whatsappNumber !== undefined) {
+    const n = wpn(req.body.whatsappNumber);
+    if (!numCheck(n)) return res.status(400).json({ error: 'Enter a valid WhatsApp number (10 digits, or with country code).' });
+    if (n !== c.whatsappNumber) { numLog.push(`WhatsApp number changed (…${String(c.whatsappNumber).slice(-4)} → …${n.slice(-4)})`); c.whatsappNumber = n; }
+  }
+  if (req.body.altNumber !== undefined) {
+    const raw = String(req.body.altNumber || '').trim();
+    const n = raw ? wpn(raw) : '';
+    if (raw && !numCheck(n)) return res.status(400).json({ error: 'Enter a valid alternate number (10 digits, or with country code).' });
+    if (n && n === c.whatsappNumber) return res.status(400).json({ error: 'The alternate number is the same as the main number.' });
+    if ((n || '') !== (c.altNumber || '')) { numLog.push(n ? `Alternate number ${c.altNumber ? 'changed' : 'added'} (…${n.slice(-4)})` : 'Alternate number removed'); if (n) c.altNumber = n; else delete c.altNumber; }
+  }
   delete patch.actor;                      // who did it is recorded below, it is not a case field
   const before = {}; for (const k of Object.keys(patch)) before[k] = c[k];
   Object.assign(c, patch);
   db.data.custody.push({
     id: uid('cust'),
     caseId: c.id,
-    event: describeChanges(before, patch),
+    event: Object.keys(patch).length ? describeChanges(before, patch) + (numLog.length ? '; ' + numLog.join('; ') : '') : numLog.join('; ') || 'Case updated',
     actor: req.user.email || req.body.actor || 'agent',
     timestamp: new Date().toISOString()
   });

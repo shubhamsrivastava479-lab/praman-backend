@@ -76,7 +76,7 @@
     <div class="card">
       <h3>Customer link</h3>
       <div class="link"><input id="link" readonly><button class="b2 ghost" id="copyBtn">Copy</button></div>
-      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><button class="b2 green" id="waBtn">Send on WhatsApp</button><button class="b2 ghost" id="msgBtn" title="Copy the full message: customer name, reason, video call link and app link">Copy message</button><button class="b2 ghost" id="newBtn" title="Create a new link; the old one stops working">New link</button></div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"><select id="sendToSel" class="b2 ghost" title="Which number gets the link"><option value="primary">Main number</option><option value="alt">Alternate number</option><option value="both">Both numbers</option></select><button class="b2 green" id="waBtn">Send on WhatsApp</button><button class="b2 ghost" id="msgBtn" title="Copy the full message: customer name, reason, video call link and app link">Copy message</button><button class="b2 ghost" id="newBtn" title="Create a new link; the old one stops working">New link</button></div>
       <details style="margin-top:8px;font-size:12px;"><summary style="cursor:pointer;">See the message the customer gets</summary><pre id="msgPreview" style="white-space:pre-wrap;font:inherit;font-size:12px;margin:6px 0 0;max-height:260px;overflow:auto;"></pre></details>
       <div class="msg" id="linkMsg"></div>
     </div>
@@ -357,7 +357,7 @@ $('msgBtn').onclick = async () => { try { await navigator.clipboard.writeText(cu
 $('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('linkMsg').textContent = 'Link copied.'; } catch { $('link').select(); } };
 $('waBtn').onclick = async () => {
   $('linkMsg').textContent = 'Sending…';
-  try { const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sendWhatsApp: true }) }); $('linkMsg').textContent = d.sent ? 'Sent to the customer on WhatsApp.' : ('Not sent: ' + d.sendError); }
+  try { const d = await api(`/api/live/case/${encodeURIComponent(caseId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sendWhatsApp: true, to: ($('sendToSel') || {}).value || 'primary' }) }); $('linkMsg').textContent = d.sent ? 'Sent to the customer on WhatsApp.' : ('Not sent: ' + d.sendError); }
   catch (e) { $('linkMsg').textContent = e.message; }
 };
 $('newBtn').onclick = async () => {

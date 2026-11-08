@@ -20,7 +20,7 @@ const { caseFileKey, unassignedFileKey, normRef } = require('../services/ids');
 // nothing is ever lost; the executive attaches it to a case from the dashboard.
 const CLOSED = ['completed', 'closed'];
 function matchCase(vendorId, senderDigits, text) {
-  const sameNumber = db.data.cases.filter(c => (!vendorId || c.vendorId === vendorId) && c.whatsappNumber === senderDigits);
+  const sameNumber = db.data.cases.filter(c => (!vendorId || c.vendorId === vendorId) && (c.whatsappNumber === senderDigits || (c.altNumber && c.altNumber === senderDigits)));
   if (!sameNumber.length) return { c: null, how: 'no case for this number' };
   const step = c => c.aiCall && c.aiCall.status === 'in_progress' && c.aiCall.queue && c.aiCall.queue[c.aiCall.i];
   let c = sameNumber.find(x => step(x) && step(x).type === 'docs');
@@ -219,12 +219,12 @@ router.post('/send-intake/:caseId', requireAuth, async (req, res) => {
     const link = customerLink(c, baseUrlFor(req));
     let used = templateName;
     if (req.body.components && req.body.components.length) await wa.sendTemplateMessage(c.whatsappNumber, templateName, account, 'en', req.body.components);
-    else used = await require('../services/customer-message').sendTemplate(c, account, { firm: require('../services/plans').firmOf(db.data, req.user), link, fallbackName: templateName });
+    else used = await require('../services/customer-message').sendTemplate(c, account, { firm: require('../services/plans').firmOf(db.data, req.user), link, fallbackName: templateName, to: req.body.to });
     c.lastContactAt = new Date().toISOString();
     db.data.custody.push({
       id: uid('cust'),
       caseId: c.id,
-      event: `Intake template "${used}" sent`,
+      event: `Intake template "${used}" sent` + ({ alt: ' to the alternate number', both: ' to both numbers' }[req.body.to] || ''),
       actor: 'agent',
       timestamp: new Date().toISOString()
     });

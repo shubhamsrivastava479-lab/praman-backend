@@ -87,11 +87,37 @@ function template(c, { firm, link, appUrl, fallbackName } = {}) {
 }
 
 // Sends the link with the template. Returns the template name used.
+// Who gets the message: the main number, the alternate number, or both ('primary' | 'alt' | 'both').
+function recipients(c, which = 'primary') {
+  const wa = require('./whatsapp');
+  const main = wa.normalizePhone(c.whatsappNumber), alt = wa.normalizePhone(c.altNumber);
+  const list = which === 'alt' ? [alt] : which === 'both' ? [main, alt] : [main];
+  return [...new Set(list.filter(Boolean))];
+}
+
+// Sends to every chosen number. It succeeds if at least one number got it; it fails (with the first error) only if none did.
+async function eachRecipient(c, which, send) {
+  const to = recipients(c, which);
+  if (!to.length) throw new Error(which === 'alt' ? 'This case has no alternate number. Add one first.' : 'This case has no WhatsApp number.');
+  let ok = 0, firstErr = null; const sent = [], failed = [];
+  for (const n of to) {
+    try { await send(n); ok++; sent.push(n); } catch (e) { firstErr = firstErr || e; failed.push(n); }
+  }
+  if (!ok) throw firstErr;
+  return { sent, failed };
+}
+
 async function sendTemplate(c, account, opts = {}) {
   const wa = require('./whatsapp');
   const t = template(c, opts);
-  await wa.sendTemplateMessage(c.whatsappNumber, t.name, account, 'en', [{ type: 'body', parameters: t.params.map(x => ({ type: 'text', text: x })) }]);
+  const r = await eachRecipient(c, opts.to, n => wa.sendTemplateMessage(n, t.name, account, 'en', [{ type: 'body', parameters: t.params.map(x => ({ type: 'text', text: x })) }]));
+  sendTemplate.last = r;
   return t.name;
 }
 
-module.exports = { text, template, sendTemplate, parts, REASON };
+async function sendText(c, body, account, which) {
+  const wa = require('./whatsapp');
+  return eachRecipient(c, which, n => wa.sendTextMessage(n, body, account));
+}
+
+module.exports = { text, template, sendTemplate, sendText, recipients, parts, REASON };

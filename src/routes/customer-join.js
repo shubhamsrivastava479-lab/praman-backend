@@ -16,7 +16,7 @@ const hash = (n, c) => crypto.createHash('sha256').update(n + '|' + c + '|' + (p
 const GENERIC = 'If a verification call is waiting for this number, a 6-digit code has been sent on WhatsApp.';
 
 function openCasesOf(n) {
-  return (db.data.cases || []).filter(c => c.status !== 'completed' && last10(c.whatsappNumber) === n)
+  return (db.data.cases || []).filter(c => c.status !== 'completed' && (last10(c.whatsappNumber) === n || (c.altNumber && last10(c.altNumber) === n)))
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 
