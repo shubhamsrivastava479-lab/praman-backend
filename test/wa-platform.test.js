@@ -18,3 +18,12 @@ test('vendors have no WhatsApp connect screen and the API is Super Admin only', 
   const route = fs.readFileSync(path.join(__dirname, '../src/routes/whatsapp-accounts.js'), 'utf8');
   assert.ok(/super_admin/.test(route));
 });
+
+test('phone numbers are completed with the country code before sending', () => {
+  const { normalizePhone } = require('../src/services/whatsapp');
+  assert.equal(normalizePhone('98765 43210'), '919876543210');
+  assert.equal(normalizePhone('+91 98765-43210'), '919876543210');
+  assert.equal(normalizePhone('09876543210'), '919876543210');
+  assert.equal(normalizePhone('0091 9876543210'), '919876543210');
+  assert.equal(normalizePhone('14155550123'), '14155550123');
+});

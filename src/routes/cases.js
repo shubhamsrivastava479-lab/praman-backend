@@ -67,7 +67,7 @@ function buildCase({ vendorId, claimNo, insuredName, vehicleNo, district, whatsa
     vehicleNo: vehicleNo || '',
     district: district || '',
     policyNo: policyNo || '',
-    whatsappNumber: String(whatsappNumber).replace(/\D/g, ''),
+    whatsappNumber: require('../services/whatsapp').normalizePhone(whatsappNumber),
     policyValue: parsedValue,
     requiresMandatoryCall: !!(parsedValue && parsedValue >= HIGH_VALUE_THRESHOLD),
     status: 'in_progress',

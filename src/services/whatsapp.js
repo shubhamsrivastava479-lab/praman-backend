@@ -112,11 +112,21 @@ async function metaError(res, what) {
   return err;
 }
 
+// Meta wants the full number with country code and digits only. Indian numbers typed as
+// 10 digits (or with a leading 0 / 00 91) are completed with 91.
+function normalizePhone(v) {
+  let d = String(v == null ? '' : v).replace(/\D/g, '');
+  if (d.startsWith('00')) d = d.slice(2);
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  if (d.length === 10) d = '91' + d;
+  return d;
+}
+
 async function sendTextMessage(to, body, { token, phoneNumberId }) {
   const res = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } })
+    body: JSON.stringify({ messaging_product: 'whatsapp', to: normalizePhone(to), type: 'text', text: { body } })
   });
   if (!res.ok) throw await metaError(res, 'Could not send message');
   return res.json();
@@ -128,7 +138,7 @@ async function sendTemplateMessage(to, templateName, { token, phoneNumberId }, l
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to,
+      to: normalizePhone(to),
       type: 'template',
       template: { name: templateName, language: { code: lang }, components }
     })
@@ -158,6 +168,7 @@ async function verifyCredentials({ token, phoneNumberId }) {
 }
 
 module.exports = {
+  normalizePhone,
   verifySubscription,
   isValidSignature,
   extractPhoneNumberId,
